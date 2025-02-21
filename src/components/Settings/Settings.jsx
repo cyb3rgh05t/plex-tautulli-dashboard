@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   FaServer,
   FaDatabase,
@@ -9,13 +9,15 @@ import {
   FaTrash,
   FaExclamationTriangle,
   FaCog,
-  FaPlus,
   FaKey,
   FaLink,
+  FaEye,
+  FaEyeSlash,
 } from "react-icons/fa";
 import axios from "axios";
 import { useConfig } from "../../context/ConfigContext";
 import toast from "react-hot-toast";
+import { appVersion } from "../../../version";
 import { testPlexConnection } from "../../services/plexService";
 import { testTautulliConnection } from "../../services/tautulliService";
 
@@ -33,52 +35,6 @@ const SubTabButton = ({ active, onClick, children, icon: Icon }) => (
   </button>
 );
 
-const ConfigField = ({
-  label,
-  type = "text",
-  value,
-  onChange,
-  placeholder,
-  icon: Icon,
-  helpText,
-  helpLink,
-}) => (
-  <div className="space-y-2">
-    <label className="block text-gray-300 font-medium">{label}</label>
-    <div className="relative">
-      {Icon && (
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Icon className="text-gray-500" />
-        </div>
-      )}
-      <input
-        type={type}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        className={`w-full bg-gray-800/50 text-white border border-gray-700 rounded-lg shadow-sm 
-        focus:ring-2 focus:ring-brand-primary-500 focus:border-brand-primary-500 
-        transition-all duration-200 ${Icon ? "pl-10" : "pl-4"} pr-4 py-3`}
-      />
-    </div>
-    {helpText && (
-      <div className="flex items-center gap-2 text-sm text-gray-400">
-        <span>{helpText}</span>
-        {helpLink && (
-          <a
-            href={helpLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-brand-primary-400 hover:text-brand-primary-300 flex items-center gap-1"
-          >
-            Learn more <FaExternalLinkAlt size={12} />
-          </a>
-        )}
-      </div>
-    )}
-  </div>
-);
-
 const ConnectionStatus = ({ status, type, showDetails = false }) => (
   <div
     className={`flex items-center gap-2 p-2 rounded-lg ${
@@ -93,15 +49,77 @@ const ConnectionStatus = ({ status, type, showDetails = false }) => (
       <FaCheckCircle className="text-green-400" />
     ) : status === false ? (
       <FaTimesCircle className="text-red-400" />
-    ) : (
-      <div className="w-4 h-4 rounded-full border-2 border-gray-600 border-t-gray-300 animate-spin" />
-    )}
+    ) : null}
     <span className="font-medium">{type}</span>
     {showDetails && status === true && (
       <span className="text-sm text-gray-400">Connected</span>
     )}
   </div>
 );
+
+const ConfigField = ({
+  label,
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+  icon: Icon,
+  helpText,
+  helpLink,
+  isPassword,
+  name,
+}) => {
+  const [showPassword, setShowPassword] = useState(false);
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-gray-300 font-medium">{label}</label>
+      <div className="relative">
+        {Icon && (
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Icon className="text-gray-500" />
+          </div>
+        )}
+        <input
+          type={isPassword && !showPassword ? "password" : "text"}
+          value={value}
+          onChange={onChange}
+          name={name}
+          placeholder={placeholder}
+          className={`w-full bg-gray-800/50 text-white border border-gray-700 rounded-lg shadow-sm 
+          focus:ring-2 focus:ring-brand-primary-500 focus:border-brand-primary-500 
+          transition-all duration-200 ${Icon ? "pl-10" : "pl-4"} ${
+            isPassword ? "pr-12" : "pr-4"
+          } py-3`}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white transition-colors"
+          >
+            {showPassword ? <FaEyeSlash size={16} /> : <FaEye size={16} />}
+          </button>
+        )}
+      </div>
+      {helpText && (
+        <div className="flex items-center gap-2 text-sm text-gray-400">
+          <span>{helpText}</span>
+          {helpLink && (
+            <a
+              href={helpLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand-primary-400 hover:text-brand-primary-300 flex items-center gap-1"
+            >
+              Learn more <FaExternalLinkAlt size={12} />
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Settings = ({ onClose }) => {
   const { config, updateConfig, clearConfig } = useConfig();
@@ -117,7 +135,6 @@ const Settings = ({ onClose }) => {
     tautulli: null,
   });
   const [testing, setTesting] = useState(false);
-  const appVersion = "v1.0.0";
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -150,29 +167,13 @@ const Settings = ({ onClose }) => {
       );
       setConnectionStatus((prev) => ({ ...prev, tautulli: true }));
 
-      toast.success("All connections tested successfully!", {
-        style: {
-          border: "1px solid #059669",
-          padding: "16px",
-          background: "#064E3B",
-        },
-        iconTheme: {
-          primary: "#10B981",
-          secondary: "#ECFDF5",
-        },
-      });
+      toast.success("All connections tested successfully!");
     } catch (error) {
-      toast.error(error.message, {
-        style: {
-          border: "1px solid #DC2626",
-          padding: "16px",
-          background: "#7F1D1D",
-        },
-        iconTheme: {
-          primary: "#EF4444",
-          secondary: "#FEF2F2",
-        },
-      });
+      toast.error(error.message);
+      setConnectionStatus((prev) => ({
+        ...prev,
+        [error.source]: false,
+      }));
     } finally {
       setTesting(false);
     }
@@ -182,26 +183,15 @@ const Settings = ({ onClose }) => {
     try {
       await axios.post("http://localhost:3006/api/config", formData);
       updateConfig(formData);
-      toast.success("Settings saved successfully!", {
-        style: {
-          border: "1px solid #059669",
-          padding: "16px",
-          background: "#064E3B",
-        },
-      });
+      toast.success("Settings saved successfully!");
     } catch (error) {
-      toast.error("Failed to save settings", {
-        style: {
-          border: "1px solid #DC2626",
-          padding: "16px",
-          background: "#7F1D1D",
-        },
-      });
+      toast.error("Failed to save settings");
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-900 bg-[radial-gradient(at_0%_0%,rgba(0,112,243,0.1)_0px,transparent_50%),radial-gradient(at_98%_100%,rgba(82,0,243,0.1)_0px,transparent_50%)]">
+      {/* Header */}
       <header className="bg-gray-800/90 backdrop-blur-sm border-b border-gray-700/50 shadow-xl">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
@@ -222,7 +212,7 @@ const Settings = ({ onClose }) => {
 
             <div className="flex items-center space-x-4">
               <a
-                href="https://github.com/cyb3rgh05t/custom-api"
+                href="https://github.com/cyb3rgh05t/plex-tautulli-dashboard"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-gray-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-gray-700/50"
@@ -240,6 +230,7 @@ const Settings = ({ onClose }) => {
         </div>
       </header>
 
+      {/* Main Content */}
       <main className="max-w-7xl mx-auto py-8 px-6">
         <div className="grid grid-cols-12 gap-8">
           {/* Sidebar */}
@@ -269,10 +260,11 @@ const Settings = ({ onClose }) => {
             </nav>
           </div>
 
-          {/* Main Content */}
+          {/* Content Area */}
           <div className="col-span-9 space-y-6">
             {activeSubTab === "connections" && (
               <div className="space-y-6">
+                {/* Plex Connection Section */}
                 <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6 shadow-lg">
                   <h2 className="text-xl font-semibold text-white mb-6">
                     Plex Connection
@@ -281,7 +273,7 @@ const Settings = ({ onClose }) => {
                     <ConfigField
                       label="Plex Server URL"
                       value={formData.plexUrl}
-                      onChange={(e) => handleChange(e)}
+                      onChange={handleChange}
                       name="plexUrl"
                       placeholder="http://your-plex-server:32400"
                       icon={FaServer}
@@ -289,17 +281,18 @@ const Settings = ({ onClose }) => {
                     <ConfigField
                       label="Plex Token"
                       value={formData.plexToken}
-                      onChange={(e) => handleChange(e)}
+                      onChange={handleChange}
                       name="plexToken"
-                      type="password"
                       placeholder="Enter your Plex token"
                       icon={FaKey}
+                      isPassword={true}
                       helpText="Need help finding your Plex token?"
                       helpLink="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/"
                     />
                   </div>
                 </div>
 
+                {/* Tautulli Connection Section */}
                 <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6 shadow-lg">
                   <h2 className="text-xl font-semibold text-white mb-6">
                     Tautulli Connection
@@ -308,7 +301,7 @@ const Settings = ({ onClose }) => {
                     <ConfigField
                       label="Tautulli URL"
                       value={formData.tautulliUrl}
-                      onChange={(e) => handleChange(e)}
+                      onChange={handleChange}
                       name="tautulliUrl"
                       placeholder="http://your-tautulli-server:8181"
                       icon={FaDatabase}
@@ -316,11 +309,11 @@ const Settings = ({ onClose }) => {
                     <ConfigField
                       label="Tautulli API Key"
                       value={formData.tautulliApiKey}
-                      onChange={(e) => handleChange(e)}
+                      onChange={handleChange}
                       name="tautulliApiKey"
-                      type="password"
                       placeholder="Enter your Tautulli API key"
                       icon={FaKey}
+                      isPassword={true}
                       helpText="Need help finding your Tautulli API key?"
                       helpLink="https://github.com/Tautulli/Tautulli/wiki/Frequently-Asked-Questions#general-q1"
                     />
@@ -347,17 +340,9 @@ const Settings = ({ onClose }) => {
                       disabled={testing}
                       className="px-6 py-2 bg-brand-primary-500 text-white rounded-lg hover:bg-brand-primary-600 
                         transition-all duration-200 shadow-lg shadow-brand-primary-500/20 
-                        hover:shadow-brand-primary-500/40 disabled:opacity-50 disabled:cursor-not-allowed
-                        flex items-center gap-2"
+                        hover:shadow-brand-primary-500/40 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {testing ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                          Testing...
-                        </>
-                      ) : (
-                        "Test Connections"
-                      )}
+                      Test Connections
                     </button>
                     <button
                       onClick={handleSave}
@@ -409,14 +394,7 @@ const Settings = ({ onClose }) => {
                               .then(() => {
                                 clearConfig();
                                 toast.success(
-                                  "All configurations have been reset",
-                                  {
-                                    style: {
-                                      border: "1px solid #059669",
-                                      padding: "16px",
-                                      background: "#064E3B",
-                                    },
-                                  }
+                                  "All configurations have been reset"
                                 );
                                 onClose();
                               })
@@ -425,13 +403,7 @@ const Settings = ({ onClose }) => {
                                   "Reset all configurations failed:",
                                   error
                                 );
-                                toast.error("Failed to reset configurations", {
-                                  style: {
-                                    border: "1px solid #DC2626",
-                                    padding: "16px",
-                                    background: "#7F1D1D",
-                                  },
-                                });
+                                toast.error("Failed to reset configurations");
                               });
                           }
                         }}

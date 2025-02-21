@@ -4,6 +4,7 @@ import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
 import toast from "react-hot-toast";
 
+// Available variables for different media types
 const BASE_VARIABLES = [
   { name: "friendly_name", description: "User's display name" },
   { name: "email", description: "User's email address" },
@@ -14,14 +15,12 @@ const BASE_VARIABLES = [
   },
   {
     name: "last_seen",
-    description: "Last activity timestamp (auto-formatted)",
+    description:
+      "Last activity timestamp (formats: default, short, relative, full, time)",
+    isDate: true,
   },
   { name: "is_active", description: "User's active status (auto-formatted)" },
   { name: "state", description: "Current watching state (watching/watched)" },
-  {
-    name: "last_played_at",
-    description: "Last played timestamp (auto-formatted)",
-  },
   { name: "media_type", description: "Type of media (movie/episode)" },
 ];
 
@@ -45,6 +44,7 @@ const SHOW_VARIABLES = [
   { name: "parent_media_index", description: "Season number" },
 ];
 
+// Helper Components
 const VariableButton = ({ variable, onClick }) => (
   <button
     onClick={() => onClick(variable.name)}
@@ -53,7 +53,11 @@ const VariableButton = ({ variable, onClick }) => (
   >
     <div className="flex items-start justify-between">
       <div>
-        <code className="text-brand-primary-400 font-mono">{`{${variable.name}}`}</code>
+        <code className="text-brand-primary-400 font-mono">
+          {variable.isDate
+            ? `{${variable.name}:relative}`
+            : `{${variable.name}}`}
+        </code>
         <p className="text-gray-400 text-sm mt-2">{variable.description}</p>
       </div>
       <div className="opacity-0 group-hover:opacity-100 transition-opacity">
@@ -110,6 +114,140 @@ const MediaTypeTab = ({ active, onClick, children }) => (
   </button>
 );
 
+// Helper function for date formatting
+const formatDate = (timestamp, format = "default") => {
+  // Return early if no timestamp
+  if (!timestamp) return "Never";
+
+  // Convert timestamp to milliseconds if needed
+  const timestampMs =
+    String(timestamp).length === 10 ? timestamp * 1000 : timestamp;
+  const date = new Date(timestampMs);
+  const now = new Date();
+
+  // Ensure we have a valid date
+  if (isNaN(date.getTime())) {
+    return "Invalid Date";
+  }
+
+  const diffMs = now - date;
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  switch (format) {
+    case "short":
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+
+    case "relative":
+      if (diffSeconds < 0)
+        return date.toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        });
+
+      if (diffSeconds < 60) {
+        return diffSeconds === 1
+          ? "1 second ago"
+          : `${diffSeconds} seconds ago`;
+      }
+
+      if (diffMinutes < 60) {
+        return diffMinutes === 1
+          ? "1 minute ago"
+          : `${diffMinutes} minutes ago`;
+      }
+
+      if (diffHours < 24) {
+        return diffHours === 1 ? "1 hour ago" : `${diffHours} hours ago`;
+      }
+
+      if (diffDays < 30) {
+        return diffDays === 1 ? "1 day ago" : `${diffDays} days ago`;
+      }
+
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+
+    case "full":
+      return date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+
+    case "time":
+      return date.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+    default:
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+  }
+};
+
+// Format state helper
+const formatState = (state) => {
+  if (state === "playing") return "watching";
+  if (!state) return "watched";
+  return state;
+};
+
+// Template processing helper
+const processTemplate = (template, data) => {
+  if (!template || !data) return "";
+
+  let result = template;
+  const variables = template.match(/\{([^}]+)\}/g) || [];
+
+  variables.forEach((variable) => {
+    const match = variable.slice(1, -1).split(":");
+    const key = match[0];
+    const format = match[1] || "default";
+
+    let value;
+    switch (key) {
+      case "duration":
+        value = data[key] ? Math.round(data[key] / 3600) + " hrs" : "";
+        break;
+      case "last_seen":
+        value = data[key] ? formatDate(data[key], format) : "Never";
+        break;
+      case "is_active":
+        value = data[key] ? "Active" : "Inactive";
+        break;
+      case "state":
+        value = formatState(data[key]);
+        break;
+      case "media_index":
+      case "parent_media_index":
+        value = data[key] ? String(data[key]).padStart(2, "0") : "";
+        break;
+      default:
+        value = data[key] || "";
+    }
+
+    if (value !== undefined) {
+      result = result.replace(variable, value);
+    }
+  });
+
+  return result;
+};
+
 const UsersFormat = () => {
   const { config } = useConfig();
   const [formats, setFormats] = useState([]);
@@ -120,16 +258,24 @@ const UsersFormat = () => {
   const [activeMediaType, setActiveMediaType] = useState("shows");
   const templateInputRef = useRef(null);
 
-  useEffect(() => {
-    fetchFormats();
-    fetchPreviewData();
-  }, []);
+  // Get current variables based on media type
+  const getCurrentVariables = () => {
+    const variables = [...BASE_VARIABLES];
+    if (activeMediaType === "movies") {
+      variables.push(...MOVIE_VARIABLES);
+    } else {
+      variables.push(...SHOW_VARIABLES);
+    }
+    return variables;
+  };
 
+  // Fetch formats from the API
   const fetchFormats = async () => {
     setLoading(true);
     try {
       const response = await fetch("http://localhost:3006/api/formats");
       const data = await response.json();
+
       // Filter formats by specific media type
       const mediaTypeMap = {
         shows: "episode",
@@ -142,12 +288,19 @@ const UsersFormat = () => {
     } catch (err) {
       logError("Failed to fetch user formats", err);
       setError("Failed to load formats");
-      toast.error("Failed to load formats");
+      toast.error("Failed to load formats", {
+        style: {
+          border: "1px solid #DC2626",
+          padding: "16px",
+          background: "#7F1D1D",
+        },
+      });
     } finally {
       setLoading(false);
     }
   };
 
+  // Fetch preview data for testing formats
   const fetchPreviewData = async () => {
     try {
       const response = await fetch("http://localhost:3006/api/users");
@@ -164,57 +317,52 @@ const UsersFormat = () => {
     }
   };
 
+  // Load data when component mounts or media type changes
   useEffect(() => {
     fetchFormats();
     fetchPreviewData();
   }, [activeMediaType]);
 
-  const getCurrentVariables = () => {
-    const variables = [...BASE_VARIABLES];
-    if (activeMediaType === "movies") {
-      variables.push(...MOVIE_VARIABLES);
-    } else {
-      variables.push(...SHOW_VARIABLES);
-    }
-    return variables;
-  };
-
-  const formatState = (state) => {
-    if (state === "playing") return "watching";
-    if (!state) return "watched";
-    return state;
-  };
-
+  // Insert variable into template
   const insertVariable = (variableName) => {
     if (templateInputRef.current) {
       const input = templateInputRef.current;
       const start = input.selectionStart;
       const end = input.selectionEnd;
       const currentValue = newFormat.template;
+
+      // Add format option for last_seen
+      const insertValue =
+        variableName === "last_seen"
+          ? `{${variableName}:relative}`
+          : `{${variableName}}`;
+
       const newValue =
         currentValue.substring(0, start) +
-        `{${variableName}}` +
+        insertValue +
         currentValue.substring(end);
 
       setNewFormat({ ...newFormat, template: newValue });
 
+      // Restore cursor position after update
       setTimeout(() => {
-        const newCursorPos = start + variableName.length + 2;
+        const newCursorPos = start + insertValue.length;
         input.focus();
         input.setSelectionRange(newCursorPos, newCursorPos);
       }, 0);
     }
   };
 
+  // Handle form submission for new format
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!newFormat.name || !newFormat.template) return;
 
     try {
       // Get current formats
-      const getResponse = await fetch("http://localhost:3006/api/formats");
-      const currentData = await getResponse.json();
-      const currentFormats = currentData.users || [];
+      const response = await fetch("http://localhost:3006/api/formats");
+      const data = await response.json();
+      const currentFormats = data.users || [];
 
       // Convert media type for backend
       const mediaTypeMap = {
@@ -248,10 +396,8 @@ const UsersFormat = () => {
         mediaType: currentMediaType,
       };
 
-      // Add new format to existing formats
+      // Add new format and save
       const updatedFormats = [...currentFormats, newFormatWithType];
-
-      // Save formats
       const saveResponse = await fetch("http://localhost:3006/api/formats", {
         method: "POST",
         headers: {
@@ -267,7 +413,7 @@ const UsersFormat = () => {
         throw new Error("Failed to save format");
       }
 
-      // Fetch and update local formats specifically for current media type
+      // Refresh formats and reset form
       fetchFormats();
       setNewFormat({ name: "", template: "" });
       toast.success("Format created successfully", {
@@ -277,7 +423,6 @@ const UsersFormat = () => {
           background: "#064E3B",
         },
       });
-      fetchPreviewData();
     } catch (err) {
       logError("Failed to save user format", err);
       toast.error("Failed to save format", {
@@ -290,21 +435,20 @@ const UsersFormat = () => {
     }
   };
 
+  // Handle format deletion
   const handleDelete = async (formatName) => {
     try {
-      // Get current formats
-      const getResponse = await fetch("http://localhost:3006/api/formats");
-      const currentData = await getResponse.json();
-      const currentFormats = currentData.users || [];
+      const response = await fetch("http://localhost:3006/api/formats");
+      const data = await response.json();
+      const currentFormats = data.users || [];
 
-      // Convert media type for backend
       const mediaTypeMap = {
         shows: "episode",
         movies: "movie",
       };
       const currentMediaType = mediaTypeMap[activeMediaType];
 
-      // Remove only the specific format for the current media type
+      // Remove specific format for current media type
       const updatedFormats = currentFormats.filter(
         (f) => !(f.name === formatName && f.mediaType === currentMediaType)
       );
@@ -325,7 +469,7 @@ const UsersFormat = () => {
         throw new Error("Failed to delete format");
       }
 
-      // Fetch and update local formats
+      // Refresh formats
       fetchFormats();
       toast.success("Format deleted successfully", {
         style: {
@@ -334,7 +478,6 @@ const UsersFormat = () => {
           background: "#064E3B",
         },
       });
-      fetchPreviewData();
     } catch (err) {
       logError("Failed to delete user format", err);
       toast.error("Failed to delete format", {
@@ -347,29 +490,24 @@ const UsersFormat = () => {
     }
   };
 
-  const formatPreviewValue = (key, value) => {
-    switch (key) {
-      case "duration":
-        return Math.round(value / 3600) + " hrs";
-      case "last_seen":
-      case "last_played_at":
-        return value ? new Date(value * 1000).toLocaleString() : "Never";
-      case "is_active":
-        return value ? "Active" : "Inactive";
-      case "state":
-        return formatState(value);
-      case "media_index":
-      case "parent_media_index":
-        return value ? String(value).padStart(2, "0") : "";
-      case "year":
-        return value || "";
-      default:
-        return value || "";
-    }
-  };
-
   return (
     <div className="space-y-8">
+      {/* Media Type Tabs */}
+      <div className="flex gap-2 mb-4">
+        <MediaTypeTab
+          active={activeMediaType === "movies"}
+          onClick={() => setActiveMediaType("movies")}
+        >
+          Movies
+        </MediaTypeTab>
+        <MediaTypeTab
+          active={activeMediaType === "shows"}
+          onClick={() => setActiveMediaType("shows")}
+        >
+          TV Shows
+        </MediaTypeTab>
+      </div>
+
       {/* Loading Indicator */}
       {loading && (
         <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6 text-center">
@@ -379,26 +517,10 @@ const UsersFormat = () => {
       )}
 
       {error && (
-        <div className="w-full p-4 bg-red-900/20 rounded">
+        <div className="bg-red-900/20 border border-red-500/50 rounded-xl p-4">
           <p className="text-red-400">{error}</p>
         </div>
       )}
-
-      {/* Media Type Tabs */}
-      <div className="flex gap-2 mb-4">
-        <MediaTypeTab
-          active={activeMediaType === "shows"}
-          onClick={() => setActiveMediaType("shows")}
-        >
-          TV Shows
-        </MediaTypeTab>
-        <MediaTypeTab
-          active={activeMediaType === "movies"}
-          onClick={() => setActiveMediaType("movies")}
-        >
-          Movies
-        </MediaTypeTab>
-      </div>
 
       {/* Available Variables Section */}
       <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6 shadow-lg">
@@ -434,12 +556,16 @@ const UsersFormat = () => {
                 setNewFormat({ ...newFormat, name: e.target.value })
               }
               className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-4 py-3
-                focus:ring-2 focus:ring-brand-primary-500 focus:border-brand-primary-500 
-                transition-all duration-200"
+      focus:ring-2 focus:ring-brand-primary-500 focus:border-brand-primary-500 
+      transition-all duration-200"
               placeholder={`e.g., ${
                 activeMediaType === "shows" ? "Show" : "Movie"
               } Format`}
             />
+            <p className="text-green-700 text-xs mt-2">
+              For best results, you should name the Custom Format fields the
+              same in both categories
+            </p>
           </div>
           <div>
             <label className="block text-gray-300 font-medium mb-2">
@@ -464,6 +590,10 @@ const UsersFormat = () => {
                   : "e.g., {friendly_name} is {state} {title} ({year})"
               }
             />
+            <p className="text-gray-400 text-xs mt-2">
+              Tip: For last_seen, you can use formats: default, short, relative,
+              full, time (e.g., {"{last_seen:relative}"})
+            </p>
           </div>
 
           {/* Live Preview */}
@@ -473,19 +603,7 @@ const UsersFormat = () => {
                 Preview
               </label>
               <code className="text-brand-primary-400 font-mono block">
-                {(() => {
-                  let result = newFormat.template;
-                  Object.entries(previewData).forEach(([key, value]) => {
-                    const formattedValue = formatPreviewValue(key, value);
-                    if (formattedValue !== undefined) {
-                      result = result.replace(
-                        new RegExp(`{${key}}`, "g"),
-                        formattedValue
-                      );
-                    }
-                  });
-                  return result;
-                })()}
+                {processTemplate(newFormat.template, previewData)}
               </code>
             </div>
           )}
@@ -519,30 +637,18 @@ const UsersFormat = () => {
             </div>
           </div>
           <div className="grid grid-cols-1 gap-4">
-            {formats.map((format, index) => {
-              const previewValue = (() => {
-                if (!previewData) return "";
-                let result = format.template;
-                Object.entries(previewData).forEach(([key, value]) => {
-                  const formattedValue = formatPreviewValue(key, value);
-                  if (formattedValue !== undefined) {
-                    result = result.replace(
-                      new RegExp(`{${key}}`, "g"),
-                      formattedValue
-                    );
-                  }
-                });
-                return result;
-              })();
-              return (
-                <FormatCard
-                  key={index}
-                  format={format}
-                  onDelete={handleDelete}
-                  previewValue={previewValue}
-                />
-              );
-            })}
+            {formats.map((format, index) => (
+              <FormatCard
+                key={index}
+                format={format}
+                onDelete={handleDelete}
+                previewValue={
+                  previewData
+                    ? processTemplate(format.template, previewData)
+                    : ""
+                }
+              />
+            ))}
           </div>
         </div>
       )}

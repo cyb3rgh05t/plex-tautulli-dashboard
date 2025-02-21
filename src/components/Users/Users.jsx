@@ -3,27 +3,44 @@ import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
 import * as Icons from "lucide-react";
 
-const StatusBadge = ({ isActive }) => (
-  <div
-    className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium
-    ${
-      isActive
-        ? "bg-green-500/10 text-green-400 border border-green-500/20"
-        : "bg-gray-500/20 text-gray-400 border border-gray-700/50"
-    }`}
-  >
-    {isActive ? <Icons.Check size={12} /> : <Icons.X size={12} />}
-    {isActive ? "Active" : "Inactive"}
-  </div>
-);
+const formatRelativeTime = (timestamp) => {
+  const now = new Date();
+  const date = new Date(timestamp * 1000);
+  const diffMs = now - date;
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  const diffMonths = Math.floor(diffDays / 30);
+  const diffYears = Math.floor(diffDays / 365);
 
-const UserStatistic = ({ icon: Icon, label, value }) => (
-  <div className="flex items-center gap-1.5 text-gray-400">
-    <Icon size={14} />
-    <span className="text-sm">{label}:</span>
-    <span className="text-brand-primary-400 font-medium">{value}</span>
-  </div>
-);
+  if (diffSecs < 60) {
+    return `${diffSecs} second${diffSecs !== 1 ? "s" : ""} ago`;
+  } else if (diffMins < 60) {
+    return `${diffMins} minute${diffMins !== 1 ? "s" : ""} ago`;
+  } else if (diffHours < 24) {
+    return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
+  } else if (diffDays < 30) {
+    return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`;
+  } else if (diffMonths < 12) {
+    return `${diffMonths} month${diffMonths !== 1 ? "s" : ""} ago`;
+  } else {
+    return `${diffYears} year${diffYears !== 1 ? "s" : ""} ago`;
+  }
+};
+
+const StatusDot = ({ state }) => {
+  const isActive = state === "watching";
+  return (
+    <div className="flex items-center justify-center">
+      <div
+        className={`w-3 h-3 rounded-full ${
+          isActive ? "bg-green-500" : "bg-gray-500"
+        }`}
+      />
+    </div>
+  );
+};
 
 const UsersTable = ({ users }) => (
   <div className="overflow-x-auto">
@@ -38,20 +55,20 @@ const UsersTable = ({ users }) => (
           </th>
           <th className="px-4 py-3 text-left bg-gray-800/50 border-b border-gray-700/50">
             <div className="flex items-center gap-2 text-gray-400 font-medium">
-              <Icons.Mail size={14} />
-              Email
+              <Icons.PlayCircle size={14} />
+              Last Played Media
             </div>
           </th>
           <th className="px-4 py-3 text-right bg-gray-800/50 border-b border-gray-700/50">
             <div className="flex items-center justify-end gap-2 text-gray-400 font-medium">
               <Icons.Play size={14} />
-              Plays
+              Total Plays
             </div>
           </th>
           <th className="px-4 py-3 text-right bg-gray-800/50 border-b border-gray-700/50">
             <div className="flex items-center justify-end gap-2 text-gray-400 font-medium">
               <Icons.Timer size={14} />
-              Duration
+              Total Duration
             </div>
           </th>
           <th className="px-4 py-3 text-left bg-gray-800/50 border-b border-gray-700/50">
@@ -74,7 +91,9 @@ const UsersTable = ({ users }) => (
             <td className="px-4 py-3 font-medium text-white">
               {user.friendly_name}
             </td>
-            <td className="px-4 py-3 text-gray-300">{user.email || "N/A"}</td>
+            <td className="px-4 py-3 text-gray-300">
+              {user.full_title || "Nothing played yet"}
+            </td>
             <td className="px-4 py-3 text-right text-brand-primary-400 font-medium">
               {user.plays.toLocaleString()}
             </td>
@@ -82,12 +101,10 @@ const UsersTable = ({ users }) => (
               {Math.round(user.duration / 3600)} hrs
             </td>
             <td className="px-4 py-3 text-gray-300">
-              {user.last_seen
-                ? new Date(user.last_seen * 1000).toLocaleString()
-                : "Never"}
+              {user.last_seen ? formatRelativeTime(user.last_seen) : "Never"}
             </td>
             <td className="px-4 py-3 text-center">
-              <StatusBadge isActive={user.is_active} />
+              <StatusDot state={user.state} />
             </td>
           </tr>
         ))}
@@ -103,46 +120,26 @@ const Users = () => {
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const fetchAllUsers = async () => {
-    if (!config.tautulliApiKey) return;
-
+  const fetchUsers = async () => {
     try {
-      let allUsers = [];
-      let start = 0;
-      let hasMore = true;
+      const response = await fetch("http://localhost:3006/api/users");
 
-      while (hasMore) {
-        const response = await fetch(
-          `http://localhost:3006/api/tautulli/api/v2?apikey=${config.tautulliApiKey}&cmd=get_users_table&start=${start}`
-        );
-        const data = await response.json();
-
-        if (data?.response?.result !== "success") {
-          throw new Error("Failed to fetch users data");
-        }
-
-        const users = data.response.data.data;
-        if (!users || users.length === 0) {
-          hasMore = false;
-        } else {
-          allUsers = [...allUsers, ...users];
-          start += 25;
-        }
+      if (!response.ok) {
+        throw new Error(`Failed to fetch users (Status: ${response.status})`);
       }
 
-      const filteredAndSortedUsers = allUsers
-        .filter((user) => user.friendly_name !== "Local")
-        .sort((a, b) => {
-          if (!a.last_played && !b.last_played) return 0;
-          if (!a.last_played) return 1;
-          if (!b.last_played) return -1;
-          return b.last_played - a.last_played;
-        });
+      const data = await response.json();
 
-      setUsers(filteredAndSortedUsers);
+      if (!data.success) {
+        throw new Error(data.message || "Failed to fetch users data");
+      }
+
+      setUsers(data.users);
+      setError(null);
     } catch (err) {
-      setError("Failed to load users. Please try again later.");
-      logError("Error fetching users:", err);
+      const errorMessage = `Failed to load users: ${err.message}`;
+      setError(errorMessage);
+      logError(errorMessage, err);
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -151,11 +148,13 @@ const Users = () => {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await fetchAllUsers();
+    await fetchUsers();
   };
 
   useEffect(() => {
-    fetchAllUsers();
+    if (config.tautulliApiKey) {
+      fetchUsers();
+    }
   }, [config.tautulliApiKey]);
 
   if (loading) {

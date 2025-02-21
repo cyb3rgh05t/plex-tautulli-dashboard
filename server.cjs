@@ -1,14 +1,17 @@
 const express = require("express");
 const cors = require("cors");
 const { createProxyMiddleware } = require("http-proxy-middleware");
-const { getConfig, setConfig } = require("./configStore.cjs");
-const { getFormats, saveFormats } = require("./formatStore.cjs");
+const { getConfig, setConfig } = require("./src/utils/configStore.cjs");
+const { getFormats, saveFormats } = require("./src/utils/formatStore.cjs");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
 // Add this near the top of your existing server.cjs file, with other imports
-const SAVED_SECTIONS_PATH = path.join(__dirname, "sections.json");
+const SAVED_SECTIONS_PATH = path.join(
+  __dirname,
+  "/src/utils/configs/sections.json"
+);
 
 const app = express();
 
@@ -87,48 +90,83 @@ app.use((req, res, next) => {
 // Add these helper functions at the top of server.cjs, before the endpoints
 
 // Date formatting helper
+// Updated formatDate function for relative time formatting
 const formatDate = (timestamp, format = "default") => {
-  const addedDate = new Date(Number(timestamp) * 1000);
+  // Return early if no timestamp
+  if (!timestamp) return "Never";
+
+  // Convert timestamp to milliseconds if needed
+  const timestampMs =
+    String(timestamp).length === 10 ? timestamp * 1000 : timestamp;
+  const date = new Date(timestampMs);
   const now = new Date();
-  const diffMs = now - addedDate;
+
+  // Ensure we have a valid date
+  if (isNaN(date.getTime())) {
+    return "Invalid Date";
+  }
+
+  const diffMs = now - date;
   const diffSeconds = Math.floor(diffMs / 1000);
   const diffMinutes = Math.floor(diffSeconds / 60);
   const diffHours = Math.floor(diffMinutes / 60);
   const diffDays = Math.floor(diffHours / 24);
+  const diffMonths = Math.floor(diffDays / 30);
+  const diffYears = Math.floor(diffDays / 365);
 
   switch (format) {
     case "short":
-      return addedDate.toLocaleDateString("en-US", {
+      return date.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
       });
 
     case "relative":
-      if (diffSeconds < 60)
-        return `${diffSeconds} second${diffSeconds !== 1 ? "s" : ""} ago`;
-      if (diffMinutes < 60)
-        return `${diffMinutes} minute${diffMinutes !== 1 ? "s" : ""} ago`;
-      if (diffHours < 24)
-        return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
-      if (diffDays < 30)
-        return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`;
-      return addedDate.toLocaleDateString();
+      if (diffSeconds < 0) return date.toLocaleDateString();
+
+      if (diffYears > 0) {
+        return diffYears === 1 ? "1 year ago" : `${diffYears} years ago`;
+      }
+
+      if (diffMonths > 0) {
+        return diffMonths === 1 ? "1 month ago" : `${diffMonths} months ago`;
+      }
+
+      if (diffDays > 0) {
+        return diffDays === 1 ? "1 day ago" : `${diffDays} days ago`;
+      }
+
+      if (diffHours > 0) {
+        return diffHours === 1 ? "1 hour ago" : `${diffHours} hours ago`;
+      }
+
+      if (diffMinutes > 0) {
+        return diffMinutes === 1
+          ? "1 minute ago"
+          : `${diffMinutes} minutes ago`;
+      }
+
+      return diffSeconds === 1 ? "1 second ago" : `${diffSeconds} seconds ago`;
 
     case "full":
-      return addedDate.toLocaleDateString("en-US", {
+      return date.toLocaleDateString("en-US", {
         year: "numeric",
         month: "long",
         day: "numeric",
       });
 
     case "time":
-      return addedDate.toLocaleTimeString("en-US", {
+      return date.toLocaleTimeString("en-US", {
         hour: "2-digit",
         minute: "2-digit",
       });
 
     default:
-      return addedDate.toLocaleDateString();
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
   }
 };
 
@@ -196,24 +234,11 @@ app.post("/api/formats", (req, res) => {
     // Get current formats
     const allFormats = getFormats();
 
-    // For recentlyAdded formats, maintain other media types
     if (type === "recentlyAdded") {
-      const mediaType = formats.length > 0 ? formats[0].type : null;
-
-      if (mediaType) {
-        // Keep formats of other media types
-        const otherFormats = allFormats.recentlyAdded.filter(
-          (format) => format.type !== mediaType
-        );
-
-        // Combine with new formats
-        allFormats.recentlyAdded = [...otherFormats, ...formats];
-      } else {
-        // If no mediaType (empty formats array), just save the empty array
-        allFormats.recentlyAdded = formats;
-      }
+      // Completely replace the recentlyAdded formats with the new array
+      allFormats.recentlyAdded = formats;
     } else {
-      // For other types (downloads, users, etc.), just replace the array
+      // For other types, replace the entire array
       allFormats[type] = formats;
     }
 
@@ -362,6 +387,7 @@ app.get("/api/users", async (req, res) => {
     });
 
     // Apply formats to each user
+    // Apply formats to each user
     const formattedUsers = sortedUsers.map((user) => {
       const formattedOutput = {};
       // Filter formats based on media type
@@ -376,16 +402,17 @@ app.get("/api/users", async (req, res) => {
           if (key === "duration") {
             formattedValue = Math.round(value / 3600) + " hrs";
           } else if (key === "last_seen" || key === "last_played_at") {
-            formattedValue = value
-              ? new Date(value * 1000).toLocaleString()
-              : "Never";
+            // Use the formatDate function to handle different formats
+            const match = format.template.match(new RegExp(`{${key}:([^}]+)}`));
+            const formatType = match ? match[1] : "default";
+            formattedValue = value ? formatDate(value, formatType) : "Never";
           } else if (key === "is_active") {
             formattedValue = value ? "Active" : "Inactive";
           } else if (key === "media_index" || key === "parent_media_index") {
             formattedValue = value ? String(value).padStart(2, "0") : "";
           }
           result = result.replace(
-            new RegExp(`{${key}}`, "g"),
+            new RegExp(`{${key}(:[^}]+)?}`, "g"),
             formattedValue || ""
           );
         });
@@ -849,9 +876,12 @@ const createDynamicProxy = (serviceName, options = {}) => {
 // In server.cjs
 app.post("/api/reset-all", (req, res) => {
   try {
-    const configPath = path.join(__dirname, "config.json");
-    const formatsPath = path.join(__dirname, "formats.json");
-    const savedSectionsPath = path.join(__dirname, "sections.json");
+    const configPath = path.join(__dirname, "/src/utils/configs/config.json");
+    const formatsPath = path.join(__dirname, "/src/utils/configs/formats.json");
+    const savedSectionsPath = path.join(
+      __dirname,
+      "/src/utils/configs/sections.json"
+    );
 
     // Reset config.json
     fs.writeFileSync(
@@ -926,14 +956,71 @@ app.get("/health", (req, res) => {
   });
 });
 
-const PROXY_PORT = process.env.PORT || 3006;
+// Helper function to format configuration in the desired style
+const formatConfig = (config) => {
+  let output = "├── Current configuration:\n";
+  Object.entries(config).forEach(([key, value]) => {
+    // Redact sensitive values if key includes "token" or "apikey"
+    const displayValue =
+      key.toLowerCase().includes("token") ||
+      key.toLowerCase().includes("apikey")
+        ? value
+          ? "[REDACTED]"
+          : "Not set"
+        : value || "Not set";
+    output += `\t├── ${key}: ${displayValue},\n`;
+  });
+  output += "├──";
+  return output;
+};
+
+const serverBanner = `
+╔════════════════════════════════════════════════════╗
+║                                                    ║
+║            Plex & Tautulli Dashboard               ║
+║                                                    ║
+║                                                    ║
+║                 by cyb3rgh05t                      ║
+╚════════════════════════════════════════════════════╝`;
+
+const endpointsBanner = `
+📍 Available Endpoints:
+|
+├── GET /api/formats
+│   └── Retrieves all Formats
+│
+├── GET  /api/users
+│   └── Retrieves formatted User Activities
+│
+├── GET /api/downlaods
+│   └── Retrieves formatted Plex Downloads
+│
+├── GET /api/recent/movies
+│   └── Retrieves formatted Movies info
+│
+├── GET /api/recent/shows
+│   └── Retrieves formatted Shows info
+│
+├── GET /api/libraries
+│   └── Retrieves all Plex Media Libraries
+│
+├── GET /api/sections
+│   └── Retrieves saved Media Sections
+│
+└── GET  /api/config
+    └── Get current Server configuration`;
+
+const PORT = process.env.PORT || 3005;
+const PROXY_PORT = process.env.PROXY_PORT || 3006;
 app.listen(PROXY_PORT, "0.0.0.0", () => {
-  console.log(`Proxy server running on http://0.0.0.0:${PROXY_PORT}`);
-  console.log("Current configuration:", getConfig());
-  console.log("API endpoints:");
-  console.log("  - GET /api/downloads");
-  console.log("  - GET /api/formats");
-  console.log("  - POST /api/formats");
-  console.log("  - GET /api/libraries");
-  console.log("  - GET /api/sections");
+  console.clear();
+  console.log(serverBanner);
+  console.log("\n🚀 Server Information:");
+  console.log("├── Status: Running");
+  console.log(`├── Frontend Server URL: http://localhost:${PORT}`);
+  console.log(`├── Proxy Server URL http://0.0.0.0:${PROXY_PORT}`);
+  console.log(formatConfig(getConfig()));
+  console.log(`├── Environment: ${process.env.NODE_ENV || "development"}`);
+  console.log("└── Time:", new Date().toLocaleString());
+  console.log(endpointsBanner);
 });

@@ -495,7 +495,7 @@ const RecentlyAddedFormat = () => {
         name: newFormat.name,
         template: newFormat.template,
         type: activeMediaType,
-        sectionId: newFormat.sectionId || "all", // Ensure sectionId is set
+        sectionId: newFormat.sectionId || "all",
       };
 
       try {
@@ -504,22 +504,13 @@ const RecentlyAddedFormat = () => {
         const data = await response.json();
         const currentFormats = data.recentlyAdded || [];
 
-        // Check if format with same name exists for the same section
-        const existingFormatIndex = currentFormats.findIndex(
-          (f) =>
-            f.name === newFormatItem.name &&
-            f.sectionId === newFormatItem.sectionId
-        );
-
-        let updatedFormats;
-        if (existingFormatIndex >= 0) {
-          // Update existing format
-          updatedFormats = [...currentFormats];
-          updatedFormats[existingFormatIndex] = newFormatItem;
-        } else {
-          // Add new format
-          updatedFormats = [...currentFormats, newFormatItem];
-        }
+        // Create a new array of formats
+        const updatedFormats = [
+          ...currentFormats.filter(
+            (f) => f.type !== activeMediaType || f.name !== newFormatItem.name
+          ),
+          newFormatItem,
+        ];
 
         // Save formats
         const saveResponse = await fetch("http://localhost:3006/api/formats", {
@@ -538,19 +529,9 @@ const RecentlyAddedFormat = () => {
         }
 
         // Update local state
-        setFormats(updatedFormats);
-        toast.success(
-          `Format "${newFormat.name}" ${
-            existingFormatIndex >= 0 ? "updated" : "created"
-          } successfully`,
-          {
-            style: {
-              border: "1px solid #059669",
-              padding: "16px",
-              background: "#064E3B",
-            },
-          }
-        );
+        setFormats(updatedFormats.filter((f) => f.type === activeMediaType));
+
+        toast.success(`Format created successfully`);
 
         // Reset form
         setNewFormat({
@@ -561,13 +542,7 @@ const RecentlyAddedFormat = () => {
         });
       } catch (error) {
         console.error("Failed to save format:", error);
-        toast.error("Failed to save format", {
-          style: {
-            border: "1px solid #DC2626",
-            padding: "16px",
-            background: "#7F1D1D",
-          },
-        });
+        toast.error("Failed to save format");
       }
     }
   };
@@ -579,7 +554,7 @@ const RecentlyAddedFormat = () => {
       const data = await response.json();
       const currentFormats = data.recentlyAdded || [];
 
-      // Remove only the specific format
+      // Remove the specific format
       const updatedFormats = currentFormats.filter(
         (format) =>
           !(format.name === formatName && format.type === activeMediaType)
@@ -602,23 +577,12 @@ const RecentlyAddedFormat = () => {
       }
 
       // Update local state
-      setFormats(updatedFormats);
-      toast.success(`Format "${formatName}" deleted successfully`, {
-        style: {
-          border: "1px solid #059669",
-          padding: "16px",
-          background: "#064E3B",
-        },
-      });
+      setFormats(updatedFormats.filter((f) => f.type === activeMediaType));
+
+      toast.success(`Format deleted successfully`);
     } catch (error) {
       console.error("Failed to delete format:", error);
-      toast.error("Failed to delete format", {
-        style: {
-          border: "1px solid #DC2626",
-          padding: "16px",
-          background: "#7F1D1D",
-        },
-      });
+      toast.error("Failed to delete format");
     }
   };
 

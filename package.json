@@ -35,14 +35,14 @@
   "author": "cyb3rgh05t",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cyb3rgh05t/custom-api.git"
+    "url": "git+https://github.com/cyb3rgh05t/plex-tautulli-dashboard.git"
   },
   "license": "MIT",
   "main": "postcss.config.js",
   "keywords": [],
   "bugs": {
-    "url": "https://github.com/cyb3rgh05t/custom-api/issues"
+    "url": "https://github.com/cyb3rgh05t/plex-tautulli-dashboard/issues"
   },
-  "homepage": "https://github.com/cyb3rgh05t/custom-api#readme",
+  "homepage": "https://github.com/cyb3rgh05t/plex-tautulli-dashboard#readme",
   "description": ""
 }

@@ -25,13 +25,13 @@ Before running the Plex & Tautulli Dashboard, ensure you have the following:
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/your-username/custom-api.git
+   git clone https://github.com/your-username/plex-tautulli-dashboard.git
    ```
 
 2. Navigate to the project directory:
 
    ```bash
-   cd custom-api
+   cd plex-tautulli-dashboard
    ```
 
 3. Install the dependencies:
@@ -57,59 +57,6 @@ Before running the Plex & Tautulli Dashboard, ensure you have the following:
 3. Click on the "Save Configuration" button to store the server details.
 
 4. The dashboard will now connect to your Plex and Tautulli instances and display the relevant information.
-
-## Project Structure
-
-The project follows a structured directory layout to organize the source code and related files. Here's an overview of the main directories and files:
-
-```bash
-custom-api/
-├── src/
-│   ├── components/
-│   │   ├── SetupWizard/
-│   │   │   ├── SetupWizard.jsx
-│   │   │   └── SetupForm.jsx
-│   │   ├── PlexActivity/
-│   │   │   ├── PlexActivity.jsx
-│   │   │   └── ActivityItem.jsx
-│   │   ├── RecentlyAdded/
-│   │   │   ├── RecentlyAdded.jsx
-│   │   │   └── MediaCard.jsx
-│   │   ├── FormatSettings/
-│   │   │   ├── FormatSettings.jsx
-│   │   │   ├── DownloadsFormat.jsx
-│   │   │   ├── RecentlyAddedFormat.jsx
-│   │   │   └── UsersFormat.jsx
-│   │   ├── Libraries/
-│   │   │   └── Libraries.jsx
-│   │   ├── Users/
-│   │   │   └── Users.jsx
-│   │   └── Layout/
-│   │       └── DashboardLayout.jsx
-│   ├── services/
-│   │   ├── plexService.js
-│   │   └── tautulliService.js
-│   ├── utils/
-│   │   └── logger.js
-│   ├── context/
-│   │   └── ConfigContext.jsx
-│   ├── hooks/
-│   │   ├── usePlexData.js
-│   │   └── useTautulliData.js
-│   ├── styles/
-│   │   └── globals.css
-│   ├── App.jsx
-│   └── main.jsx
-├── public/
-│   └── index.html
-├── server/
-│   ├── server.cjs
-│   ├── configStore.cjs
-│   └── formatStore.cjs
-├── package.json
-├── vite.config.js
-└── README.md
-```
 
 ## Technologies Used
 
@@ -144,31 +91,31 @@ You can run the Plex & Tautulli Dashboard using Docker Compose. Here's an exampl
 ```yaml
 version: "3.9"
 services:
-  custom-api:
-    hostname: "custom-api"
-    container_name: "custom-api"
+  plex-tautulli-dashboard:
+    hostname: "plex-tautulli-dashboard"
+    container_name: "plex-tautulli-dashboard"
     environment:
       - "TZ=Europe/berlin"
       - "NODE_ENV=production"
       - "ALLOWED_ORIGINS=" # CORS ORIGINS
       - "VITE_ALLOWED_HOSTS=all" # Allow all hosts
       - "VITE_ALLOW_ALL_HOSTS=true" # Alternative to VITE_ALLOWED_HOSTS=all
-    image: "ghcr.io/cyb3rgh05t/custom-api"
+    image: "ghcr.io/cyb3rgh05t/plex-tautulli-dashboard"
     restart: "unless-stopped"
     ports:
       - "3005:3005" # frontend server
       - "3006:3006" # backend proxyserver
     volumes:
-      - "/opt/appdata/custom-api:/app/data"
+      - "/opt/appdata/plex-tautulli-dashboard:/app/src/utils/configs:rw"
 ```
 
 Before running the Docker Compose setup, make sure to create the required local folders and files:
 
 ```bash
-mkdir /opt/appdata/custom-api
-touch /opt/appdata/custom-api/sections.json
-touch /opt/appdata/custom-api/config.json
-touch /opt/appdata/custom-api/formats.json
+mkdir /opt/appdata/plex-tautulli-dashboard
+touch /opt/appdata/plex-tautulli-dashboard/sections.json
+touch /opt/appdata/plex-tautulli-dashboard/config.json
+touch /opt/appdata/plex-tautulli-dashboard/formats.json
 ```
 
 These files will be mounted as volumes in the Docker container and will be used to store the application data.
@@ -229,7 +176,7 @@ Remember to review and adhere to the security best practices recommended by Plex
 
 ## Contributing
 
-Contributions are welcome! If you find any bugs, have feature requests, or want to contribute improvements, please open an issue or submit a pull request on the [GitHub repository](https://github.com/cyb3rgho5t/custom-api).
+Contributions are welcome! If you find any bugs, have feature requests, or want to contribute improvements, please open an issue or submit a pull request on the [GitHub repository](https://github.com/cyb3rgho5t/plex-tautulli-dashboard).
 
 ## License
 
@@ -245,7 +192,7 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## Getting Help
 
-If you encounter any issues or have questions about the Plex & Tautulli Dashboard, please feel free to reach out by opening an issue on the [GitHub repository](https://github.com/your-username/custom-api/issues). We'll be happy to assist you!
+If you encounter any issues or have questions about the Plex & Tautulli Dashboard, please feel free to reach out by opening an issue on the [GitHub repository](https://github.com/your-username/plex-tautulli-dashboard/issues). We'll be happy to assist you!
 
 ## Future Enhancements
 

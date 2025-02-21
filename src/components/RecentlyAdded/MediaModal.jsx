@@ -1,8 +1,10 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import * as Icons from "lucide-react";
 
 const MediaModal = ({ media, onClose, apiKey }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   if (!media) return null;
 
   // Create modal root if it doesn't exist
@@ -34,16 +36,12 @@ const MediaModal = ({ media, onClose, apiKey }) => {
     const scrollbarWidth =
       window.innerWidth - document.documentElement.clientWidth;
     const originalStyle = window.getComputedStyle(document.body).overflow;
-
-    // Save current scroll position
     const scrollY = window.scrollY;
 
-    // Prevent scroll
     document.body.style.overflow = "hidden";
     document.body.style.paddingRight = `${scrollbarWidth}px`;
 
     return () => {
-      // Restore scroll
       document.body.style.overflow = originalStyle;
       document.body.style.paddingRight = "0px";
       window.scrollTo(0, scrollY);
@@ -153,8 +151,7 @@ const MediaModal = ({ media, onClose, apiKey }) => {
                   {media.genres.map((genre) => (
                     <span
                       key={genre}
-                      className="px-2 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50 
-                        text-white text-sm"
+                      className="px-2 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50 text-white text-sm"
                     >
                       {genre}
                     </span>
@@ -225,7 +222,8 @@ const MediaModal = ({ media, onClose, apiKey }) => {
       {/* Modal Content */}
       <div
         className="relative w-full max-w-4xl bg-gray-900 rounded-xl overflow-hidden shadow-2xl 
-          shadow-brand-primary-500/10 border border-gray-800/50 animate-in fade-in duration-200"
+          shadow-brand-primary-500/10 border border-gray-800/50 animate-in fade-in duration-200
+          max-h-[90vh] flex flex-col"
       >
         {/* Hero Section */}
         <div className="relative">
@@ -248,13 +246,11 @@ const MediaModal = ({ media, onClose, apiKey }) => {
             <div className="relative h-full flex flex-col justify-end p-6">
               {/* Media Type Badge */}
               <div className="flex items-center gap-2 mb-4">
-                <div
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900/50 
-                  backdrop-blur-sm rounded-lg border border-gray-700/50"
-                >
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-700/50">
                   <MediaTypeIcon size={14} className="text-brand-primary-400" />
                   <span className="text-sm text-gray-300">
-                    {media.media_type}
+                    {media.media_type.charAt(0).toUpperCase() +
+                      media.media_type.slice(1).toLowerCase()}
                   </span>
                 </div>
               </div>
@@ -267,20 +263,14 @@ const MediaModal = ({ media, onClose, apiKey }) => {
               {/* Metadata */}
               <div className="flex flex-wrap items-center gap-3 text-sm">
                 {media.year && (
-                  <div
-                    className="flex items-center gap-1.5 px-2 py-1 bg-gray-900/50 backdrop-blur-sm 
-                    rounded-lg border border-gray-700/50"
-                  >
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-700/50">
                     <Icons.Calendar size={14} className="text-gray-400" />
                     <span className="text-gray-300">{media.year}</span>
                   </div>
                 )}
 
                 {media.duration && (
-                  <div
-                    className="flex items-center gap-1.5 px-2 py-1 bg-gray-900/50 backdrop-blur-sm 
-                    rounded-lg border border-gray-700/50"
-                  >
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-700/50">
                     <Icons.Clock size={14} className="text-gray-400" />
                     <span className="text-gray-300">
                       {formatDuration(media.duration)}
@@ -289,28 +279,21 @@ const MediaModal = ({ media, onClose, apiKey }) => {
                 )}
 
                 {media.rating && (
-                  <div
-                    className="flex items-center gap-1.5 px-2 py-1 bg-yellow-500/10 backdrop-blur-sm 
-                    rounded-lg border border-yellow-500/20"
-                  >
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-yellow-500/10 backdrop-blur-sm rounded-lg border border-yellow-500/20">
                     <Icons.Star size={14} className="text-yellow-400" />
                     <span className="text-yellow-400">{media.rating}</span>
                   </div>
                 )}
 
                 {media.content_rating && (
-                  <div
-                    className="px-2 py-1 bg-gray-900/50 backdrop-blur-sm rounded-lg 
-                    border border-gray-700/50 text-gray-300"
-                  >
+                  <div className="px-2 py-1 bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-700/50 text-gray-300">
                     {media.content_rating}
                   </div>
                 )}
 
                 {media.stream_video_full_resolution && (
                   <div
-                    className={`flex items-center gap-1.5 px-2 py-1 backdrop-blur-sm 
-                    rounded-lg border ${quality.className}`}
+                    className={`flex items-center gap-1.5 px-2 py-1 backdrop-blur-sm rounded-lg border ${quality.className}`}
                   >
                     <quality.icon size={14} />
                     <span>{quality.label}</span>
@@ -318,10 +301,7 @@ const MediaModal = ({ media, onClose, apiKey }) => {
                 )}
 
                 {media.file_size && (
-                  <div
-                    className="flex items-center gap-1.5 px-2 py-1 bg-gray-900/50 backdrop-blur-sm 
-                    rounded-lg border border-gray-700/50"
-                  >
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-700/50">
                     <Icons.HardDrive size={14} className="text-gray-400" />
                     <span className="text-gray-300">
                       {formatFileSize(media.file_size)}
@@ -333,52 +313,78 @@ const MediaModal = ({ media, onClose, apiKey }) => {
           </div>
         </div>
 
-        {/* Content Section */}
-        <div className="p-6 space-y-6">
-          {/* Summary */}
-          {media.summary && (
-            <p className="text-gray-300 text-lg leading-relaxed">
-              {media.summary}
-            </p>
-          )}
-
-          {/* Details Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-            {/* Media Specific Info */}
-            {getMediaSpecificInfo()}
-
-            {/* Common Info */}
-            <div className="space-y-1.5">
-              <h3 className="text-gray-400 text-sm">Added</h3>
-              <div className="flex items-center gap-1.5">
-                <Icons.Calendar size={14} className="text-gray-500" />
-                <p className="text-white">{formatDate(media.added_at)}</p>
+        {/* Scrollable Content Section */}
+        <div className="overflow-y-auto flex-1">
+          <div className="p-6 space-y-6">
+            {/* Summary */}
+            {media.summary && (
+              <div className="relative">
+                <p
+                  className={`text-gray-300 text-lg leading-relaxed ${
+                    !isExpanded ? "line-clamp-4" : ""
+                  }`}
+                >
+                  {media.summary}
+                </p>
+                {media.summary.split(" ").length > 60 && (
+                  <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="text-brand-primary-400 hover:text-brand-primary-300 text-sm mt-2 flex items-center gap-1"
+                  >
+                    {isExpanded ? (
+                      <>
+                        <Icons.ChevronUp size={14} />
+                        Show Less
+                      </>
+                    ) : (
+                      <>
+                        <Icons.ChevronDown size={14} />
+                        Read More
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
+            )}
+
+            {/* Details Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+              {/* Media Specific Info */}
+              {getMediaSpecificInfo()}
+
+              {/* Common Info */}
+              <div className="space-y-1.5">
+                <h3 className="text-gray-400 text-sm">Added</h3>
+                <div className="flex items-center gap-1.5">
+                  <Icons.Calendar size={14} className="text-gray-500" />
+                  <p className="text-white">{formatDate(media.added_at)}</p>
+                </div>
+              </div>
+
+              {media.last_viewed_at && (
+                <div className="space-y-1.5">
+                  <h3 className="text-gray-400 text-sm">Last Viewed</h3>
+                  <div className="flex items-center gap-1.5">
+                    <Icons.Eye size={14} className="text-gray-500" />
+                    <p className="text-white">
+                      {formatDate(media.last_viewed_at)}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {media.stream_video_full_resolution && (
+                <div className="space-y-1.5">
+                  <h3 className="text-gray-400 text-sm">Quality</h3>
+                  <div className="flex items-center gap-1.5">
+                    <quality.icon size={14} className="text-gray-500" />
+                    <p className="text-white">
+                      {media.stream_video_full_resolution}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
-
-            {media.last_viewed_at && (
-              <div className="space-y-1.5">
-                <h3 className="text-gray-400 text-sm">Last Viewed</h3>
-                <div className="flex items-center gap-1.5">
-                  <Icons.Eye size={14} className="text-gray-500" />
-                  <p className="text-white">
-                    {formatDate(media.last_viewed_at)}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {media.stream_video_full_resolution && (
-              <div className="space-y-1.5">
-                <h3 className="text-gray-400 text-sm">Quality</h3>
-                <div className="flex items-center gap-1.5">
-                  <quality.icon size={14} className="text-gray-500" />
-                  <p className="text-white">
-                    {media.stream_video_full_resolution}
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 

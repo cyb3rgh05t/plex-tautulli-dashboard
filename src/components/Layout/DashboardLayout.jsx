@@ -19,7 +19,7 @@ import { testTautulliConnection } from "../../services/tautulliService";
 import PlexActivity from "../PlexActivity/PlexActivity";
 import RecentlyAdded from "../RecentlyAdded/RecentlyAdded";
 import FormatSettings from "../FormatSettings/FormatSettings";
-
+import { appVersion } from "../../../version";
 import Libraries from "../Libraries/Libraries";
 import Users from "../Users/Users";
 import Settings from "../Settings/Settings";
@@ -75,7 +75,7 @@ const DashboardLayout = () => {
     plex: null,
     tautulli: null,
   });
-  const appVersion = "v1.0.0";
+  //const appVersion = "v1.0.0";
 
   // Check connection status when component mounts or config changes
   useEffect(() => {
@@ -112,7 +112,7 @@ const DashboardLayout = () => {
               <div className="flex items-center gap-3">
                 <ActivitySquare className="text-brand-primary-500 text-2xl" />
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-                  Plex Dashboard
+                  Plex & Tautulli Dashboard
                 </h1>
               </div>
               <div className="flex items-center gap-2 px-3 py-1 bg-gray-900/50 rounded-full">
@@ -141,7 +141,7 @@ const DashboardLayout = () => {
               )}
 
               <a
-                href="https://github.com/cyb3rgh05t/custom-api"
+                href="https://github.com/cyb3rgh05t/plex-tautulli-dashboard"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-gray-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-gray-700/50"

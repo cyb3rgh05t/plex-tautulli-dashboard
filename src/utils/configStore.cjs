@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 // Determine the correct path for the config file
-const CONFIG_FILE = path.join(__dirname, "config.json");
+const CONFIG_FILE = path.join(__dirname, "/configs/config.json");
 
 // Initialize config with default values
 let config = {

@@ -56,7 +56,13 @@ const SetupWizard = () => {
     setTesting(true);
     setTestResults({ plex: null, tautulli: null });
 
-    const loadingToast = toast.loading("Testing connections...");
+    const loadingToast = toast.loading("Testing connections...", {
+      style: {
+        border: "1px solid #059669",
+        padding: "16px",
+        background: "#064E3B",
+      },
+    });
 
     try {
       // Configure the proxy server first
@@ -93,6 +99,11 @@ const SetupWizard = () => {
       updateConfig(formData);
 
       toast.success("Setup completed successfully!", {
+        style: {
+          border: "1px solid #059669",
+          padding: "16px",
+          background: "#064E3B",
+        },
         id: loadingToast,
         duration: 3000,
       });
@@ -100,6 +111,11 @@ const SetupWizard = () => {
       logInfo("Setup completed successfully");
     } catch (err) {
       toast.error(err.message || "Setup failed. Please check your settings.", {
+        style: {
+          border: "1px solid #DC2626",
+          padding: "16px",
+          background: "#7F1D1D",
+        },
         id: loadingToast,
         duration: 4000,
       });
@@ -159,7 +175,7 @@ const SetupWizard = () => {
           <div className="flex items-center justify-center gap-3 mb-3">
             <Icons.ActivitySquare className="text-brand-primary-500 text-3xl" />
             <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-              Plex Dashboard
+              Plex & Tautulli Dashboard
             </h1>
           </div>
           <p className="text-gray-400">
@@ -374,7 +390,7 @@ const SetupWizard = () => {
           {/* Footer */}
           <div className="mt-6 text-center">
             <a
-              href="https://github.com/cyb3rgh05t/custom-api"
+              href="https://github.com/cyb3rgh05t/plex-tautulli-dashboard"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors"

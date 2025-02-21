@@ -2,7 +2,7 @@
 FROM node:20-alpine
 
 LABEL maintainer=cyb3rgh05t
-LABEL org.opencontainers.image.source https://github.com/cyb3rgh05t/custom-api
+LABEL org.opencontainers.image.source https://github.com/cyb3rgh05t/plex-tautulli-dashboard
 
 # Set the working directory in the container
 WORKDIR /app

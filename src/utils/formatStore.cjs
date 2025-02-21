@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const FORMATS_FILE = path.join(__dirname, "formats.json");
+const FORMATS_FILE = path.join(__dirname, "/configs/formats.json");
 
 // Initialize formats file if it doesn't exist
 if (!fs.existsSync(FORMATS_FILE)) {
@@ -10,7 +10,6 @@ if (!fs.existsSync(FORMATS_FILE)) {
     JSON.stringify({
       downloads: [],
       recentlyAdded: [],
-      sections: [],
       users: [],
     })
   );
@@ -24,7 +23,6 @@ const getFormats = () => {
     return {
       downloads: formats.downloads || [],
       recentlyAdded: formats.recentlyAdded || [],
-      sections: formats.sections || [],
       users: formats.users || [], // Add users array
     };
   } catch (error) {
@@ -32,7 +30,6 @@ const getFormats = () => {
     return {
       downloads: [],
       recentlyAdded: [],
-      sections: [],
       users: [], // Add users array
     };
   }
@@ -40,11 +37,11 @@ const getFormats = () => {
 
 const saveFormats = (formats) => {
   try {
-    // Ensure we maintain the structure and don't override other format types
-    const currentFormats = getFormats();
+    // Ensure we have all required keys
     const updatedFormats = {
-      ...currentFormats,
-      ...formats,
+      downloads: formats.downloads || [],
+      recentlyAdded: formats.recentlyAdded || [],
+      users: formats.users || [],
     };
 
     fs.writeFileSync(FORMATS_FILE, JSON.stringify(updatedFormats, null, 2));

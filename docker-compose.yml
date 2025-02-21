@@ -1,26 +1,26 @@
 version: "3.9"
 services:
-  custom-api:
-    hostname: "custom-api"
-    container_name: "custom-api"
+  plex-tautulli-dashboard:
+    hostname: "plex-tautulli-dashboard"
+    container_name: "plex-tautulli-dashboard"
     environment:
       - "TZ=Europe/berlin"
       - "NODE_ENV=production"
       - "ALLOWED_ORIGINS=" # CORS ORIGINS
       - "VITE_ALLOWED_HOSTS=all" # Allow all hosts
       - "VITE_ALLOW_ALL_HOSTS=true" # Alternative to VITE_ALLOWED_HOSTS=all
-    image: "ghcr.io/cyb3rgh05t/custom-api"
+    image: "ghcr.io/cyb3rgh05t/plex-tautulli-dashboard"
     restart: "unless-stopped"
     ports:
       - "3005:3005" # frontend server
       - "3006:3006" # backend proxyserver
     volumes:
-      - "/opt/appdata/custom-api:/app/data"
+      - "/opt/appdata/plex-tautulli-dashboard:/app/data"
 # ===============================================
 
 # LOCAL APP DATA
 
-# mkdir /opt/appdata/custom-api
+# mkdir /opt/appdata/plex-tautulli-dashboard
 # touch sections.json
 # touch config.json
 # touch formats.json
