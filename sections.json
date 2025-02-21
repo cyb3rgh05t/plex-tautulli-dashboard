@@ -1,0 +1,22 @@
+[
+  {
+    "section_id": 10,
+    "type": "show",
+    "name": "TV Shows"
+  },
+  {
+    "section_id": 1,
+    "type": "movie",
+    "name": "Marvel"
+  },
+  {
+    "section_id": 3,
+    "type": "movie",
+    "name": "DC"
+  },
+  {
+    "section_id": 4,
+    "type": "movie",
+    "name": "007"
+  }
+]

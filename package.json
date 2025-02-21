@@ -1,0 +1,48 @@
+{
+  "name": "plex-tautulli-dashboard",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev:frontend": "vite --port 3005",
+    "dev:server": "node server.cjs",
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:server\"",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "concurrently": "^8.2.2",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^2.0.6",
+    "lucide-react": "^0.475.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hot-toast": "^2.4.1",
+    "react-icons": "^5.4.0",
+    "react-query": "^3.39.3"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "vite": "^5.0.8"
+  },
+  "author": "cyb3rgh05t",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cyb3rgh05t/custom-api.git"
+  },
+  "license": "MIT",
+  "main": "postcss.config.js",
+  "keywords": [],
+  "bugs": {
+    "url": "https://github.com/cyb3rgh05t/custom-api/issues"
+  },
+  "homepage": "https://github.com/cyb3rgh05t/custom-api#readme",
+  "description": ""
+}

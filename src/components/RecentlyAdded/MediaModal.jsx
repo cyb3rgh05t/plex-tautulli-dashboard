@@ -1,0 +1,405 @@
+import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
+import * as Icons from "lucide-react";
+
+const MediaModal = ({ media, onClose, apiKey }) => {
+  if (!media) return null;
+
+  // Create modal root if it doesn't exist
+  useEffect(() => {
+    let modalRoot = document.getElementById("modal-root");
+    if (!modalRoot) {
+      modalRoot = document.createElement("div");
+      modalRoot.id = "modal-root";
+      document.body.appendChild(modalRoot);
+    }
+    return () => {
+      if (modalRoot && !modalRoot.childNodes.length) {
+        document.body.removeChild(modalRoot);
+      }
+    };
+  }, []);
+
+  // Handle escape key
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [onClose]);
+
+  // Lock scroll
+  useEffect(() => {
+    const scrollbarWidth =
+      window.innerWidth - document.documentElement.clientWidth;
+    const originalStyle = window.getComputedStyle(document.body).overflow;
+
+    // Save current scroll position
+    const scrollY = window.scrollY;
+
+    // Prevent scroll
+    document.body.style.overflow = "hidden";
+    document.body.style.paddingRight = `${scrollbarWidth}px`;
+
+    return () => {
+      // Restore scroll
+      document.body.style.overflow = originalStyle;
+      document.body.style.paddingRight = "0px";
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+
+  const getBackgroundUrl = () => {
+    if (!media.art) return null;
+    return `http://localhost:3006/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
+      media.art
+    )}&apikey=${apiKey}`;
+  };
+
+  const formatDuration = (ms) => {
+    if (!ms) return "";
+    const minutes = Math.floor(ms / (1000 * 60));
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return hours > 0
+      ? `${hours}h ${remainingMinutes}m`
+      : `${remainingMinutes}m`;
+  };
+
+  const formatDate = (timestamp) => {
+    if (!timestamp) return "";
+    return new Date(timestamp * 1000).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return "";
+    const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
+  };
+
+  const getQualityBadge = () => {
+    const resolution = media.stream_video_full_resolution?.toLowerCase() || "";
+    if (resolution.includes("4k") || resolution.includes("2160")) {
+      return {
+        label: "4K",
+        icon: Icons.CircleDot,
+        className:
+          "bg-brand-primary-500/20 text-brand-primary-400 border-brand-primary-500/30",
+      };
+    }
+    if (resolution.includes("1080")) {
+      return {
+        label: "HD",
+        icon: Icons.Circle,
+        className: "bg-green-500/20 text-green-400 border-green-500/30",
+      };
+    }
+    if (resolution.includes("720")) {
+      return {
+        label: "HD",
+        icon: Icons.Circle,
+        className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+      };
+    }
+    return {
+      label: "SD",
+      icon: Icons.CircleDashed,
+      className: "bg-gray-500/20 text-gray-400 border-gray-500/30",
+    };
+  };
+
+  const getMediaTypeIcon = () => {
+    switch (media.media_type?.toLowerCase()) {
+      case "movie":
+        return Icons.Film;
+      case "episode":
+        return Icons.Tv;
+      case "show":
+        return Icons.Tv2;
+      case "season":
+        return Icons.List;
+      default:
+        return Icons.Film;
+    }
+  };
+
+  const getMediaSpecificInfo = () => {
+    switch (media.media_type?.toLowerCase()) {
+      case "movie":
+        return (
+          <>
+            {media.studio && (
+              <div className="space-y-1.5">
+                <h3 className="text-gray-400 text-sm">Studio</h3>
+                <p className="text-white">{media.studio}</p>
+              </div>
+            )}
+            {media.director && (
+              <div className="space-y-1.5">
+                <h3 className="text-gray-400 text-sm">Director</h3>
+                <p className="text-white">{media.director}</p>
+              </div>
+            )}
+            {media.genres && (
+              <div className="space-y-1.5">
+                <h3 className="text-gray-400 text-sm">Genres</h3>
+                <div className="flex flex-wrap gap-2">
+                  {media.genres.map((genre) => (
+                    <span
+                      key={genre}
+                      className="px-2 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50 
+                        text-white text-sm"
+                    >
+                      {genre}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        );
+      case "episode":
+        return (
+          <>
+            <div className="space-y-1.5">
+              <h3 className="text-gray-400 text-sm">Show</h3>
+              <p className="text-white">{media.grandparent_title}</p>
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-gray-400 text-sm">Season</h3>
+              <p className="text-white">{media.parent_media_index}</p>
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-gray-400 text-sm">Episode</h3>
+              <p className="text-white">{media.media_index}</p>
+            </div>
+          </>
+        );
+      case "show":
+        return (
+          <>
+            {media.network && (
+              <div className="space-y-1.5">
+                <h3 className="text-gray-400 text-sm">Network</h3>
+                <p className="text-white">{media.network}</p>
+              </div>
+            )}
+            {media.season_count && (
+              <div className="space-y-1.5">
+                <h3 className="text-gray-400 text-sm">Seasons</h3>
+                <p className="text-white">{media.season_count}</p>
+              </div>
+            )}
+            {media.episode_count && (
+              <div className="space-y-1.5">
+                <h3 className="text-gray-400 text-sm">Episodes</h3>
+                <p className="text-white">{media.episode_count}</p>
+              </div>
+            )}
+          </>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const quality = getQualityBadge();
+  const MediaTypeIcon = getMediaTypeIcon();
+
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" />
+
+      {/* Modal Content */}
+      <div
+        className="relative w-full max-w-4xl bg-gray-900 rounded-xl overflow-hidden shadow-2xl 
+          shadow-brand-primary-500/10 border border-gray-800/50 animate-in fade-in duration-200"
+      >
+        {/* Hero Section */}
+        <div className="relative">
+          {/* Background Image */}
+          <div className="aspect-video relative overflow-hidden">
+            {getBackgroundUrl() ? (
+              <div
+                className="absolute inset-0 bg-cover bg-center scale-105"
+                style={{
+                  backgroundImage: `url(${getBackgroundUrl()})`,
+                }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/50 to-transparent" />
+              </div>
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-gray-800" />
+            )}
+
+            {/* Content */}
+            <div className="relative h-full flex flex-col justify-end p-6">
+              {/* Media Type Badge */}
+              <div className="flex items-center gap-2 mb-4">
+                <div
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900/50 
+                  backdrop-blur-sm rounded-lg border border-gray-700/50"
+                >
+                  <MediaTypeIcon size={14} className="text-brand-primary-400" />
+                  <span className="text-sm text-gray-300">
+                    {media.media_type}
+                  </span>
+                </div>
+              </div>
+
+              {/* Title */}
+              <h2 className="text-4xl font-bold text-white mb-4">
+                {media.title}
+              </h2>
+
+              {/* Metadata */}
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                {media.year && (
+                  <div
+                    className="flex items-center gap-1.5 px-2 py-1 bg-gray-900/50 backdrop-blur-sm 
+                    rounded-lg border border-gray-700/50"
+                  >
+                    <Icons.Calendar size={14} className="text-gray-400" />
+                    <span className="text-gray-300">{media.year}</span>
+                  </div>
+                )}
+
+                {media.duration && (
+                  <div
+                    className="flex items-center gap-1.5 px-2 py-1 bg-gray-900/50 backdrop-blur-sm 
+                    rounded-lg border border-gray-700/50"
+                  >
+                    <Icons.Clock size={14} className="text-gray-400" />
+                    <span className="text-gray-300">
+                      {formatDuration(media.duration)}
+                    </span>
+                  </div>
+                )}
+
+                {media.rating && (
+                  <div
+                    className="flex items-center gap-1.5 px-2 py-1 bg-yellow-500/10 backdrop-blur-sm 
+                    rounded-lg border border-yellow-500/20"
+                  >
+                    <Icons.Star size={14} className="text-yellow-400" />
+                    <span className="text-yellow-400">{media.rating}</span>
+                  </div>
+                )}
+
+                {media.content_rating && (
+                  <div
+                    className="px-2 py-1 bg-gray-900/50 backdrop-blur-sm rounded-lg 
+                    border border-gray-700/50 text-gray-300"
+                  >
+                    {media.content_rating}
+                  </div>
+                )}
+
+                {media.stream_video_full_resolution && (
+                  <div
+                    className={`flex items-center gap-1.5 px-2 py-1 backdrop-blur-sm 
+                    rounded-lg border ${quality.className}`}
+                  >
+                    <quality.icon size={14} />
+                    <span>{quality.label}</span>
+                  </div>
+                )}
+
+                {media.file_size && (
+                  <div
+                    className="flex items-center gap-1.5 px-2 py-1 bg-gray-900/50 backdrop-blur-sm 
+                    rounded-lg border border-gray-700/50"
+                  >
+                    <Icons.HardDrive size={14} className="text-gray-400" />
+                    <span className="text-gray-300">
+                      {formatFileSize(media.file_size)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Content Section */}
+        <div className="p-6 space-y-6">
+          {/* Summary */}
+          {media.summary && (
+            <p className="text-gray-300 text-lg leading-relaxed">
+              {media.summary}
+            </p>
+          )}
+
+          {/* Details Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+            {/* Media Specific Info */}
+            {getMediaSpecificInfo()}
+
+            {/* Common Info */}
+            <div className="space-y-1.5">
+              <h3 className="text-gray-400 text-sm">Added</h3>
+              <div className="flex items-center gap-1.5">
+                <Icons.Calendar size={14} className="text-gray-500" />
+                <p className="text-white">{formatDate(media.added_at)}</p>
+              </div>
+            </div>
+
+            {media.last_viewed_at && (
+              <div className="space-y-1.5">
+                <h3 className="text-gray-400 text-sm">Last Viewed</h3>
+                <div className="flex items-center gap-1.5">
+                  <Icons.Eye size={14} className="text-gray-500" />
+                  <p className="text-white">
+                    {formatDate(media.last_viewed_at)}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {media.stream_video_full_resolution && (
+              <div className="space-y-1.5">
+                <h3 className="text-gray-400 text-sm">Quality</h3>
+                <div className="flex items-center gap-1.5">
+                  <quality.icon size={14} className="text-gray-500" />
+                  <p className="text-white">
+                    {media.stream_video_full_resolution}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 rounded-lg bg-gray-900/50 backdrop-blur-sm 
+            border border-gray-700/50 text-gray-400 hover:text-white 
+            hover:bg-gray-800/50 transition-colors duration-200"
+        >
+          <Icons.X size={20} />
+        </button>
+      </div>
+    </div>
+  );
+
+  // Render modal through portal
+  return createPortal(
+    modalContent,
+    document.getElementById("modal-root") || document.body
+  );
+};
+
+export default MediaModal;

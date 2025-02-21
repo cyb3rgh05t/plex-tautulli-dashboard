@@ -1,0 +1,140 @@
+name: Build Docker Image
+
+on:
+  push:
+    branches:
+      - "main"
+      - "dev"
+    paths-ignore:
+      - ".github/**"
+      - "LICENSE"
+      - "**.md"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: FranzDiebold/github-env-vars-action@v2.8.0
+
+      - name: Print environment variables
+        run: |
+          echo "CI_REPOSITORY_NAME=$CI_REPOSITORY_NAME"
+          echo "CI_RUN_NUMBER=$CI_RUN_NUMBER"
+
+      - name: Prepare GHCR.io
+        id: prep
+        run: |
+          REPO=$CI_REPOSITORY_NAME
+          DOCKER_IMAGE=${{ github.repository_owner }}/${REPO}
+          if [[ "$CI_REF_NAME" == "main" ]]; then
+            VERSION=latest
+          else
+            VERSION=$CI_REF_NAME
+          fi
+          RUNNERNR=$CI_RUN_NUMBER
+          CREATED=$(date +'%Y-%m-%dT%H:%M:%SZ')
+          TAGS="${DOCKER_IMAGE}:${VERSION}"
+          echo ::set-output name=tags::${TAGS}
+          echo ::set-output name=title::${GITHUB_REPOSITORY}
+          echo ::set-output name=version::${VERSION}
+          echo ::set-output name=created::${CREATED}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/amd64
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v3.8.0
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3.3.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.PACKAGES }}
+
+      - name: Build and push GHCR.io
+        id: docker_build
+        uses: docker/build-push-action@v6.12.0
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          tags: |
+            ghcr.io/${{ steps.prep.outputs.tags }}
+          build-args: |
+            COMMIT_TAG=${{ github.sha }}
+            REACT_APP_PLEX_SERVER_URL=${{ secrets.PLEX_SERVER_URL }}
+            REACT_APP_PLEX_TOKEN=${{ secrets.PLEX_TOKEN }}
+          labels: |
+            org.opencontainers.image.title=${{ steps.prep.outputs.title }}
+            org.opencontainers.image.version=${{ steps.prep.outputs.version }}
+            org.opencontainers.image.created=${{ steps.prep.outputs.created }}
+            org.opencontainers.image.description=Plex Activity Monitor
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - name: Image digest
+        run: echo ${{ steps.docker_build.outputs.digest }}
+
+      - name: Send Discord Notification on Success
+        if: success()
+        run: |
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d '{
+              "content": "🚀 Docker build and push completed successfully!",
+              "embeds": [{
+                "title": "Build Details",
+                "color": 5025616,
+                "fields": [
+                  {
+                    "name": "Repository",
+                    "value": "${{ github.repository }}",
+                    "inline": true
+                  },
+                  {
+                    "name": "Version",
+                    "value": "${{ steps.prep.outputs.version }}",
+                    "inline": true
+                  },
+                  {
+                    "name": "Commit",
+                    "value": "`${{ github.sha }}`",
+                    "inline": true
+                  }
+                ],
+                "timestamp": "'$(date -u +'%Y-%m-%dT%H:%M:%SZ')'"
+              }]
+            }' \
+            ${{ secrets.DISCORD_WEBHOOK }}
