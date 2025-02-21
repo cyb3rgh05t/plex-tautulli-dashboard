@@ -25,13 +25,13 @@ Before running the Plex & Tautulli Dashboard, ensure you have the following:
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/your-username/plex-tautulli-dashboard.git
+   git clone https://github.com/your-username/custom-api.git
    ```
 
 2. Navigate to the project directory:
 
    ```bash
-   cd plex-tautulli-dashboard
+   cd custom-api
    ```
 
 3. Install the dependencies:
