@@ -4,6 +4,9 @@ import { logError } from "../../utils/logger";
 import * as Icons from "lucide-react";
 import MediaModal from "./MediaModal";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
+
 const MediaCard = ({ media }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
@@ -33,7 +36,7 @@ const MediaCard = ({ media }) => {
       thumbPath = media.thumb;
     }
 
-    return `http://localhost:3006/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
+    return `${API_BASE_URL}/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
       thumbPath
     )}&apikey=${apiKey}`;
   };
@@ -240,7 +243,7 @@ const RecentlyAdded = () => {
   // Fetch saved sections
   const fetchSections = async () => {
     try {
-      const response = await fetch("http://localhost:3006/api/sections");
+      const response = await fetch(`${API_BASE_URL}/api/sections`);
       const data = await response.json();
       setSections(data.sections);
       return data.sections;
@@ -255,7 +258,7 @@ const RecentlyAdded = () => {
   const fetchSectionRecentlyAdded = async (sectionId) => {
     try {
       const response = await fetch(
-        `http://localhost:3006/api/tautulli/api/v2?apikey=${config.tautulliApiKey}&cmd=get_recently_added&section_id=${sectionId}&count=10`
+        `${API_BASE_URL}/api/tautulli/api/v2?apikey=${config.tautulliApiKey}&cmd=get_recently_added&section_id=${sectionId}&count=10`
       );
       const data = await response.json();
 

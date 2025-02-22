@@ -2,15 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 // Determine the correct path for the config file
-const CONFIG_FILE = path.join(__dirname, "/configs/config.json");
-
-// Initialize config with default values
-let config = {
-  plexUrl: null,
-  plexToken: null,
-  tautulliUrl: null,
-  tautulliApiKey: null,
-};
+const CONFIG_FILE = path.join(__dirname, "configs", "config.json");
 
 // Ensure the config directory exists
 const ensureConfigDirectoryExists = () => {
@@ -22,6 +14,14 @@ const ensureConfigDirectoryExists = () => {
       console.error("Failed to create config directory:", error);
     }
   }
+};
+
+// Initialize config with default values
+let config = {
+  plexUrl: null,
+  plexToken: null,
+  tautulliUrl: null,
+  tautulliApiKey: null,
 };
 
 // Load config from file if it exists

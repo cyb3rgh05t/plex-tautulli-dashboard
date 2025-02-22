@@ -9,6 +9,9 @@ import {
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
+
 const EndpointCard = ({ endpoint, method, description, example, baseUrl }) => {
   const handleTest = () => {
     window.open(`${baseUrl}${endpoint}`, "_blank");
@@ -83,7 +86,7 @@ const EndpointCard = ({ endpoint, method, description, example, baseUrl }) => {
 };
 
 const ApiEndpoints = () => {
-  const [baseUrl, setBaseUrl] = useState("http://localhost:3006");
+  const [baseUrl, setBaseUrl] = useState(`${API_BASE_URL}`);
   const [serverStatus, setServerStatus] = useState("active"); // 'active', 'inactive', or 'error'
 
   // Load saved baseUrl from localStorage

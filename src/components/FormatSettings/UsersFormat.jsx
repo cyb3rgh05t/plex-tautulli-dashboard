@@ -4,6 +4,9 @@ import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
 import toast from "react-hot-toast";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
+
 // Available variables for different media types
 const BASE_VARIABLES = [
   { name: "friendly_name", description: "User's display name" },
@@ -255,7 +258,7 @@ const UsersFormat = () => {
   const [loading, setLoading] = useState(true);
   const [previewData, setPreviewData] = useState(null);
   const [error, setError] = useState(null);
-  const [activeMediaType, setActiveMediaType] = useState("shows");
+  const [activeMediaType, setActiveMediaType] = useState("movies");
   const templateInputRef = useRef(null);
 
   // Get current variables based on media type
@@ -273,7 +276,7 @@ const UsersFormat = () => {
   const fetchFormats = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:3006/api/formats");
+      const response = await fetch(`${API_BASE_URL}/api/formats`);
       const data = await response.json();
 
       // Filter formats by specific media type
@@ -303,7 +306,7 @@ const UsersFormat = () => {
   // Fetch preview data for testing formats
   const fetchPreviewData = async () => {
     try {
-      const response = await fetch("http://localhost:3006/api/users");
+      const response = await fetch(`${API_BASE_URL}/api/users`);
       const data = await response.json();
       if (data.users && data.users.length > 0) {
         // Find a user with the current media type
@@ -360,7 +363,7 @@ const UsersFormat = () => {
 
     try {
       // Get current formats
-      const response = await fetch("http://localhost:3006/api/formats");
+      const response = await fetch(`${API_BASE_URL}/api/formats`);
       const data = await response.json();
       const currentFormats = data.users || [];
 
@@ -398,7 +401,7 @@ const UsersFormat = () => {
 
       // Add new format and save
       const updatedFormats = [...currentFormats, newFormatWithType];
-      const saveResponse = await fetch("http://localhost:3006/api/formats", {
+      const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -438,7 +441,7 @@ const UsersFormat = () => {
   // Handle format deletion
   const handleDelete = async (formatName) => {
     try {
-      const response = await fetch("http://localhost:3006/api/formats");
+      const response = await fetch(`${API_BASE_URL}/api/formats`);
       const data = await response.json();
       const currentFormats = data.users || [];
 
@@ -454,7 +457,7 @@ const UsersFormat = () => {
       );
 
       // Save updated formats
-      const saveResponse = await fetch("http://localhost:3006/api/formats", {
+      const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

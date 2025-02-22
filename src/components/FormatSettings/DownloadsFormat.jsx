@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Trash2, Code, Plus, Variable } from "lucide-react";
 import toast from "react-hot-toast";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
+
 const AVAILABLE_VARIABLES = [
   { name: "title", description: "Title of the media" },
   { name: "subtitle", description: "Movie or episode title" },
@@ -97,7 +100,7 @@ const DownloadsFormat = () => {
     const fetchFormats = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch("http://localhost:3006/api/formats");
+        const response = await fetch(`${API_BASE_URL}/api/formats`);
         const data = await response.json();
         setFormats(data.downloads || []);
       } catch (error) {
@@ -147,7 +150,7 @@ const DownloadsFormat = () => {
 
       try {
         // Check for duplicate names
-        const getResponse = await fetch("http://localhost:3006/api/formats");
+        const getResponse = await fetch(`${API_BASE_URL}/api/formats`);
         const currentData = await getResponse.json();
         const currentFormats = currentData.downloads || [];
 
@@ -168,7 +171,7 @@ const DownloadsFormat = () => {
         const updatedFormats = [...currentFormats, newFormatItem];
 
         // Save the updated formats
-        const saveResponse = await fetch("http://localhost:3006/api/formats", {
+        const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -217,7 +220,7 @@ const DownloadsFormat = () => {
     );
 
     try {
-      const saveResponse = await fetch("http://localhost:3006/api/formats", {
+      const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -4,6 +4,9 @@ import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
 import * as Icons from "lucide-react";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
+
 const ActivityBadge = ({ type }) => {
   // Map activity types to their visual styles
   const styles = {
@@ -90,25 +93,6 @@ const ActivityItem = ({ activity }) => {
         </div>
 
         <ProgressBar progress={activity.progress} />
-
-        {activity.formatted &&
-          Object.entries(activity.formatted).length > 0 && (
-            <div className="pt-3 mt-3 border-t border-gray-700/50">
-              <p className="text-xs font-medium text-gray-500 mb-2">
-                Custom Formats
-              </p>
-              <div className="space-y-1.5">
-                {Object.entries(activity.formatted).map(([name, value]) => (
-                  <div key={name} className="flex items-start text-sm">
-                    <span className="text-gray-400 font-medium min-w-[120px] mr-2">
-                      {name}:
-                    </span>
-                    <span className="text-gray-300">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
       </div>
     </div>
   );
@@ -141,7 +125,7 @@ const PlexActivity = () => {
   } = useQuery(
     ["plexActivities", config.plexToken],
     async () => {
-      const response = await fetch("/api/downloads");
+      const response = await fetch(`${API_BASE_URL}/api/downloads`);
       const data = await response.json();
       if (data.error) throw new Error(data.message || data.error);
       return data.activities;

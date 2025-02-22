@@ -5,6 +5,9 @@ import { logError } from "../../utils/logger";
 import { Film, Tv, Music, Book, RefreshCw, Check, Save } from "lucide-react";
 import toast from "react-hot-toast";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
+
 const capitalizeFirstLetter = (string) => {
   return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
 };
@@ -74,7 +77,7 @@ const Libraries = () => {
   useEffect(() => {
     const fetchSavedSections = async () => {
       try {
-        const response = await fetch("http://localhost:3006/api/sections");
+        const response = await fetch(`${API_BASE_URL}/api/sections`);
         const data = await response.json();
 
         if (data.sections && data.sections.length) {
@@ -121,7 +124,7 @@ const Libraries = () => {
     ["libraries"],
     async () => {
       try {
-        const response = await fetch("http://localhost:3006/api/libraries");
+        const response = await fetch(`${API_BASE_URL}/api/libraries`);
         const data = await response.json();
         return data;
       } catch (error) {
@@ -147,7 +150,7 @@ const Libraries = () => {
       }));
 
     try {
-      const response = await fetch("http://localhost:3006/api/sections", {
+      const response = await fetch(`${API_BASE_URL}/api/sections`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

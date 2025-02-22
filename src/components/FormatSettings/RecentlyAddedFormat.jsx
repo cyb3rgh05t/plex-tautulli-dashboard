@@ -5,6 +5,9 @@ import toast from "react-hot-toast";
 import { useConfig } from "../../context/ConfigContext";
 import { Trash2, Code, Plus, Variable } from "lucide-react";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
+
 // Update EXAMPLE_DATA with more consistent timestamps
 const EXAMPLE_DATA = {
   movies: {
@@ -299,7 +302,7 @@ const RecentlyAddedFormat = () => {
   // Fetch sections
   const fetchSections = async () => {
     try {
-      const response = await axios.get("http://localhost:3006/api/sections");
+      const response = await axios.get(`${API_BASE_URL}/api/sections`);
       setSections(response.data.sections);
       return response.data.sections;
     } catch (error) {
@@ -312,7 +315,7 @@ const RecentlyAddedFormat = () => {
   const fetchRecentMedia = async (sections) => {
     setIsLoading(true);
     try {
-      const configResponse = await fetch("http://localhost:3006/api/config");
+      const configResponse = await fetch(`${API_BASE_URL}/api/config`);
       const config = await configResponse.json();
 
       const typeMap = {
@@ -328,7 +331,7 @@ const RecentlyAddedFormat = () => {
       const mediaPromises = filteredSections.map(async (section) => {
         try {
           const response = await axios.get(
-            "http://localhost:3006/api/tautulli/api/v2",
+            `${API_BASE_URL}/api/tautulli/api/v2`,
             {
               params: {
                 apikey: config.tautulliApiKey,
@@ -373,7 +376,7 @@ const RecentlyAddedFormat = () => {
       const metadataPromises = media.map(async (item) => {
         try {
           const response = await axios.get(
-            "http://localhost:3006/api/tautulli/api/v2",
+            `${API_BASE_URL}/api/tautulli/api/v2`,
             {
               params: {
                 apikey: config.tautulliApiKey,
@@ -500,7 +503,7 @@ const RecentlyAddedFormat = () => {
 
       try {
         // Get current formats
-        const response = await fetch("http://localhost:3006/api/formats");
+        const response = await fetch(`${API_BASE_URL}/api/formats`);
         const data = await response.json();
         const currentFormats = data.recentlyAdded || [];
 
@@ -513,7 +516,7 @@ const RecentlyAddedFormat = () => {
         ];
 
         // Save formats
-        const saveResponse = await fetch("http://localhost:3006/api/formats", {
+        const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -550,7 +553,7 @@ const RecentlyAddedFormat = () => {
   const handleDeleteFormat = async (formatName) => {
     try {
       // Get current formats
-      const response = await fetch("http://localhost:3006/api/formats");
+      const response = await fetch(`${API_BASE_URL}/api/formats`);
       const data = await response.json();
       const currentFormats = data.recentlyAdded || [];
 
@@ -561,7 +564,7 @@ const RecentlyAddedFormat = () => {
       );
 
       // Save updated formats
-      const saveResponse = await fetch("http://localhost:3006/api/formats", {
+      const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -590,7 +593,7 @@ const RecentlyAddedFormat = () => {
   useEffect(() => {
     const fetchFormats = async () => {
       try {
-        const response = await fetch("http://localhost:3006/api/formats");
+        const response = await fetch(`${API_BASE_URL}/api/formats`);
         const data = await response.json();
 
         // Filter formats to only show current media type

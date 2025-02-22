@@ -1,4 +1,5 @@
 import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "react-query";
 import { Toaster } from "react-hot-toast";
 import { ConfigProvider, useConfig } from "./context/ConfigContext";
@@ -25,7 +26,11 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <ConfigProvider>
-        <AppContent />
+        <Router>
+          <Routes>
+            <Route path="/" element={<AppContent />} />
+          </Routes>
+        </Router>
         <Toaster
           position="top-right"
           toastOptions={{
@@ -33,14 +38,25 @@ const App = () => {
             style: {
               background: "#1F2937",
               color: "#fff",
+              padding: "16px",
             },
             success: {
+              style: {
+                background: "#064E3B",
+                border: "1px solid #059669",
+                padding: "16px",
+              },
               iconTheme: {
                 primary: "#10B981",
                 secondary: "#fff",
               },
             },
             error: {
+              style: {
+                background: "#7F1D1D",
+                border: "1px solid #DC2626",
+                padding: "16px",
+              },
               iconTheme: {
                 primary: "#EF4444",
                 secondary: "#fff",

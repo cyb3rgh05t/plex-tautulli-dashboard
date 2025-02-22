@@ -3,6 +3,9 @@ import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
 import * as Icons from "lucide-react";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
+
 const formatRelativeTime = (timestamp) => {
   const now = new Date();
   const date = new Date(timestamp * 1000);
@@ -122,7 +125,7 @@ const Users = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch("http://localhost:3006/api/users");
+      const response = await fetch(`${API_BASE_URL}/api/users`);
 
       if (!response.ok) {
         throw new Error(`Failed to fetch users (Status: ${response.status})`);

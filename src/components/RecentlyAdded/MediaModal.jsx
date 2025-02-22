@@ -2,6 +2,9 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import * as Icons from "lucide-react";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
+
 const MediaModal = ({ media, onClose, apiKey }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -50,7 +53,7 @@ const MediaModal = ({ media, onClose, apiKey }) => {
 
   const getBackgroundUrl = () => {
     if (!media.art) return null;
-    return `http://localhost:3006/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
+    return `${API_BASE_URL}/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
       media.art
     )}&apikey=${apiKey}`;
   };

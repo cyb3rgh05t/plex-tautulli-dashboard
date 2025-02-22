@@ -457,17 +457,35 @@ app.get("/api/downloads", async (req, res) => {
       },
     });
 
-    // Process the data
+    // Get stored formats
+    const { downloads: formats } = getFormats();
+
+    // Process the data with formats
     const processedData = {
       total: plexResponse.data?.MediaContainer?.Activity?.length || 0,
       activities:
-        plexResponse.data?.MediaContainer?.Activity?.map((activity) => ({
-          uuid: activity.uuid,
-          title: activity.title,
-          subtitle: activity.subtitle,
-          progress: activity.progress,
-          type: activity.type,
-        })) || [],
+        plexResponse.data?.MediaContainer?.Activity?.map((activity) => {
+          const baseData = {
+            uuid: activity.uuid,
+            title: activity.title,
+            subtitle: activity.subtitle,
+            progress: activity.progress,
+            type: activity.type,
+          };
+
+          const formattedData = {};
+          formats.forEach((format) => {
+            formattedData[format.name] = processTemplate(
+              format.template,
+              baseData
+            );
+          });
+
+          return {
+            ...baseData,
+            formatted: formattedData,
+          };
+        }) || [],
     };
 
     res.json(processedData);
