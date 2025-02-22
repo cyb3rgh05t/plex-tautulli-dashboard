@@ -97,7 +97,7 @@ const DownloadsFormat = () => {
     const fetchFormats = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch("/api/formats");
+        const response = await fetch("http://localhost:3006/api/formats");
         const data = await response.json();
         setFormats(data.downloads || []);
       } catch (error) {
@@ -147,7 +147,7 @@ const DownloadsFormat = () => {
 
       try {
         // Check for duplicate names
-        const getResponse = await fetch("/api/formats");
+        const getResponse = await fetch("http://localhost:3006/api/formats");
         const currentData = await getResponse.json();
         const currentFormats = currentData.downloads || [];
 
@@ -168,7 +168,7 @@ const DownloadsFormat = () => {
         const updatedFormats = [...currentFormats, newFormatItem];
 
         // Save the updated formats
-        const saveResponse = await fetch("/api/formats", {
+        const saveResponse = await fetch("http://localhost:3006/api/formats", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -217,7 +217,7 @@ const DownloadsFormat = () => {
     );
 
     try {
-      const saveResponse = await fetch("/api/formats", {
+      const saveResponse = await fetch("http://localhost:3006/api/formats", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

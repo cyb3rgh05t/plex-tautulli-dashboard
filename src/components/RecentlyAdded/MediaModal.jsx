@@ -50,7 +50,7 @@ const MediaModal = ({ media, onClose, apiKey }) => {
 
   const getBackgroundUrl = () => {
     if (!media.art) return null;
-    return `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
+    return `http://localhost:3006/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
       media.art
     )}&apikey=${apiKey}`;
   };

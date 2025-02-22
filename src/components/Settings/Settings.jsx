@@ -181,7 +181,7 @@ const Settings = ({ onClose }) => {
 
   const handleSave = async () => {
     try {
-      await axios.post("/api/config", formData);
+      await axios.post("http://localhost:3006/api/config", formData);
       updateConfig(formData);
       toast.success("Settings saved successfully!");
     } catch (error) {
@@ -390,7 +390,7 @@ const Settings = ({ onClose }) => {
                             )
                           ) {
                             axios
-                              .post("/api/reset-all")
+                              .post("http://localhost:3006/api/reset-all")
                               .then(() => {
                                 clearConfig();
                                 toast.success(

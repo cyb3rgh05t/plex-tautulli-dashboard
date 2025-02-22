@@ -273,7 +273,7 @@ const UsersFormat = () => {
   const fetchFormats = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/formats");
+      const response = await fetch("http://localhost:3006/api/formats");
       const data = await response.json();
 
       // Filter formats by specific media type
@@ -303,7 +303,7 @@ const UsersFormat = () => {
   // Fetch preview data for testing formats
   const fetchPreviewData = async () => {
     try {
-      const response = await fetch("/api/users");
+      const response = await fetch("http://localhost:3006/api/users");
       const data = await response.json();
       if (data.users && data.users.length > 0) {
         // Find a user with the current media type
@@ -360,7 +360,7 @@ const UsersFormat = () => {
 
     try {
       // Get current formats
-      const response = await fetch("/api/formats");
+      const response = await fetch("http://localhost:3006/api/formats");
       const data = await response.json();
       const currentFormats = data.users || [];
 
@@ -398,7 +398,7 @@ const UsersFormat = () => {
 
       // Add new format and save
       const updatedFormats = [...currentFormats, newFormatWithType];
-      const saveResponse = await fetch("/api/formats", {
+      const saveResponse = await fetch("http://localhost:3006/api/formats", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -438,7 +438,7 @@ const UsersFormat = () => {
   // Handle format deletion
   const handleDelete = async (formatName) => {
     try {
-      const response = await fetch("/api/formats");
+      const response = await fetch("http://localhost:3006/api/formats");
       const data = await response.json();
       const currentFormats = data.users || [];
 
@@ -454,7 +454,7 @@ const UsersFormat = () => {
       );
 
       // Save updated formats
-      const saveResponse = await fetch("/api/formats", {
+      const saveResponse = await fetch("http://localhost:3006/api/formats", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
