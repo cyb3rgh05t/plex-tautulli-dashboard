@@ -6,7 +6,7 @@ services:
     environment:
       - "TZ=Europe/berlin"
       - "NODE_ENV=production"
-      - "ALLOWED_ORIGINS=" # CORS ORIGINS
+      - "ALLOWED_ORIGINS=*" # CORS ORIGINS
       - "VITE_ALLOWED_HOSTS=all" # Allow all hosts
       - "VITE_ALLOW_ALL_HOSTS=true" # Alternative to VITE_ALLOWED_HOSTS=all
     image: "ghcr.io/cyb3rgh05t/plex-tautulli-dashboard"
@@ -15,12 +15,4 @@ services:
       - "3005:3005" # frontend server
       - "3006:3006" # backend proxyserver
     volumes:
-      - "/opt/appdata/plex-tautulli-dashboard:/app/data"
-# ===============================================
-
-# LOCAL APP DATA
-
-# mkdir /opt/appdata/plex-tautulli-dashboard
-# touch sections.json
-# touch config.json
-# touch formats.json
+      - "/opt/appdata/plex-tautulli-dashboard:/app/src/utils/configs:rw"

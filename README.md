@@ -109,15 +109,6 @@ services:
       - "/opt/appdata/plex-tautulli-dashboard:/app/src/utils/configs:rw"
 ```
 
-Before running the Docker Compose setup, make sure to create the required local folders and files:
-
-```bash
-mkdir /opt/appdata/plex-tautulli-dashboard
-touch /opt/appdata/plex-tautulli-dashboard/sections.json
-touch /opt/appdata/plex-tautulli-dashboard/config.json
-touch /opt/appdata/plex-tautulli-dashboard/formats.json
-```
-
 These files will be mounted as volumes in the Docker container and will be used to store the application data.
 
 To start the Plex & Tautulli Dashboard using Docker Compose, run the following command in the directory containing the `docker-compose.yml` file:

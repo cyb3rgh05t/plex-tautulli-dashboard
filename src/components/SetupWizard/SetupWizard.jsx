@@ -51,22 +51,19 @@ const SetupWizard = () => {
     tautulliApiKey: false,
   });
 
+  // Update all your API calls to use relative URLs
+  // For example, in SetupWizard.jsx:
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setTesting(true);
-    setTestResults({ plex: null, tautulli: null });
-
-    const loadingToast = toast.loading("Testing connections...", {
-      style: {
-        border: "1px solid #059669",
-        padding: "16px",
-        background: "#064E3B",
-      },
-    });
 
     try {
+      const loadingToast = toast.loading("Testing connections...");
+
       // Configure the proxy server first
-      await fetch("http://localhost:3006/api/config", {
+      await fetch("/api/config", {
+        // Remove the hardcoded localhost:3006
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -74,28 +71,13 @@ const SetupWizard = () => {
         body: JSON.stringify(formData),
       });
 
-      // Test Plex connection
-      try {
-        await testPlexConnection(formData.plexUrl, formData.plexToken);
-        setTestResults((prev) => ({ ...prev, plex: true }));
-      } catch (err) {
-        setTestResults((prev) => ({ ...prev, plex: false }));
-        throw new Error("Plex connection failed");
-      }
+      // Test connections
+      await Promise.all([
+        testPlexConnection(formData.plexUrl, formData.plexToken),
+        testTautulliConnection(formData.tautulliUrl, formData.tautulliApiKey),
+      ]);
 
-      // Test Tautulli connection
-      try {
-        await testTautulliConnection(
-          formData.tautulliUrl,
-          formData.tautulliApiKey
-        );
-        setTestResults((prev) => ({ ...prev, tautulli: true }));
-      } catch (err) {
-        setTestResults((prev) => ({ ...prev, tautulli: false }));
-        throw new Error("Tautulli connection failed");
-      }
-
-      // Update config if all tests pass
+      // Update local config if tests pass
       updateConfig(formData);
 
       toast.success("Setup completed successfully!", {
@@ -116,7 +98,6 @@ const SetupWizard = () => {
           padding: "16px",
           background: "#7F1D1D",
         },
-        id: loadingToast,
         duration: 4000,
       });
       logError("Setup failed", err);
