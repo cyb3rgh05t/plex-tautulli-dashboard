@@ -1,11 +1,9 @@
 import axios from "axios";
 import { logError, logInfo } from "../utils/logger";
 
-const PROXY_BASE_URL = "http://localhost:3006";
-
 const plexAxios = axios.create({
-  baseURL: `${PROXY_BASE_URL}/api/plex`,
-  timeout: 30000, // Increased from 10000 to 30000ms (30 seconds)
+  baseURL: "/api/plex", // Changed to relative path
+  timeout: 30000,
   timeoutErrorMessage: "Connection to Plex server timed out",
   headers: {
     Accept: "application/json",
@@ -18,7 +16,7 @@ export const testPlexConnection = async (plexUrl, plexToken) => {
     logInfo("Testing Plex connection...", { url: plexUrl });
 
     // Configure the proxy with both URL and token
-    await axios.post(`${PROXY_BASE_URL}/api/config`, {
+    await axios.post("/api/config", {
       plexUrl,
       plexToken,
     });

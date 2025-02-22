@@ -28,43 +28,24 @@ const PLEX_HEADERS = [
   "x-plex-language",
 ];
 
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",")
+  : ["http://localhost:3005"];
+
 // CORS configuration
+// Update the CORS configuration
 app.use(
   cors({
     origin: function (origin, callback) {
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
 
-      // List of allowed origins from environment variable
-      const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
-        ? process.env.ALLOWED_ORIGINS.split(",")
-        : ["http://localhost:3005"];
-
-      // Check if '*' is specified (allow all origins)
-      if (ALLOWED_ORIGINS.includes("*")) {
-        return callback(null, true);
+      // Check if the origin is in the allowed list
+      if (ALLOWED_ORIGINS.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
       }
-
-      // Check if the origin matches any allowed origin
-      const isAllowed = ALLOWED_ORIGINS.some((allowedOrigin) => {
-        // Exact match
-        if (origin === allowedOrigin) return true;
-
-        // Wildcard subdomain match
-        if (allowedOrigin.startsWith("*.")) {
-          const domain = allowedOrigin.slice(2);
-          return new URL(origin).hostname.endsWith(domain);
-        }
-
-        return false;
-      });
-
-      if (isAllowed) {
-        return callback(null, true);
-      }
-
-      // Reject if not in allowed origins
-      callback(new Error("Not allowed by CORS policy"));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -846,8 +827,10 @@ const createDynamicProxy = (serviceName, options = {}) => {
         });
       },
       onProxyRes: (proxyRes, req, res) => {
-        proxyRes.headers["Access-Control-Allow-Origin"] =
-          "http://localhost:3005";
+        // Get the origin from the request or use the first allowed origin as fallback
+        const origin = req.headers.origin || ALLOWED_ORIGINS[0];
+        proxyRes.headers["Access-Control-Allow-Origin"] = origin;
+        proxyRes.headers["Access-Control-Allow-Credentials"] = "true";
         proxyRes.headers["Access-Control-Allow-Headers"] = [
           "Content-Type",
           "Authorization",
@@ -1010,17 +993,16 @@ const endpointsBanner = `
 └── GET  /api/config
     └── Get current Server configuration`;
 
-const PORT = process.env.PORT || 3005;
-const PROXY_PORT = process.env.PROXY_PORT || 3006;
-app.listen(PROXY_PORT, "0.0.0.0", () => {
+const PORT = process.env.PORT || 3006;
+app.listen(PORT, "0.0.0.0", () => {
+  // Changed from localhost to 0.0.0.0
   console.clear();
   console.log(serverBanner);
   console.log("\n🚀 Server Information:");
   console.log("├── Status: Running");
-  console.log(`├── Frontend Server URL: http://localhost:${PORT}`);
-  console.log(`├── Proxy Server URL http://0.0.0.0:${PROXY_PORT}`);
-  console.log(formatConfig(getConfig()));
+  console.log(`├── Listening on: http://0.0.0.0:${PORT}`);
   console.log(`├── Environment: ${process.env.NODE_ENV || "development"}`);
   console.log("└── Time:", new Date().toLocaleString());
+  //console.log(formatConfig(getConfig()));
   console.log(endpointsBanner);
 });

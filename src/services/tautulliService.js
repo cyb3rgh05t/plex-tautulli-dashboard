@@ -1,11 +1,9 @@
 import axios from "axios";
 import { logError, logInfo } from "../utils/logger";
 
-const PROXY_BASE_URL = "http://localhost:3006";
-
 const tautulliAxios = axios.create({
-  baseURL: `${PROXY_BASE_URL}/api/tautulli`,
-  timeout: 30000, // Increased from 10000 to 30000ms (30 seconds)
+  baseURL: "/api/tautulli", // Changed to relative path
+  timeout: 30000,
   timeoutErrorMessage: "Connection to Tautulli server timed out",
   headers: {
     Accept: "application/json",
@@ -16,7 +14,7 @@ const tautulliAxios = axios.create({
 export const testTautulliConnection = async (tautulliUrl, apiKey) => {
   try {
     // Configure the proxy first
-    await axios.post(`${PROXY_BASE_URL}/api/config`, {
+    await axios.post("/api/config", {
       tautulliUrl,
     });
 
@@ -61,14 +59,15 @@ export const testTautulliConnection = async (tautulliUrl, apiKey) => {
 
 export const getImageUrl = (imagePath, apiKey) => {
   if (!imagePath) return null;
-  return `${PROXY_BASE_URL}/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
+  return `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
     imagePath
-  )}&apikey=${apiKey}`;
+  )}&apikey=${apiKey}`; // Changed to relative path
 };
 
 export const configureProxy = async (plexUrl, tautulliUrl) => {
   try {
-    await axios.post(`${PROXY_BASE_URL}/api/config`, {
+    await axios.post("/api/config", {
+      // Changed to relative path
       plexUrl,
       tautulliUrl,
     });
