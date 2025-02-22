@@ -141,7 +141,7 @@ const PlexActivity = () => {
   } = useQuery(
     ["plexActivities", config.plexToken],
     async () => {
-      const response = await fetch("http://localhost:3006/api/downloads");
+      const response = await fetch("/api/downloads");
       const data = await response.json();
       if (data.error) throw new Error(data.message || data.error);
       return data.activities;

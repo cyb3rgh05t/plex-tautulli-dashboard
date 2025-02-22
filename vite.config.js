@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 // Get environment variables with fallbacks
-const backendUrl = process.env.VITE_BACKEND_URL || "http://localhost:3006";
+const backendUrl = process.env.VITE_BACKEND_URL || "http://0.0.0.0:3006";
 const allowedHosts =
   process.env.VITE_ALLOWED_HOSTS === "*"
     ? "all"

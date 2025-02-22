@@ -1042,7 +1042,7 @@ app.listen(PORT, "0.0.0.0", () => {
   //console.log(serverBanner);
   console.log("\n🚀 Server Information:");
   console.log("├── Status: Running");
-  console.log(`├── Listening on: http://0.0.0.0:${PORT}`);
+  console.log(`├── Listening on: ${process.env.VITE_BACKEND_URL}`);
   console.log(`├── Allowed CORS: ${ALLOWED_ORIGINS}`);
   console.log(`├── Environment: ${process.env.NODE_ENV || "development"}`);
   console.log("└── Time:", new Date().toLocaleString());
