@@ -4,15 +4,29 @@ services:
     hostname: "plex-tautulli-dashboard"
     container_name: "plex-tautulli-dashboard"
     environment:
-      - "TZ=Europe/berlin"
-      - "NODE_ENV=production"
-      - "ALLOWED_ORIGINS=*" # CORS ORIGINS
-      - "VITE_ALLOWED_HOSTS=all" # Allow all hosts
-      - "VITE_ALLOW_ALL_HOSTS=true" # Alternative to VITE_ALLOWED_HOSTS=all
+      # System settings
+      - TZ=Europe/Berlin
+      - NODE_ENV=production
+
+      # Backend settings
+      - PORT=3006
+      - ALLOWED_ORIGINS=* # CORS settings (comma-separated list or * for all)
+
+      # Frontend settings
+      - VITE_ALLOWED_HOSTS=all # Allow any host to access frontend
+      - VITE_ALLOW_ALL_HOSTS=true # Alternative to VITE_ALLOWED_HOSTS
+      - VITE_BACKEND_URL=http://localhost:3006 # Backend URL for frontend to connect to
+
+      # Proxy timeouts (in milliseconds)
+      - PROXY_TIMEOUT=30000
+      - PROXY_READ_TIMEOUT=30000
+      - PROXY_WRITE_TIMEOUT=30000
+
     image: "ghcr.io/cyb3rgh05t/plex-tautulli-dashboard"
     restart: "unless-stopped"
     ports:
-      - "3005:3005" # frontend server
-      - "3006:3006" # backend proxyserver
+      - "3005:3005" # Frontend
+      - "3006:3006" # Backend API
     volumes:
+      # Persistent storage for configurations
       - "/opt/appdata/plex-tautulli-dashboard:/app/src/utils/configs:rw"

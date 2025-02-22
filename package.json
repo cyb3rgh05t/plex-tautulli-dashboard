@@ -14,6 +14,7 @@
     "axios": "^1.7.9",
     "concurrently": "^8.2.2",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
     "express": "^4.18.2",
     "http-proxy-middleware": "^2.0.6",
     "lucide-react": "^0.475.0",

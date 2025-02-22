@@ -1,3 +1,5 @@
+//require("dotenv").config(); // This will load environment variables from .env file
+require("dotenv").config({ path: ".env" });
 const express = require("express");
 const cors = require("cors");
 const { createProxyMiddleware } = require("http-proxy-middleware");
@@ -7,15 +9,34 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
-// Add this near the top of your existing server.cjs file, with other imports
+// Constants and Configuration
 const SAVED_SECTIONS_PATH = path.join(
   __dirname,
   "/src/utils/configs/sections.json"
 );
 
+const PROXY_TIMEOUT = parseInt(process.env.PROXY_TIMEOUT) || 30000;
+const PROXY_READ_TIMEOUT = parseInt(process.env.PROXY_READ_TIMEOUT) || 30000;
+const PROXY_WRITE_TIMEOUT = parseInt(process.env.PROXY_WRITE_TIMEOUT) || 30000;
+
+// Ensure required directories exist
+const ensureDirectories = () => {
+  const dirs = [path.dirname(SAVED_SECTIONS_PATH)];
+
+  dirs.forEach((dir) => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      console.log(`Created directory: ${dir}`);
+    }
+  });
+};
+
+// Initialize directories
+ensureDirectories();
+
 const app = express();
 
-// List of all allowed Plex headers
+// Plex headers configuration
 const PLEX_HEADERS = [
   "x-plex-client-identifier",
   "x-plex-product",
@@ -28,47 +49,50 @@ const PLEX_HEADERS = [
   "x-plex-language",
 ];
 
+// CORS Configuration
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",")
-  : ["http://localhost:3005"];
+  ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
+  : ["http://localhost:3005"]; // Default fallback
 
-// CORS configuration
-// Update the CORS configuration
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin || ALLOWED_ORIGINS.includes("*")) {
+      return callback(null, true);
+    }
 
-      // Check if the origin is in the allowed list
-      if (ALLOWED_ORIGINS.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", ...PLEX_HEADERS],
-  })
-);
+    if (ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log("Origin not allowed by CORS:", origin);
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", ...PLEX_HEADERS],
+  exposedHeaders: ["Access-Control-Allow-Origin"],
+};
 
+// Apply middleware
+app.use(cors(corsOptions));
 app.use(express.json());
+app.options("*", cors(corsOptions));
 
-// OPTIONS preflight handler
-app.options("*", cors());
-
-// Debug logging middleware
+// Logging middleware
 app.use((req, res, next) => {
   console.log("Request:", {
     method: req.method,
     url: req.url,
-    headers: req.headers,
+    origin: req.headers.origin,
+    headers: {
+      ...req.headers,
+      "x-plex-token": req.headers["x-plex-token"] ? "[REDACTED]" : undefined,
+      authorization: req.headers.authorization ? "[REDACTED]" : undefined,
+    },
   });
   next();
 });
-
-// Add these helper functions at the top of server.cjs, before the endpoints
 
 // Date formatting helper
 // Updated formatDate function for relative time formatting
@@ -780,34 +804,33 @@ const createDynamicProxy = (serviceName, options = {}) => {
     const target = serviceName === "Plex" ? config.plexUrl : config.tautulliUrl;
 
     if (!target) {
-      return res
-        .status(500)
-        .json({ error: `${serviceName} URL not configured` });
+      return res.status(500).json({
+        error: `${serviceName} URL not configured`,
+        detail: `Please configure ${serviceName} URL in settings`,
+      });
     }
-
-    console.log(`${serviceName} Proxy Request:`, {
-      method: req.method,
-      url: req.url,
-      target: target,
-    });
 
     const proxy = createProxyMiddleware({
       target,
       changeOrigin: true,
       secure: false,
-      timeout: 30000, // 30 seconds timeout
-      proxyTimeout: 30000, // 30 seconds proxy timeout
+      timeout: PROXY_TIMEOUT,
+      proxyTimeout: PROXY_TIMEOUT,
+      xfwd: true, // Forward the x-forwarded-* headers
       pathRewrite: (path) => {
         const newPath = path.replace(
           new RegExp(`^/api/${serviceName.toLowerCase()}`),
           ""
         );
-        console.log("Path rewrite:", { from: path, to: newPath });
+        console.log(`${serviceName} path rewrite:`, {
+          from: path,
+          to: newPath,
+        });
         return newPath;
       },
       onProxyReq: (proxyReq, req, res) => {
+        // Add service-specific headers
         if (serviceName === "Plex" && config.plexToken) {
-          // Add Plex headers
           proxyReq.setHeader(
             "X-Plex-Client-Identifier",
             "PlexTautulliDashboard"
@@ -815,38 +838,58 @@ const createDynamicProxy = (serviceName, options = {}) => {
           proxyReq.setHeader("X-Plex-Product", "Plex Tautulli Dashboard");
           proxyReq.setHeader("X-Plex-Version", "1.0.0");
 
-          // Add token if not in URL
           if (!req.query["X-Plex-Token"]) {
             proxyReq.setHeader("X-Plex-Token", config.plexToken);
           }
         }
 
-        console.log("Proxying request:", {
-          url: proxyReq.path,
-          headers: proxyReq.getHeaders(),
+        // Log the proxied request (with sensitive data redacted)
+        console.log(`${serviceName} proxy request:`, {
+          path: proxyReq.path,
+          headers: {
+            ...proxyReq.getHeaders(),
+            "x-plex-token": "[REDACTED]",
+            authorization: "[REDACTED]",
+          },
         });
       },
       onProxyRes: (proxyRes, req, res) => {
-        // Get the origin from the request or use the first allowed origin as fallback
+        // Handle CORS headers
         const origin = req.headers.origin || ALLOWED_ORIGINS[0];
-        proxyRes.headers["Access-Control-Allow-Origin"] = origin;
+        proxyRes.headers["Access-Control-Allow-Origin"] =
+          ALLOWED_ORIGINS.includes("*") ? "*" : origin;
         proxyRes.headers["Access-Control-Allow-Credentials"] = "true";
         proxyRes.headers["Access-Control-Allow-Headers"] = [
           "Content-Type",
           "Authorization",
           ...PLEX_HEADERS,
         ].join(", ");
+
+        // Log the response (without sensitive data)
+        console.log(`${serviceName} proxy response:`, {
+          status: proxyRes.statusCode,
+          url: req.url,
+          headers: {
+            ...proxyRes.headers,
+            authorization: proxyRes.headers.authorization
+              ? "[REDACTED]"
+              : undefined,
+          },
+        });
       },
       onError: (err, req, res) => {
-        console.error(`${serviceName} Proxy Error:`, {
+        console.error(`${serviceName} proxy error:`, {
           message: err.message,
-          stack: err.stack,
           code: err.code,
+          stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
         });
+
+        // Send a more detailed error response
         res.status(500).json({
           error: `${serviceName} Proxy Error`,
           message: err.message,
           code: err.code,
+          detail: `Failed to proxy request to ${serviceName}. Please check your connection and settings.`,
         });
       },
       ...options,
@@ -856,7 +899,6 @@ const createDynamicProxy = (serviceName, options = {}) => {
   };
 };
 
-// In server.cjs
 app.post("/api/reset-all", (req, res) => {
   try {
     const configPath = path.join(__dirname, "/src/utils/configs/config.json");
@@ -997,12 +1039,13 @@ const PORT = process.env.PORT || 3006;
 app.listen(PORT, "0.0.0.0", () => {
   // Changed from localhost to 0.0.0.0
   console.clear();
-  console.log(serverBanner);
+  //console.log(serverBanner);
   console.log("\n🚀 Server Information:");
   console.log("├── Status: Running");
   console.log(`├── Listening on: http://0.0.0.0:${PORT}`);
+  console.log(`├── Allowed CORS: ${ALLOWED_ORIGINS}`);
   console.log(`├── Environment: ${process.env.NODE_ENV || "development"}`);
   console.log("└── Time:", new Date().toLocaleString());
   //console.log(formatConfig(getConfig()));
-  console.log(endpointsBanner);
+  //console.log(endpointsBanner);
 });
