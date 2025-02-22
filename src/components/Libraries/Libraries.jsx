@@ -74,7 +74,7 @@ const Libraries = () => {
   useEffect(() => {
     const fetchSavedSections = async () => {
       try {
-        const response = await fetch("http://localhost:3006/api/sections");
+        const response = await fetch("/api/sections");
         const data = await response.json();
 
         if (data.sections && data.sections.length) {
@@ -121,7 +121,7 @@ const Libraries = () => {
     ["libraries"],
     async () => {
       try {
-        const response = await fetch("http://localhost:3006/api/libraries");
+        const response = await fetch("/api/libraries");
         const data = await response.json();
         return data;
       } catch (error) {
@@ -147,7 +147,7 @@ const Libraries = () => {
       }));
 
     try {
-      const response = await fetch("http://localhost:3006/api/sections", {
+      const response = await fetch("/api/sections", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

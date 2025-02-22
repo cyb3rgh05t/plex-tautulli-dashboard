@@ -33,7 +33,7 @@ const MediaCard = ({ media }) => {
       thumbPath = media.thumb;
     }
 
-    return `http://localhost:3006/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
+    return `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
       thumbPath
     )}&apikey=${apiKey}`;
   };
@@ -240,7 +240,7 @@ const RecentlyAdded = () => {
   // Fetch saved sections
   const fetchSections = async () => {
     try {
-      const response = await fetch("http://localhost:3006/api/sections");
+      const response = await fetch("/api/sections");
       const data = await response.json();
       setSections(data.sections);
       return data.sections;
@@ -255,7 +255,7 @@ const RecentlyAdded = () => {
   const fetchSectionRecentlyAdded = async (sectionId) => {
     try {
       const response = await fetch(
-        `http://localhost:3006/api/tautulli/api/v2?apikey=${config.tautulliApiKey}&cmd=get_recently_added&section_id=${sectionId}&count=10`
+        `/api/tautulli/api/v2?apikey=${config.tautulliApiKey}&cmd=get_recently_added&section_id=${sectionId}&count=10`
       );
       const data = await response.json();
 

@@ -598,9 +598,7 @@ app.get("/api/recent/:type", async (req, res) => {
     }
 
     // Fetch sections
-    const sectionsResponse = await axios.get(
-      "http://localhost:3006/api/sections"
-    );
+    const sectionsResponse = await axios.get("/api/sections");
     const allSections = sectionsResponse.data.sections;
 
     // Get formats
