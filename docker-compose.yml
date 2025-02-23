@@ -16,6 +16,7 @@ services:
       - VITE_ALLOWED_HOSTS=all # Allow any host to access frontend
       - VITE_ALLOW_ALL_HOSTS=true # Alternative to VITE_ALLOWED_HOSTS
       - VITE_BACKEND_URL=http://localhost:3006 # Backend URL for frontend to connect to
+      - VITE_API_BASE_URL=http://localhost:3006 # Backend URL for frontend to connect to
 
       # Proxy timeouts (in milliseconds)
       - PROXY_TIMEOUT=30000

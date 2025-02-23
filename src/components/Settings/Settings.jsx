@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   FaExclamationTriangle,
   FaGithub,
@@ -32,12 +31,14 @@ const SubTabButton = ({ active, onClick, children, icon: Icon }) => (
 );
 
 const Settings = ({ onClose }) => {
-  const navigate = useNavigate();
   const { clearConfig } = useConfig();
   const [activeSubTab, setActiveSubTab] = useState("api");
 
   const handleApiDocumentationClick = () => {
-    navigate("/?tab=apiEndpoints");
+    // Dispatch custom event to change tab
+    window.dispatchEvent(
+      new CustomEvent("changeTab", { detail: "apiEndpoints" })
+    );
     onClose();
   };
 

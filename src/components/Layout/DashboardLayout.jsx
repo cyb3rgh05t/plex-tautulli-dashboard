@@ -1,17 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { FaGithub } from "react-icons/fa";
+import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useConfig } from "../../context/ConfigContext";
 import { testPlexConnection } from "../../services/plexService";
 import { testTautulliConnection } from "../../services/tautulliService";
-import PlexActivity from "../PlexActivity/PlexActivity";
-import RecentlyAdded from "../RecentlyAdded/RecentlyAdded";
-import FormatSettings from "../FormatSettings/FormatSettings";
 import { appVersion } from "../../../version";
-import Libraries from "../Libraries/Libraries";
-import Users from "../Users/Users";
-import Settings from "../Settings/Settings";
-import ApiEndpoints from "../FormatSettings/ApiEndpoints";
 import {
   ActivitySquare,
   ClipboardList,
@@ -23,6 +15,16 @@ import {
   Clock,
   SlidersHorizontal,
 } from "lucide-react";
+import {
+  FaExclamationTriangle,
+  FaGithub,
+  FaCog,
+  FaKey,
+  FaExternalLinkAlt,
+  FaTrash,
+  FaChevronLeft,
+} from "react-icons/fa";
+import Settings from "../Settings/Settings";
 
 const TabButton = ({ active, onClick, children, icon: Icon }) => (
   <button
@@ -56,66 +58,40 @@ const ConnectionBadge = ({ status, type, icon: Icon }) => (
 );
 
 const DashboardLayout = () => {
-  const location = useLocation();
   const navigate = useNavigate();
-  const { config, isConfigured } = useConfig();
-  const [activeTab, setActiveTab] = useState("activities");
+  const location = useLocation();
+  const { config } = useConfig();
   const [showSettings, setShowSettings] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState({
     plex: null,
     tautulli: null,
   });
 
-  // Update active tab based on URL parameters
-  useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    const tabFromUrl = searchParams.get("tab");
+  // Check active route
+  const isActiveRoute = (path) => location.pathname === path;
 
-    if (tabFromUrl) {
-      setActiveTab(tabFromUrl);
-    }
-  }, [location]);
-
-  // Check connection status when component mounts or config changes
   useEffect(() => {
     const checkConnections = async () => {
-      if (isConfigured()) {
-        try {
-          await testPlexConnection(config.plexUrl, config.plexToken);
-          setConnectionStatus((prev) => ({ ...prev, plex: true }));
-        } catch (error) {
-          setConnectionStatus((prev) => ({ ...prev, plex: false }));
-        }
+      try {
+        await testPlexConnection(config.plexUrl, config.plexToken);
+        setConnectionStatus((prev) => ({ ...prev, plex: true }));
+      } catch (error) {
+        setConnectionStatus((prev) => ({ ...prev, plex: false }));
+      }
 
-        try {
-          await testTautulliConnection(
-            config.tautulliUrl,
-            config.tautulliApiKey
-          );
-          setConnectionStatus((prev) => ({ ...prev, tautulli: true }));
-        } catch (error) {
-          setConnectionStatus((prev) => ({ ...prev, tautulli: false }));
-        }
+      try {
+        await testTautulliConnection(config.tautulliUrl, config.tautulliApiKey);
+        setConnectionStatus((prev) => ({ ...prev, tautulli: true }));
+      } catch (error) {
+        setConnectionStatus((prev) => ({ ...prev, tautulli: false }));
       }
     };
 
     checkConnections();
-  }, [config, isConfigured]);
-
-  // Update URL when tab changes
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    navigate(`/?tab=${tab}`);
-  };
+  }, [config]);
 
   return (
     <div className="min-h-screen bg-gray-900 bg-[radial-gradient(at_0%_0%,rgba(0,112,243,0.1)_0px,transparent_50%),radial-gradient(at_98%_100%,rgba(82,0,243,0.1)_0px,transparent_50%)]">
-      {showSettings && (
-        <div className="fixed inset-0 z-50 bg-gray-900">
-          <Settings onClose={() => setShowSettings(false)} />
-        </div>
-      )}
-
       <header className="bg-gray-800/90 backdrop-blur-sm border-b border-gray-700/50 shadow-xl">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
@@ -135,21 +111,18 @@ const DashboardLayout = () => {
             </div>
 
             <div className="flex items-center space-x-4">
-              {/* Connection Status Badges */}
-              {isConfigured() && (
-                <div className="flex items-center space-x-2 mr-4">
-                  <ConnectionBadge
-                    status={connectionStatus.plex}
-                    type="Plex"
-                    icon={Server}
-                  />
-                  <ConnectionBadge
-                    status={connectionStatus.tautulli}
-                    type="Tautulli"
-                    icon={Database}
-                  />
-                </div>
-              )}
+              <div className="flex items-center space-x-2">
+                <ConnectionBadge
+                  status={connectionStatus.plex}
+                  type="Plex"
+                  icon={Server}
+                />
+                <ConnectionBadge
+                  status={connectionStatus.tautulli}
+                  type="Tautulli"
+                  icon={Database}
+                />
+              </div>
 
               <a
                 href="https://github.com/cyb3rgh05t/plex-tautulli-dashboard"
@@ -159,15 +132,12 @@ const DashboardLayout = () => {
               >
                 <FaGithub size={24} />
               </a>
-
-              {isConfigured() && (
-                <button
-                  onClick={() => setShowSettings(true)}
-                  className="text-gray-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-gray-700/50"
-                >
-                  <SettingsCog size={24} />
-                </button>
-              )}
+              <button
+                onClick={() => setShowSettings(true)}
+                className="text-gray-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-gray-700/50"
+              >
+                <SettingsCog size={24} />
+              </button>
             </div>
           </div>
         </div>
@@ -178,29 +148,29 @@ const DashboardLayout = () => {
         <div className="flex justify-between mb-6">
           <div className="flex gap-2">
             <TabButton
-              active={activeTab === "activities"}
-              onClick={() => handleTabChange("activities")}
+              active={isActiveRoute("/activities")}
+              onClick={() => navigate("/activities")}
               icon={ActivitySquare}
             >
               Plex Activities
             </TabButton>
             <TabButton
-              active={activeTab === "recent"}
-              onClick={() => handleTabChange("recent")}
+              active={isActiveRoute("/recent")}
+              onClick={() => navigate("/recent")}
               icon={Clock}
             >
               Recently Added
             </TabButton>
             <TabButton
-              active={activeTab === "libraries"}
-              onClick={() => handleTabChange("libraries")}
+              active={isActiveRoute("/libraries")}
+              onClick={() => navigate("/libraries")}
               icon={ClipboardList}
             >
               Libraries
             </TabButton>
             <TabButton
-              active={activeTab === "users"}
-              onClick={() => handleTabChange("users")}
+              active={isActiveRoute("/users")}
+              onClick={() => navigate("/users")}
               icon={UsersGroup}
             >
               Users
@@ -208,15 +178,15 @@ const DashboardLayout = () => {
           </div>
           <div className="flex gap-2">
             <TabButton
-              active={activeTab === "format"}
-              onClick={() => handleTabChange("format")}
+              active={isActiveRoute("/format")}
+              onClick={() => navigate("/format")}
               icon={SlidersHorizontal}
             >
               Format Settings
             </TabButton>
             <TabButton
-              active={activeTab === "apiEndpoints"}
-              onClick={() => handleTabChange("apiEndpoints")}
+              active={isActiveRoute("/api-endpoints")}
+              onClick={() => navigate("/api-endpoints")}
               icon={Code}
             >
               API Endpoints
@@ -226,21 +196,16 @@ const DashboardLayout = () => {
 
         {/* Content */}
         <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6 shadow-lg">
-          {activeTab === "activities" ? (
-            <PlexActivity />
-          ) : activeTab === "recent" ? (
-            <RecentlyAdded />
-          ) : activeTab === "libraries" ? (
-            <Libraries />
-          ) : activeTab === "users" ? (
-            <Users />
-          ) : activeTab === "apiEndpoints" ? (
-            <ApiEndpoints />
-          ) : (
-            <FormatSettings />
-          )}
+          <Outlet />
         </div>
       </main>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 z-50">
+          <Settings onClose={() => setShowSettings(false)} />
+        </div>
+      )}
     </div>
   );
 };

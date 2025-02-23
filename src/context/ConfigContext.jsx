@@ -1,72 +1,111 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
 import { logInfo } from "../utils/logger";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
+
 const ConfigContext = createContext(null);
 
 export const ConfigProvider = ({ children }) => {
-  const [config, setConfig] = useState(() => {
-    const savedConfig = localStorage.getItem("plexTautulliConfig");
-    return savedConfig ? JSON.parse(savedConfig) : null;
-  });
+  const [config, setConfig] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [forceUpdate, setForceUpdate] = useState(false); // Force re-render
 
-  const updateConfig = (newConfig) => {
-    // Create a new config object that merges existing config with new config
-    const updatedConfig = {
-      ...config,
-      plexUrl: newConfig.plexUrl,
-      plexToken: newConfig.plexToken,
-      tautulliUrl: newConfig.tautulliUrl,
-      tautulliApiKey: newConfig.tautulliApiKey,
-    };
+  const checkExistingConfig = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(`${API_BASE_URL}/api/config`);
 
-    // Set the new config in local storage
-    localStorage.setItem("plexTautulliConfig", JSON.stringify(updatedConfig));
+      if (!response.ok) {
+        throw new Error("Failed to fetch configuration");
+      }
 
-    // Update the state
-    setConfig(updatedConfig);
+      const configData = await response.json();
 
-    // Log the update (optional)
-    logInfo("Configuration updated", {
-      config: {
-        plexUrl: updatedConfig.plexUrl,
-        tautulliUrl: updatedConfig.tautulliUrl,
-        hasPlexToken: !!updatedConfig.plexToken,
-        hasTautulliKey: !!updatedConfig.tautulliApiKey,
-      },
-    });
+      if (
+        configData.plexUrl &&
+        configData.plexToken &&
+        configData.tautulliUrl &&
+        configData.tautulliApiKey
+      ) {
+        setConfig(configData);
+        logInfo("Existing configuration loaded successfully");
+      } else {
+        setConfig(null);
+      }
+    } catch (error) {
+      console.error("Error checking configuration:", error);
+      setConfig(null);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const isConfigured = () => {
-    return !!(
-      config &&
-      config.plexUrl &&
-      config.plexToken &&
-      config.tautulliUrl &&
-      config.tautulliApiKey
-    );
+  useEffect(() => {
+    checkExistingConfig();
+  }, []);
+
+  const updateConfig = async (newConfig) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/config`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newConfig),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update configuration");
+      }
+
+      const updatedConfig = await response.json();
+      setConfig(updatedConfig.config);
+      setForceUpdate((prev) => !prev); // Force re-render
+
+      logInfo("Configuration updated successfully");
+    } catch (error) {
+      console.error("Error updating configuration:", error);
+      throw error;
+    }
   };
 
-  // Clear configuration (useful for testing)
-  const clearConfig = () => {
-    localStorage.removeItem("plexTautulliConfig");
-    setConfig(null);
+  const isConfigured = () => !!config;
+
+  // Clear configuration
+  const clearConfig = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/reset-all`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to reset configuration");
+      }
+
+      localStorage.removeItem("plexTautulliConfig");
+      setConfig(null);
+      logInfo("Configuration cleared successfully");
+    } catch (error) {
+      console.error("Error clearing configuration:", error);
+      throw error;
+    }
   };
 
   return (
     <ConfigContext.Provider
-      value={{ config, updateConfig, isConfigured, clearConfig }}
+      value={{
+        config,
+        updateConfig,
+        isConfigured,
+        clearConfig,
+        isLoading,
+      }}
     >
       {children}
     </ConfigContext.Provider>
   );
 };
 
-export const useConfig = () => {
-  const context = useContext(ConfigContext);
-  if (!context) {
-    throw new Error("useConfig must be used within a ConfigProvider");
-  }
-  return context;
-};
-
+export const useConfig = () => useContext(ConfigContext);
 export default ConfigContext;

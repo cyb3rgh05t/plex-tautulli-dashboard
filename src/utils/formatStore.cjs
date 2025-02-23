@@ -11,6 +11,7 @@ if (!fs.existsSync(FORMATS_FILE)) {
       downloads: [],
       recentlyAdded: [],
       users: [],
+      sections: [], // Add sections array to initial structure
     })
   );
 }
@@ -23,14 +24,16 @@ const getFormats = () => {
     return {
       downloads: formats.downloads || [],
       recentlyAdded: formats.recentlyAdded || [],
-      users: formats.users || [], // Add users array
+      users: formats.users || [],
+      sections: formats.sections || [], // Add sections to returned object
     };
   } catch (error) {
     console.error("Error reading formats:", error);
     return {
       downloads: [],
       recentlyAdded: [],
-      users: [], // Add users array
+      users: [],
+      sections: [], // Add sections to default return
     };
   }
 };
@@ -42,6 +45,7 @@ const saveFormats = (formats) => {
       downloads: formats.downloads || [],
       recentlyAdded: formats.recentlyAdded || [],
       users: formats.users || [],
+      sections: formats.sections || [], // Add sections to saved structure
     };
 
     fs.writeFileSync(FORMATS_FILE, JSON.stringify(updatedFormats, null, 2));

@@ -8,24 +8,109 @@ import {
   FaCopy,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
+import axios from "axios";
 
+// Base URL configuration
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
 
-const EndpointCard = ({ endpoint, method, description, example, baseUrl }) => {
-  const handleTest = () => {
-    window.open(`${baseUrl}${endpoint}`, "_blank");
+// Reusable Sub-Tab Button Component
+const SubTabButton = ({ active, onClick, children }) => (
+  <button
+    onClick={onClick}
+    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+      active
+        ? "bg-gray-700 text-white"
+        : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+    }`}
+  >
+    {children}
+  </button>
+);
+
+// Request Example Display Component
+const RequestExampleDisplay = ({ examples }) => {
+  const [activeLanguage, setActiveLanguage] = useState("url");
+
+  return (
+    <div className="space-y-4">
+      {/* Language Selection Tabs */}
+      <div className="flex gap-2 mb-4">
+        <SubTabButton
+          active={activeLanguage === "url"}
+          onClick={() => setActiveLanguage("url")}
+        >
+          URL
+        </SubTabButton>
+        <SubTabButton
+          active={activeLanguage === "python"}
+          onClick={() => setActiveLanguage("python")}
+        >
+          Python
+        </SubTabButton>
+        <SubTabButton
+          active={activeLanguage === "javascript"}
+          onClick={() => setActiveLanguage("javascript")}
+        >
+          JavaScript
+        </SubTabButton>
+      </div>
+
+      {/* Example Code Display */}
+      {examples.map((example, index) => (
+        <div key={index} className="space-y-2">
+          <p className="text-gray-400 text-sm">{example.description}</p>
+          <pre className="bg-gray-900/50 p-4 rounded-lg border border-gray-700/50 overflow-x-auto">
+            <code className="text-sm text-gray-300 font-mono">
+              {activeLanguage === "url" && example.curlCommand}
+              {activeLanguage === "python" && example.pythonRequest}
+              {activeLanguage === "javascript" && example.javascriptFetch}
+            </code>
+          </pre>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const EndpointCard = ({
+  endpoint,
+  method,
+  description,
+  example,
+  baseUrl,
+  payload,
+  requestExamples,
+  responseTypes,
+}) => {
+  const [testResponse, setTestResponse] = useState(null);
+  const [testError, setTestError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleTest = async () => {
+    setLoading(true);
+    setTestResponse(null);
+    setTestError(null);
+
+    try {
+      let response;
+      if (method === "GET") {
+        response = await axios.get(`${baseUrl}${endpoint}`);
+      } else if (method === "POST") {
+        response = await axios.post(`${baseUrl}${endpoint}`, payload);
+      }
+
+      setTestResponse(response.data);
+    } catch (error) {
+      setTestError(error.response?.data || error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(`${baseUrl}${endpoint}`);
-    toast.success("Endpoint URL copied to clipboard", {
-      style: {
-        border: "1px solid #059669",
-        padding: "16px",
-        background: "#064E3B",
-      },
-    });
+    toast.success("Endpoint URL copied to clipboard");
   };
 
   return (
@@ -57,20 +142,59 @@ const EndpointCard = ({ endpoint, method, description, example, baseUrl }) => {
           >
             <FaCopy />
           </button>
-          {method === "GET" && (
+          {(method === "GET" || method === "POST") && (
             <button
               onClick={handleTest}
+              disabled={loading}
               className="px-4 py-2 bg-brand-primary-500 text-white rounded-lg hover:bg-brand-primary-600 
                 transition-all duration-200 shadow-lg shadow-brand-primary-500/20 
-                hover:shadow-brand-primary-500/40 flex items-center gap-2"
+                hover:shadow-brand-primary-500/40 flex items-center gap-2
+                disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <FaExternalLinkAlt size={12} />
-              Test
+              {loading ? "Testing..." : "Test"}
             </button>
           )}
         </div>
       </div>
       <p className="text-gray-400 mb-4">{description}</p>
+
+      {/* Request Examples Section */}
+      {requestExamples && (
+        <div className="space-y-4 mb-4">
+          <h4 className="text-white font-medium">Request Examples</h4>
+          <RequestExampleDisplay examples={requestExamples} />
+        </div>
+      )}
+
+      {/* Test Response Section */}
+      {loading && (
+        <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700/50">
+          <p className="text-gray-400 animate-pulse">Testing endpoint...</p>
+        </div>
+      )}
+
+      {testResponse && (
+        <div className="space-y-2">
+          <p className="text-green-400 font-medium">Test Response:</p>
+          <pre className="bg-green-900/20 p-4 rounded-lg border border-green-500/20 overflow-x-auto">
+            <code className="text-sm text-green-300 font-mono">
+              {JSON.stringify(testResponse, null, 2)}
+            </code>
+          </pre>
+        </div>
+      )}
+
+      {testError && (
+        <div className="space-y-2">
+          <p className="text-red-400 font-medium">Test Error:</p>
+          <pre className="bg-red-900/20 p-4 rounded-lg border border-red-500/20 overflow-x-auto">
+            <code className="text-sm text-red-300 font-mono">
+              {JSON.stringify(testError, null, 2)}
+            </code>
+          </pre>
+        </div>
+      )}
+
       {example && (
         <div className="space-y-2">
           <p className="text-gray-500 text-sm">Example Response:</p>
@@ -86,10 +210,10 @@ const EndpointCard = ({ endpoint, method, description, example, baseUrl }) => {
 };
 
 const ApiEndpoints = () => {
-  const [baseUrl, setBaseUrl] = useState(`${API_BASE_URL}`);
-  const [serverStatus, setServerStatus] = useState("active"); // 'active', 'inactive', or 'error'
+  const [baseUrl, setBaseUrl] = useState(API_BASE_URL);
+  const [activeTab, setActiveTab] = useState("get");
+  const [serverStatus, setServerStatus] = useState("active");
 
-  // Load saved baseUrl from localStorage
   useEffect(() => {
     const saved = localStorage.getItem("apiBaseUrl");
     if (saved) setBaseUrl(saved);
@@ -104,19 +228,35 @@ const ApiEndpoints = () => {
         }
       })
       .catch(() => setServerStatus("inactive"));
-  }, []);
+  }, [baseUrl]);
 
-  // Save baseUrl to localStorage
   const handleBaseUrlChange = (newUrl) => {
     setBaseUrl(newUrl);
     localStorage.setItem("apiBaseUrl", newUrl);
   };
 
-  const endpoints = [
+  // Constants for endpoint definitions
+  const GET_ENDPOINTS = [
     {
-      method: "GET",
       endpoint: "/api/downloads",
       description: "Get all current downloads with custom formatting applied.",
+      requestExamples: [
+        {
+          description: "Retrieve all downloads",
+          curlCommand: "http://localhost:3006/api/downloads",
+          pythonRequest: `
+  import requests
+  
+  response = requests.get('http://localhost:3006/api/downloads')
+  downloads = response.json()
+          `.trim(),
+          javascriptFetch: `
+  fetch('http://localhost:3006/api/downloads')
+    .then(response => response.json())
+    .then(downloads => console.log(downloads));
+          `.trim(),
+        },
+      ],
       example: {
         total: 2,
         activities: [
@@ -132,9 +272,25 @@ const ApiEndpoints = () => {
       },
     },
     {
-      method: "GET",
       endpoint: "/api/formats",
       description: "Get all configured format templates.",
+      requestExamples: [
+        {
+          description: "Retrieve all format templates",
+          curlCommand: "http://localhost:3006/api/formats",
+          pythonRequest: `
+  import requests
+  
+  response = requests.get('http://localhost:3006/api/formats')
+  formats = response.json()
+          `.trim(),
+          javascriptFetch: `
+  fetch('http://localhost:3006/api/formats')
+    .then(response => response.json())
+    .then(formats => console.log(formats));
+          `.trim(),
+        },
+      ],
       example: {
         downloads: [
           {
@@ -142,26 +298,34 @@ const ApiEndpoints = () => {
             template: "{title} - {progress}%",
           },
         ],
-      },
-    },
-    {
-      method: "POST",
-      endpoint: "/api/formats",
-      description: "Save format templates.",
-      example: {
-        type: "downloads",
-        formats: [
+        recentlyAdded: [
           {
-            name: "Custom Format 1",
-            template: "{title} - {progress}%",
+            name: "Movie Format",
+            template: "{title} ({year})",
           },
         ],
       },
     },
     {
-      method: "GET",
       endpoint: "/api/sections",
       description: "Get all saved library sections.",
+      requestExamples: [
+        {
+          description: "Retrieve saved sections",
+          curlCommand: "http://localhost:3006/api/sections",
+          pythonRequest: `
+  import requests
+  
+  response = requests.get('http://localhost:3006/api/sections')
+  sections = response.json()
+          `.trim(),
+          javascriptFetch: `
+  fetch('http://localhost:3006/api/sections')
+    .then(response => response.json())
+    .then(sections => console.log(sections));
+          `.trim(),
+        },
+      ],
       example: {
         total: 2,
         sections: [
@@ -169,43 +333,42 @@ const ApiEndpoints = () => {
             section_id: 1,
             type: "movie",
             name: "Movies",
-          },
-          {
-            section_id: 2,
-            type: "show",
-            name: "TV Shows",
+            count: 500,
+            total_plays: 10000,
+            last_accessed: 1640995200,
           },
         ],
       },
     },
     {
-      method: "POST",
-      endpoint: "/api/sections",
-      description: "Save selected library sections.",
-      example: [
-        {
-          section_id: 1,
-          type: "movie",
-          name: "Movies",
-        },
-        {
-          section_id: 2,
-          type: "show",
-          name: "TV Shows",
-        },
-      ],
-    },
-    {
-      method: "GET",
       endpoint: "/api/users",
       description: "Get users with activity and custom formatting.",
+      requestExamples: [
+        {
+          description: "Retrieve all users",
+          curlCommand: "http://localhost:3006/api/users",
+          pythonRequest: `
+  import requests
+  
+  response = requests.get('http://localhost:3006/api/users')
+  users = response.json()
+          `.trim(),
+          javascriptFetch: `
+  fetch('http://localhost:3006/api/users')
+    .then(response => response.json())
+    .then(users => console.log(users));
+          `.trim(),
+        },
+      ],
       example: {
-        total: 1,
+        total: 5,
         users: [
           {
             user_id: 1,
             friendly_name: "John Doe",
             plays: 150,
+            duration: 500,
+            last_seen: 1640995200,
             formatted: {
               "User Format 1": "John Doe - 150 plays",
             },
@@ -214,28 +377,273 @@ const ApiEndpoints = () => {
       },
     },
     {
-      method: "GET",
+      endpoint: "/api/media/:type",
+      description:
+        "Get detailed media information with optional filtering and advanced options.",
+      requestExamples: [
+        {
+          description: "Get all movies",
+          curlCommand: `
+    # Get all movies
+    http://localhost:3006/api/media/movies
+    
+    # Get movies from a specific section
+    http://localhost:3006/api/media/movies?section=1
+    
+    # Limit number of results
+    http://localhost:3006/api/media/movies?count=10
+    
+    # Advanced filtering
+    http://localhost:3006/api/media/movies?year=2010&resolution=4K
+          `.trim(),
+          pythonRequest: `
+    import requests
+    
+    # Get all movies
+    response = requests.get('http://localhost:3006/api/media/movies')
+    movies = response.json()
+    
+    # Get movies from a specific section
+    response = requests.get('http://localhost:3006/api/media/movies?section=1')
+    section_movies = response.json()
+    
+    # Limit number of results
+    response = requests.get('http://localhost:3006/api/media/movies?count=10')
+    limited_movies = response.json()
+    
+    # Advanced filtering
+    response = requests.get('http://localhost:3006/api/media/movies?year=2010&resolution=4K')
+    filtered_movies = response.json()
+          `.trim(),
+          javascriptFetch: `
+    // Get all movies
+    fetch('http://localhost:3006/api/media/movies')
+      .then(response => response.json())
+      .then(movies => console.log(movies));
+    
+    // Get movies from a specific section
+    fetch('http://localhost:3006/api/media/movies?section=1')
+      .then(response => response.json())
+      .then(sectionMovies => console.log(sectionMovies));
+    
+    // Limit number of results
+    fetch('http://localhost:3006/api/media/movies?count=10')
+      .then(response => response.json())
+      .then(limitedMovies => console.log(limitedMovies));
+    
+    // Advanced filtering
+    fetch('http://localhost:3006/api/media/movies?year=2010&resolution=4K')
+      .then(response => response.json())
+      .then(filteredMovies => console.log(filteredMovies));
+          `.trim(),
+        },
+        {
+          description: "Get TV shows with advanced filtering",
+          curlCommand:
+            "http://localhost:3006/api/media/shows?genre=Drama&rating=8",
+          pythonRequest: `
+    import requests
+    
+    # Get TV shows by genre
+    response = requests.get('http://localhost:3006/api/media/shows?genre=Drama')
+    drama_shows = response.json()
+    
+    # Get shows with high rating
+    response = requests.get('http://localhost:3006/api/media/shows?rating=8')
+    highly_rated_shows = response.json()
+    
+    # Combine filters
+    response = requests.get('http://localhost:3006/api/media/shows?genre=Drama&rating=8&year=2020')
+    specific_shows = response.json()
+          `.trim(),
+          javascriptFetch: `
+    // Get TV shows by genre
+    fetch('http://localhost:3006/api/media/shows?genre=Drama')
+      .then(response => response.json())
+      .then(dramaShows => console.log(dramaShows));
+    
+    // Get shows with high rating
+    fetch('http://localhost:3006/api/media/shows?rating=8')
+      .then(response => response.json())
+      .then(highlyRatedShows => console.log(highlyRatedShows));
+    
+    // Combine filters
+    fetch('http://localhost:3006/api/media/shows?genre=Drama&rating=8&year=2020')
+      .then(response => response.json())
+      .then(specificShows => console.log(specificShows));
+          `.trim(),
+        },
+      ],
+      example: {
+        movies: {
+          total: 50,
+          sections: [
+            { id: 1, name: "Main Movies" },
+            { id: 2, name: "4K Movies" },
+          ],
+          media: [
+            {
+              title: "Inception",
+              year: 2010,
+              rating: "8.8",
+              duration: 148,
+              directors: ["Christopher Nolan"],
+              genres: ["Sci-Fi", "Action"],
+              video_full_resolution: "4K",
+              section_id: 2,
+              formatted: {
+                "Custom Movie Format": "Inception (4K) - Christopher Nolan",
+              },
+            },
+          ],
+        },
+        shows: {
+          total: 75,
+          sections: [
+            { id: 3, name: "TV Shows" },
+            { id: 4, name: "Completed Series" },
+          ],
+          media: [
+            {
+              title: "Live Free or Die",
+              grandparent_title: "Breaking Bad",
+              year: 2012,
+              parent_media_index: 5,
+              media_index: 1,
+              directors: ["Vince Gilligan"],
+              genres: ["Crime", "Drama"],
+              video_full_resolution: "1080p",
+              section_id: 3,
+              formatted: {
+                "Custom Show Format": "Breaking Bad - S05E01",
+              },
+            },
+          ],
+        },
+      },
+      queryParameters: [
+        {
+          name: "section",
+          type: "number",
+          description: "Filter media by specific library section ID",
+        },
+        {
+          name: "count",
+          type: "number",
+          description: "Limit the number of results returned (default: 50)",
+        },
+        {
+          name: "year",
+          type: "number",
+          description: "Filter media by release year",
+        },
+        {
+          name: "genre",
+          type: "string",
+          description: "Filter media by genre",
+        },
+        {
+          name: "rating",
+          type: "number",
+          description: "Filter media by minimum rating",
+        },
+        {
+          name: "resolution",
+          type: "string",
+          description: "Filter media by video resolution (e.g., '4K', '1080p')",
+        },
+        {
+          name: "sort",
+          type: "string",
+          description: "Sort results (options: 'year', 'rating', 'added_date')",
+        },
+        {
+          name: "order",
+          type: "string",
+          description: "Sort order for sorted results (asc/desc)",
+        },
+      ],
+    },
+    {
       endpoint: "/api/recent/:type",
       description:
         "Get recently added media for a specific type (movies, shows, music).",
+      requestExamples: [
+        {
+          description: "Get recent movies",
+          curlCommand: `
+  # Get recent movies
+  http://localhost:3006/api/recent/movies
+  
+  # Get recent movies from a specific section
+  http://localhost:3006/api/recent/movies?section=1
+          `.trim(),
+          pythonRequest: `
+  import requests
+  
+  # Get recent movies
+  response = requests.get('http://localhost:3006/api/recent/movies')
+  recent_movies = response.json()
+  
+  # Get recent movies from a specific section
+  response = requests.get('http://localhost:3006/api/recent/movies?section=1')
+  section_movies = response.json()
+          `.trim(),
+          javascriptFetch: `
+  // Get recent movies
+  fetch('http://localhost:3006/api/recent/movies')
+    .then(response => response.json())
+    .then(recentMovies => console.log(recentMovies));
+  
+  // Get recent movies from a specific section
+  fetch('http://localhost:3006/api/recent/movies?section=1')
+    .then(response => response.json())
+    .then(sectionMovies => console.log(sectionMovies));
+          `.trim(),
+        },
+      ],
       example: {
-        total: 2,
+        total: 10,
         media: [
           {
-            "Show Title": "Breaking Bad - S05E01 - Live Free or Die",
+            "Movie Title": "Inception (2010)",
             raw_data: {
-              title: "Live Free or Die",
-              year: 2012,
+              title: "Inception",
+              year: 2010,
+              video_full_resolution: "1080p",
               addedAt: "1625097600",
+              rating: "8.8",
             },
           },
+        ],
+        sections: [
+          { id: 1, name: "Main Movies" },
+          { id: 2, name: "4K Movies" },
         ],
       },
     },
     {
-      method: "GET",
       endpoint: "/api/libraries",
-      description: "Get all Plex libraries.",
+      description: "Get all Plex media libraries.",
+      requestExamples: [
+        {
+          description: "Retrieve all libraries",
+          curlCommand: "curl http://localhost:3006/api/libraries",
+          pythonRequest: `
+  import requests
+  
+  # Get all libraries
+  response = requests.get('http://localhost:3006/api/libraries')
+  libraries = response.json()
+          `.trim(),
+          javascriptFetch: `
+  // Get all libraries
+  fetch('http://localhost:3006/api/libraries')
+    .then(response => response.json())
+    .then(libraries => console.log(libraries));
+          `.trim(),
+        },
+      ],
       example: [
         {
           section_id: 1,
@@ -243,12 +651,36 @@ const ApiEndpoints = () => {
           section_name: "Movies",
           count: 500,
         },
+        {
+          section_id: 2,
+          section_type: "show",
+          section_name: "TV Shows",
+          count: 250,
+        },
       ],
     },
     {
-      method: "GET",
       endpoint: "/api/config",
       description: "Get current server configuration.",
+      requestExamples: [
+        {
+          description: "Retrieve server configuration",
+          curlCommand: "curl http://localhost:3006/api/config",
+          pythonRequest: `
+  import requests
+  
+  # Get server configuration
+  response = requests.get('http://localhost:3006/api/config')
+  config = response.json()
+          `.trim(),
+          javascriptFetch: `
+  // Get server configuration
+  fetch('http://localhost:3006/api/config')
+    .then(response => response.json())
+    .then(config => console.log(config));
+          `.trim(),
+        },
+      ],
       example: {
         plexUrl: "http://localhost:32400",
         tautulliUrl: "http://localhost:8181",
@@ -257,11 +689,30 @@ const ApiEndpoints = () => {
       },
     },
     {
-      method: "POST",
-      endpoint: "/api/config",
-      description: "Update server configuration.",
+      endpoint: "/health",
+      description: "Server health check endpoint.",
+      requestExamples: [
+        {
+          description: "Check server health",
+          curlCommand: "curl http://localhost:3006/health",
+          pythonRequest: `
+  import requests
+  
+  # Check server health
+  response = requests.get('http://localhost:3006/health')
+  health_status = response.json()
+          `.trim(),
+          javascriptFetch: `
+  // Check server health
+  fetch('http://localhost:3006/health')
+    .then(response => response.json())
+    .then(healthStatus => console.log(healthStatus));
+          `.trim(),
+        },
+      ],
       example: {
         status: "ok",
+        timestamp: "2024-02-23T12:34:56Z",
         config: {
           plexUrl: "http://localhost:32400",
           tautulliUrl: "http://localhost:8181",
@@ -270,13 +721,277 @@ const ApiEndpoints = () => {
         },
       },
     },
+  ];
+
+  const POST_ENDPOINTS = [
     {
-      method: "POST",
-      endpoint: "/api/reset-all",
-      description: "Reset all configurations to default.",
+      endpoint: "/api/formats",
+      description: "Save format templates for different media types.",
+      requestExamples: [
+        {
+          description: "Save download format",
+          curlCommand: `
+curl -X POST http://localhost:3006/api/formats \\
+     -H "Content-Type: application/json" \\
+     -d '{
+  "type": "downloads",
+  "formats": [
+    {
+      "name": "Custom Download Format",
+      "template": "{title} - {progress}%"
+    }
+  ]
+}'
+        `.trim(),
+          pythonRequest: `
+import requests
+import json
+
+payload = {
+    "type": "downloads",
+    "formats": [
+        {
+            "name": "Custom Download Format",
+            "template": "{title} - {progress}%"
+        }
+    ]
+}
+
+response = requests.post(
+    'http://localhost:3006/api/formats', 
+    headers={'Content-Type': 'application/json'},
+    data=json.dumps(payload)
+)
+result = response.json()
+        `.trim(),
+          javascriptFetch: `
+const payload = {
+  type: "downloads",
+  formats: [
+    {
+      name: "Custom Download Format",
+      template: "{title} - {progress}%"
+    }
+  ]
+};
+
+fetch('http://localhost:3006/api/formats', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify(payload)
+})
+.then(response => response.json())
+.then(result => console.log(result));
+        `.trim(),
+        },
+      ],
+      payload: {
+        type: "downloads",
+        formats: [
+          {
+            name: "Custom Download Format",
+            template: "{title} - {progress}%",
+          },
+        ],
+      },
       example: {
-        status: "success",
-        message: "All configurations reset successfully",
+        success: true,
+        formats: {
+          downloads: [
+            {
+              name: "Custom Download Format",
+              template: "{title} - {progress}%",
+            },
+          ],
+        },
+      },
+    },
+    {
+      endpoint: "/api/sections",
+      description: "Save selected library sections with advanced metadata.",
+      requestExamples: [
+        {
+          description: "Save library sections",
+          curlCommand: `
+  curl -X POST http://localhost:3006/api/sections \\
+       -H "Content-Type: application/json" \\
+       -d '[
+    {
+      "section_id": 1,
+      "type": "movie",
+      "name": "Movies",
+      "count": 500,
+      "last_accessed": 1640995200,
+      "total_plays": 10000
+    },
+    {
+      "section_id": 2,
+      "type": "show",
+      "name": "TV Shows",
+      "count": 250,
+      "last_accessed": 1643673600,
+      "total_plays": 5000
+    }
+  ]'
+          `.trim(),
+          pythonRequest: `
+  import requests
+  import json
+  
+  payload = [
+      {
+          "section_id": 1,
+          "type": "movie",
+          "name": "Movies",
+          "count": 500,
+          "last_accessed": 1640995200,
+          "total_plays": 10000
+      },
+      {
+          "section_id": 2,
+          "type": "show",
+          "name": "TV Shows",
+          "count": 250,
+          "last_accessed": 1643673600,
+          "total_plays": 5000
+      }
+  ]
+  
+  response = requests.post(
+      'http://localhost:3006/api/sections', 
+      headers={'Content-Type': 'application/json'},
+      data=json.dumps(payload)
+  )
+  result = response.json()
+          `.trim(),
+          javascriptFetch: `
+  const payload = [
+    {
+      section_id: 1,
+      type: "movie",
+      name: "Movies",
+      count: 500,
+      last_accessed: 1640995200,
+      total_plays: 10000
+    },
+    {
+      section_id: 2,
+      type: "show",
+      name: "TV Shows",
+      count: 250,
+      last_accessed: 1643673600,
+      total_plays: 5000
+    }
+  ];
+  
+  fetch('http://localhost:3006/api/sections', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  })
+  .then(response => response.json())
+  .then(result => console.log(result));
+          `.trim(),
+        },
+      ],
+      payload: [
+        {
+          section_id: 1,
+          type: "movie",
+          name: "Movies",
+          count: 500,
+          last_accessed: 1640995200,
+          total_plays: 10000,
+        },
+      ],
+      example: {
+        success: true,
+        total: 1,
+        sections: [
+          {
+            section_id: 1,
+            type: "movie",
+            name: "Movies",
+            count: 500,
+            total_plays: 10000,
+            last_accessed: 1640995200,
+          },
+        ],
+        message: "Successfully saved sections",
+      },
+    },
+    {
+      endpoint: "/api/config",
+      description: "Update Plex and Tautulli server configurations.",
+      requestExamples: [
+        {
+          description: "Update server configurations",
+          curlCommand: `
+  curl -X POST http://localhost:3006/api/config \\
+       -H "Content-Type: application/json" \\
+       -d '{
+    "plexUrl": "http://localhost:32400",
+    "plexToken": "your_plex_token",
+    "tautulliUrl": "http://localhost:8181",
+    "tautulliApiKey": "your_tautulli_api_key"
+  }'
+          `.trim(),
+          pythonRequest: `
+  import requests
+  import json
+  
+  payload = {
+      "plexUrl": "http://localhost:32400",
+      "plexToken": "your_plex_token",
+      "tautulliUrl": "http://localhost:8181",
+      "tautulliApiKey": "your_tautulli_api_key"
+  }
+  
+  response = requests.post(
+      'http://localhost:3006/api/config', 
+      headers={'Content-Type': 'application/json'},
+      data=json.dumps(payload)
+  )
+  result = response.json()
+          `.trim(),
+          javascriptFetch: `
+  const payload = {
+    plexUrl: "http://localhost:32400",
+    plexToken: "your_plex_token",
+    tautulliUrl: "http://localhost:8181",
+    tautulliApiKey: "your_tautulli_api_key"
+  };
+  
+  fetch('http://localhost:3006/api/config', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  })
+  .then(response => response.json())
+  .then(result => console.log(result));
+          `.trim(),
+        },
+      ],
+      payload: {
+        plexUrl: "http://localhost:32400",
+        plexToken: "your_plex_token",
+        tautulliUrl: "http://localhost:8181",
+        tautulliApiKey: "your_tautulli_api_key",
+      },
+      example: {
+        status: "ok",
+        config: {
+          plexUrl: "http://localhost:32400",
+          tautulliUrl: "http://localhost:8181",
+          hasPlexToken: true,
+          hasTautulliKey: true,
+        },
       },
     },
   ];
@@ -332,22 +1047,54 @@ const ApiEndpoints = () => {
         </div>
       </div>
 
+      {/* Tabs for GET and POST Endpoints */}
+      <div className="flex gap-2 mb-4">
+        <SubTabButton
+          active={activeTab === "get"}
+          onClick={() => setActiveTab("get")}
+        >
+          GET Endpoints
+        </SubTabButton>
+        <SubTabButton
+          active={activeTab === "post"}
+          onClick={() => setActiveTab("post")}
+        >
+          POST Endpoints
+        </SubTabButton>
+      </div>
+
       {/* Endpoints Section */}
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-white">
-            Available Endpoints
+            {activeTab === "get" ? "GET" : "POST"} Endpoints
           </h2>
           <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-gray-700/50">
             <span className="text-sm font-medium text-gray-400">
-              {endpoints.length} Endpoints Available
+              {activeTab === "get"
+                ? `${GET_ENDPOINTS.length} Endpoints`
+                : `${POST_ENDPOINTS.length} Endpoints`}
             </span>
           </div>
         </div>
         <div className="space-y-4">
-          {endpoints.map((endpoint, index) => (
-            <EndpointCard key={index} {...endpoint} baseUrl={baseUrl} />
-          ))}
+          {activeTab === "get"
+            ? GET_ENDPOINTS.map((endpoint, index) => (
+                <EndpointCard
+                  key={index}
+                  {...endpoint}
+                  baseUrl={baseUrl}
+                  method="GET"
+                />
+              ))
+            : POST_ENDPOINTS.map((endpoint, index) => (
+                <EndpointCard
+                  key={index}
+                  {...endpoint}
+                  baseUrl={baseUrl}
+                  method="POST"
+                />
+              ))}
         </div>
       </div>
     </div>

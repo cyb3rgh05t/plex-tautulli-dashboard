@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import DownloadsFormat from "./DownloadsFormat";
 import RecentlyAddedFormat from "./RecentlyAddedFormat";
 import UsersFormat from "./UsersFormat";
+import SectionsFormat from "./SectionsFormat";
 
 const SubTabButton = ({ active, onClick, children }) => (
   <button
@@ -40,11 +41,18 @@ const FormatSettings = () => {
         >
           Users
         </SubTabButton>
+        <SubTabButton
+          active={activeSubTab === "sections"}
+          onClick={() => setActiveSubTab("sections")}
+        >
+          Sections
+        </SubTabButton>
       </div>
 
       {activeSubTab === "downloads" && <DownloadsFormat />}
       {activeSubTab === "recentlyAdded" && <RecentlyAddedFormat />}
       {activeSubTab === "users" && <UsersFormat />}
+      {activeSubTab === "sections" && <SectionsFormat />}
     </div>
   );
 };

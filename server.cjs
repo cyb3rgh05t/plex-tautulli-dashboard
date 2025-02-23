@@ -1,4 +1,3 @@
-//require("dotenv").config(); // This will load environment variables from .env file
 require("dotenv").config({ path: ".env" });
 const express = require("express");
 const cors = require("cors");
@@ -185,6 +184,71 @@ const formatShowEpisode = (seasonNumber, episodeNumber) => {
   return `S${paddedSeason}E${paddedEpisode}`;
 };
 
+const formatMediaWithCustomFormats = (media, formats, sectionId = "all") => {
+  const applicableFormats = formats.filter(
+    (format) =>
+      format.sectionId === "all" || format.sectionId === sectionId.toString()
+  );
+
+  const formattedData = {};
+  applicableFormats.forEach((format) => {
+    formattedData[format.name] = processTemplate(format.template, media);
+  });
+
+  return {
+    ...media,
+    formatted: formattedData,
+  };
+};
+
+// Add this function to help fetch library details
+const getLibraryDetails = async (sectionId, config) => {
+  try {
+    // Get library stats
+    const statsResponse = await axios.get(`${config.tautulliUrl}/api/v2`, {
+      params: {
+        apikey: config.tautulliApiKey,
+        cmd: "get_library_media_info",
+        section_id: sectionId,
+      },
+    });
+
+    // Get watch statistics
+    const watchStatsResponse = await axios.get(`${config.tautulliUrl}/api/v2`, {
+      params: {
+        apikey: config.tautulliApiKey,
+        cmd: "get_library_watch_time_stats",
+        section_id: sectionId,
+      },
+    });
+
+    const stats = statsResponse.data?.response?.data || {};
+    const watchStats = watchStatsResponse.data?.response?.data || {};
+
+    return {
+      count: stats.count || 0,
+      parent_count: stats.parent_count || 0,
+      child_count: stats.child_count || 0,
+      total_plays: watchStats.total_plays || 0,
+      last_accessed: watchStats.last_accessed || null,
+      last_played: watchStats.last_played || null,
+    };
+  } catch (error) {
+    console.error(
+      `Error fetching library details for section ${sectionId}:`,
+      error
+    );
+    return {
+      count: 0,
+      parent_count: 0,
+      child_count: 0,
+      total_plays: 0,
+      last_accessed: null,
+      last_played: null,
+    };
+  }
+};
+
 // Template processing function
 const processTemplate = (template, data) => {
   if (!template) return "";
@@ -277,6 +341,127 @@ app.get("/api/formats", (req, res) => {
   } catch (error) {
     console.error("Error reading formats:", error);
     res.status(500).json({ error: "Failed to read formats" });
+  }
+});
+
+// Update the media endpoint
+app.get("/api/media/:type", async (req, res) => {
+  try {
+    const { type } = req.params;
+    const { count = 10, section } = req.query;
+    const config = getConfig();
+
+    if (!["movies", "shows"].includes(type)) {
+      return res.status(400).json({ error: "Invalid media type" });
+    }
+
+    // Get formats
+    const formats = getFormats().sections || [];
+
+    // Get all sections
+    const sectionsResponse = await axios.get(`${config.tautulliUrl}/api/v2`, {
+      params: {
+        apikey: config.tautulliApiKey,
+        cmd: "get_libraries_table",
+      },
+    });
+
+    const allSections = sectionsResponse.data?.response?.data?.data || [];
+    const mediaType = type === "shows" ? "show" : "movie";
+    let targetSections = allSections.filter(
+      (s) => s.section_type === mediaType
+    );
+
+    // Filter by specific section if provided
+    if (section) {
+      targetSections = targetSections.filter(
+        (s) => s.section_id.toString() === section
+      );
+      if (targetSections.length === 0) {
+        return res.status(404).json({ error: "Section not found" });
+      }
+    }
+
+    // Fetch recently added for each section
+    const mediaPromises = targetSections.map(async (section) => {
+      // Get library details including counts
+      const libraryDetails = await getLibraryDetails(
+        section.section_id,
+        config
+      );
+
+      // Get recently added items
+      const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
+        params: {
+          apikey: config.tautulliApiKey,
+          cmd: "get_recently_added",
+          section_id: section.section_id,
+          count: count,
+          include_details: 1, // Request additional metadata
+        },
+      });
+
+      const items = response.data?.response?.data?.recently_added || [];
+
+      // Enhance each item with library details and section info
+      return items.map((item) => ({
+        ...item,
+        ...libraryDetails,
+        section_id: section.section_id,
+        section_name: section.section_name,
+        library_name: section.section_name, // Add library name
+        // Ensure arrays are always arrays even if empty
+        directors: item.directors || [],
+        writers: item.writers || [],
+        actors: item.actors || [],
+        genres: item.genres || [],
+        labels: item.labels || [],
+        collections: item.collections || [],
+      }));
+    });
+
+    let allMedia = await Promise.all(mediaPromises);
+    allMedia = allMedia.flat();
+
+    // Sort by date added (newest first)
+    allMedia.sort((a, b) => b.added_at - a.added_at);
+
+    // Limit to requested count
+    allMedia = allMedia.slice(0, parseInt(count));
+
+    // Apply custom formats
+    const formattedMedia = allMedia.map((media) => {
+      const applicableFormats = formats.filter(
+        (format) =>
+          format.sectionId === "all" ||
+          format.sectionId === media.section_id.toString()
+      );
+
+      const formattedData = {};
+      applicableFormats.forEach((format) => {
+        formattedData[format.name] = processTemplate(format.template, media);
+      });
+
+      return {
+        ...media,
+        formatted: formattedData,
+      };
+    });
+
+    res.json({
+      total: formattedMedia.length,
+      sections: targetSections.map((s) => ({
+        id: s.section_id,
+        name: s.section_name,
+      })),
+      media: formattedMedia,
+    });
+  } catch (error) {
+    console.error(`Error fetching ${req.params.type}:`, error);
+    res.status(500).json({
+      error: `Failed to fetch ${req.params.type}`,
+      message: error.message,
+    });
   }
 });
 
@@ -445,6 +630,7 @@ app.get("/api/users", async (req, res) => {
 });
 
 // Downloads endpoint with format processing
+
 app.get("/api/downloads", async (req, res) => {
   try {
     const config = getConfig();
@@ -528,20 +714,51 @@ app.get("/api/libraries", async (req, res) => {
 });
 
 // Saved sections GET endpoint
-app.get("/api/sections", (req, res) => {
+// Update the sections GET endpoint
+app.get("/api/sections", async (req, res) => {
   try {
-    // Ensure the file exists, create if not
+    // Read saved sections
     if (!fs.existsSync(SAVED_SECTIONS_PATH)) {
       fs.writeFileSync(SAVED_SECTIONS_PATH, JSON.stringify([], null, 2));
     }
 
-    // Read saved sections
     const rawData = fs.readFileSync(SAVED_SECTIONS_PATH, "utf8");
     const savedSections = JSON.parse(rawData);
 
+    // Get formats
+    const formats = getFormats().sections || [];
+
+    // Apply formats to sections
+    const formattedSections = savedSections.map((section) => {
+      const applicableFormats = formats.filter(
+        (format) =>
+          format.sectionId === "all" ||
+          format.sectionId === section.section_id.toString()
+      );
+
+      const formattedData = {};
+      applicableFormats.forEach((format) => {
+        formattedData[format.name] = processTemplate(format.template, {
+          section_id: section.section_id,
+          section_name: section.name,
+          section_type: section.type,
+          count: section.count || 0,
+          parent_count: section.parent_count || 0,
+          child_count: section.child_count || 0,
+          last_accessed: section.last_accessed,
+          last_updated: section.last_updated,
+        });
+      });
+
+      return {
+        ...section,
+        formatted: formattedData,
+      };
+    });
+
     res.json({
-      total: savedSections.length,
-      sections: savedSections,
+      total: formattedSections.length,
+      sections: formattedSections,
     });
   } catch (error) {
     console.error("Error reading saved sections:", error);
@@ -553,9 +770,10 @@ app.get("/api/sections", (req, res) => {
 });
 
 // Save sections POST endpoint
-app.post("/api/sections", (req, res) => {
+app.post("/api/sections", async (req, res) => {
   try {
     const sections = req.body;
+    const config = getConfig();
 
     // Validate input
     if (!Array.isArray(sections)) {
@@ -577,14 +795,83 @@ app.post("/api/sections", (req, res) => {
       });
     }
 
-    // Write sections to file
-    fs.writeFileSync(SAVED_SECTIONS_PATH, JSON.stringify(sections, null, 2));
+    // Fetch library details for each section
+    const sectionsWithDetails = await Promise.all(
+      sections.map(async (section) => {
+        try {
+          console.log(`Fetching details for section ${section.section_id}`);
+
+          // Get library details from libraries table
+          const libraryResponse = await axios.get(
+            `${config.tautulliUrl}/api/v2`,
+            {
+              params: {
+                apikey: config.tautulliApiKey,
+                cmd: "get_libraries_table",
+              },
+            }
+          );
+
+          if (libraryResponse.data?.response?.result !== "success") {
+            console.error("Library response error:", libraryResponse.data);
+            throw new Error("Failed to fetch library details");
+          }
+
+          const libraryData = libraryResponse.data?.response?.data?.data || [];
+          const libraryDetails =
+            libraryData.find((lib) => lib.section_id === section.section_id) ||
+            {};
+
+          console.log(
+            "Library details found:",
+            JSON.stringify(libraryDetails, null, 2)
+          );
+
+          return {
+            ...section,
+            count: libraryDetails.count || 0,
+            parent_count: libraryDetails.parent_count || 0,
+            child_count: libraryDetails.child_count || 0,
+            total_plays: libraryDetails.plays || 0,
+            last_accessed: libraryDetails.last_accessed || null,
+            last_played: libraryDetails.last_played || null,
+            section_type: libraryDetails.section_type || section.type,
+            section_name: libraryDetails.section_name || section.name,
+          };
+
+          const stats = statsResponse.data?.response?.data || {};
+          const watchStats = watchStatsResponse.data?.response?.data || {};
+
+          return {
+            ...section,
+            count: stats.count || 0,
+            parent_count: stats.parent_count || 0,
+            child_count: stats.child_count || 0,
+            total_plays: watchStats.total_plays || 0,
+            last_accessed: watchStats.last_accessed || null,
+            last_played: watchStats.last_played || null,
+          };
+        } catch (error) {
+          console.error(
+            `Error fetching details for section ${section.section_id}:`,
+            error
+          );
+          return section;
+        }
+      })
+    );
+
+    // Write enhanced sections to file
+    fs.writeFileSync(
+      SAVED_SECTIONS_PATH,
+      JSON.stringify(sectionsWithDetails, null, 2)
+    );
 
     res.json({
       success: true,
-      total: sections.length,
-      sections: sections,
-      message: `Successfully saved ${sections.length} sections`,
+      total: sectionsWithDetails.length,
+      sections: sectionsWithDetails,
+      message: `Successfully saved ${sectionsWithDetails.length} sections`,
     });
   } catch (error) {
     console.error("Error saving sections:", error);
@@ -594,9 +881,6 @@ app.post("/api/sections", (req, res) => {
     });
   }
 });
-
-// New endpoint for recently added media by type
-// In server.cjs, update the /api/recent/:type endpoint:
 
 app.get("/api/recent/:type", async (req, res) => {
   try {

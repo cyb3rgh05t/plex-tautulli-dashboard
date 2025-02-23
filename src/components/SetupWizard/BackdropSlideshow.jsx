@@ -20,6 +20,10 @@ const BackdropSlideshow = () => {
           ),
         ]);
 
+        if (!moviesResponse.ok || !tvResponse.ok) {
+          throw new Error("Failed to fetch backdrops");
+        }
+
         const moviesData = await moviesResponse.json();
         const tvData = await tvResponse.json();
 
@@ -37,12 +41,16 @@ const BackdropSlideshow = () => {
           })),
         ].filter((item) => item.backdrop_path);
 
+        if (allBackdrops.length === 0) {
+          throw new Error("No valid backdrops found");
+        }
+
         // Shuffle array
         const shuffledBackdrops = allBackdrops.sort(() => Math.random() - 0.5);
         setBackdrops(shuffledBackdrops);
-        setLoading(false);
       } catch (error) {
         console.error("Error fetching backdrops:", error);
+      } finally {
         setLoading(false);
       }
     };
@@ -60,10 +68,24 @@ const BackdropSlideshow = () => {
     return () => clearInterval(interval);
   }, [backdrops.length]);
 
+  // Default background when loading or no backdrops
+  const defaultBackground = (
+    <div className="fixed inset-0">
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900" />
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: `
+            radial-gradient(circle at 0% 0%, rgba(0, 112, 243, 0.1) 0px, transparent 50%),
+            radial-gradient(circle at 100% 100%, rgba(82, 0, 243, 0.1) 0px, transparent 50%)
+          `,
+        }}
+      />
+    </div>
+  );
+
   if (loading || backdrops.length === 0) {
-    return (
-      <div className="fixed inset-0 bg-gray-900 bg-[radial-gradient(at_0%_0%,rgba(0,112,243,0.1)_0px,transparent_50%),radial-gradient(at_98%_100%,rgba(82,0,243,0.1)_0px,transparent_50%)]" />
-    );
+    return defaultBackground;
   }
 
   const currentBackdrop = backdrops[currentIndex];
@@ -74,11 +96,9 @@ const BackdropSlideshow = () => {
     <div className="fixed inset-0 bg-gray-900 overflow-hidden">
       {/* Current Backdrop */}
       <div
-        className="absolute inset-0 bg-cover bg-center transition-all duration-3000 ease-in-out transform scale-105"
+        className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000"
         style={{
           backgroundImage: `url(${TMDB_IMAGE_BASE}${currentBackdrop.backdrop_path})`,
-          opacity: 1,
-          animation: "zoomEffect 20s ease-in-out infinite alternate",
         }}
       >
         <div className="absolute inset-0 bg-black/60" />
@@ -98,21 +118,16 @@ const BackdropSlideshow = () => {
       <div
         className="absolute inset-0"
         style={{
-          background:
-            "radial-gradient(circle at 0% 0%, rgba(0,112,243,0.05) 0%, transparent 50%), radial-gradient(circle at 100% 100%, rgba(82,0,243,0.05) 0%, transparent 50%)",
+          backgroundImage: `
+            radial-gradient(circle at 0% 0%, rgba(0, 112, 243, 0.05) 0px, transparent 50%),
+            radial-gradient(circle at 100% 100%, rgba(82, 0, 243, 0.05) 0px, transparent 50%)
+          `,
         }}
       />
 
-      <style jsx>{`
-        @keyframes zoomEffect {
-          from {
-            transform: scale(1.05);
-          }
-          to {
-            transform: scale(1.15);
-          }
-        }
-      `}</style>
+      {/* Gradient overlays for better text readability */}
+      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 to-transparent" />
+      <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/50 to-transparent" />
     </div>
   );
 };
