@@ -1,6 +1,6 @@
 import React from "react";
 
-const LoadingScreen = () => {
+const LoadingScreen = ({ message = "Loading Dashboard" }) => {
   return (
     <div className="fixed inset-0 bg-gray-900 bg-[radial-gradient(at_0%_0%,rgba(0,112,243,0.1)_0px,transparent_50%),radial-gradient(at_98%_100%,rgba(82,0,243,0.1)_0px,transparent_50%)] flex items-center justify-center">
       <div className="relative">
@@ -23,7 +23,7 @@ const LoadingScreen = () => {
 
           {/* Text content */}
           <h2 className="text-2xl font-semibold bg-gradient-to-r from-brand-primary-400 to-brand-secondary-400 bg-clip-text text-transparent mb-3">
-            Loading Dashboard
+            {message}
           </h2>
 
           <p className="text-gray-400 text-sm max-w-sm">

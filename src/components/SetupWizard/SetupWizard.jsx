@@ -1,29 +1,31 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
 import { testPlexConnection } from "../../services/plexService";
 import { testTautulliConnection } from "../../services/tautulliService";
+import { logInfo, logError } from "../../utils/logger";
 import {
-  ActivitySquare,
-  HelpCircle,
-  Server,
-  Database,
-  Eye,
-  EyeOff,
-} from "lucide-react";
-import {
-  FaExclamationTriangle,
+  FaServer,
+  FaDatabase,
+  FaCheckCircle,
+  FaTimesCircle,
   FaGithub,
-  FaCog,
-  FaKey,
   FaExternalLinkAlt,
   FaTrash,
-  FaChevronLeft,
+  FaExclamationTriangle,
+  FaCog,
+  FaPlus,
+  FaKey,
+  FaLink,
 } from "react-icons/fa";
+import * as Icons from "lucide-react";
 import toast from "react-hot-toast";
 import BackdropSlideshow from "./BackdropSlideshow";
-import { logInfo, logError } from "../../utils/logger";
-import * as Icons from "lucide-react";
+import LoadingScreen from "../common/LoadingScreen";
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
 
 const HelpLink = ({ href, children }) => (
   <a
@@ -39,6 +41,7 @@ const HelpLink = ({ href, children }) => (
 
 const SetupWizard = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { updateConfig } = useConfig();
   const [formData, setFormData] = useState({
     plexUrl: "",
@@ -47,6 +50,11 @@ const SetupWizard = () => {
     tautulliApiKey: "",
   });
   const [testing, setTesting] = useState(false);
+  const [initializing, setInitializing] = useState(false);
+  const [testResults, setTestResults] = useState({
+    plex: null,
+    tautulli: null,
+  });
   const [showPasswords, setShowPasswords] = useState({
     plexToken: false,
     tautulliApiKey: false,
@@ -59,7 +67,8 @@ const SetupWizard = () => {
     try {
       const loadingToast = toast.loading("Testing connections...");
 
-      await fetch("/api/config", {
+      // Configure the proxy server first
+      await fetch(`${API_BASE_URL}/api/config`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -73,24 +82,55 @@ const SetupWizard = () => {
         testTautulliConnection(formData.tautulliUrl, formData.tautulliApiKey),
       ]);
 
-      // Update configuration
-      updateConfig({ ...formData, isConfigured: true });
+      toast.success("Setup completed successfully!", {
+        style: {
+          border: "1px solid #059669",
+          padding: "16px",
+          background: "#064E3B",
+        },
+        id: loadingToast,
+        duration: 3000,
+      });
 
-      toast.success("Setup completed successfully!", { id: loadingToast });
+      logInfo("Setup completed successfully");
 
-      // Fix: Ensure state updates before navigation
-      setTimeout(() => {
-        navigate("/");
-      }, 500);
+      // Show initializing screen while preloading data
+      setInitializing(true);
+
+      // Update config to trigger the app to recognize we're configured
+      await updateConfig(formData);
+
+      // Start preloading dashboard data
+      try {
+        await Promise.all([
+          queryClient.prefetchQuery("plexActivities"),
+          queryClient.prefetchQuery("recentlyAdded"),
+          queryClient.prefetchQuery("libraries"),
+        ]);
+      } catch (error) {
+        console.error("Error preloading data:", error);
+      }
+
+      // Navigate to the main dashboard
+      navigate("/activities");
     } catch (err) {
-      toast.error(err.message || "Setup failed. Please check your settings.");
-    } finally {
+      toast.error(err.message || "Setup failed. Please check your settings.", {
+        style: {
+          border: "1px solid #DC2626",
+          padding: "16px",
+          background: "#7F1D1D",
+        },
+        duration: 4000,
+      });
+      logError("Setup failed", err);
+      setInitializing(false);
       setTesting(false);
     }
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    // Remove trailing slashes from URLs
     const formattedValue = name.includes("Url")
       ? value.replace(/\/$/, "")
       : value;
@@ -104,6 +144,35 @@ const SetupWizard = () => {
     }));
   };
 
+  const ConnectionStatus = ({ type, status }) => {
+    if (status === null) return null;
+
+    return (
+      <div
+        className={`absolute right-12 top-1/2 -translate-y-1/2 flex items-center gap-1.5 
+          px-2 py-1 rounded-lg backdrop-blur-sm border ${
+            status
+              ? "bg-green-500/10 text-green-400 border-green-500/20"
+              : "bg-red-500/10 text-red-400 border-red-500/20"
+          }`}
+      >
+        {status ? (
+          <Icons.CheckCircle2 size={14} />
+        ) : (
+          <Icons.XCircle size={14} />
+        )}
+        <span className="text-xs font-medium">
+          {status ? "Connected" : "Failed"}
+        </span>
+      </div>
+    );
+  };
+
+  // If we're initializing the dashboard, show a loading screen
+  if (initializing) {
+    return <LoadingScreen message="Initializing Dashboard..." />;
+  }
+
   return (
     <>
       <BackdropSlideshow />
@@ -112,7 +181,7 @@ const SetupWizard = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-3">
-            <ActivitySquare className="text-brand-primary-500 text-3xl" />
+            <Icons.ActivitySquare className="text-brand-primary-500 text-3xl" />
             <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
               Plex & Tautulli Dashboard
             </h1>
@@ -132,142 +201,171 @@ const SetupWizard = () => {
               {/* Plex Section */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-gray-700/50">
-                  <Server size={16} className="text-brand-primary-400" />
+                  <Icons.Server size={16} className="text-brand-primary-400" />
                   <h2 className="text-lg font-medium text-white">
                     Plex Configuration
                   </h2>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                    Plex Server URL
-                  </label>
-                  <input
-                    type="url"
-                    name="plexUrl"
-                    value={formData.plexUrl}
-                    onChange={handleChange}
-                    className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg px-4 py-2.5 
-                      text-white placeholder-gray-500 focus:outline-none focus:border-brand-primary-500/50
-                      focus:ring-1 focus:ring-brand-primary-500/50"
-                    placeholder="http://your-plex-server:32400"
-                    required
-                    disabled={testing}
-                  />
-                  <p className="mt-1.5 text-xs text-gray-500 flex items-center justify-between">
-                    <span>The URL where your Plex Media Server is running</span>
-                    <HelpLink href="https://support.plex.tv/articles/200288666-opening-plex-web-app/">
-                      How to find your server URL
-                    </HelpLink>
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                    Plex Token
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPasswords.plexToken ? "text" : "password"}
-                      name="plexToken"
-                      value={formData.plexToken}
-                      onChange={handleChange}
-                      className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg px-4 py-2.5 
-                        text-white placeholder-gray-500 focus:outline-none focus:border-brand-primary-500/50
-                        focus:ring-1 focus:ring-brand-primary-500/50 pr-24"
-                      required
-                      disabled={testing}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => togglePasswordVisibility("plexToken")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 
-                        hover:text-white transition-colors"
-                    >
-                      {showPasswords.plexToken ? (
-                        <EyeOff size={16} />
-                      ) : (
-                        <Eye size={16} />
-                      )}
-                    </button>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                      Plex Server URL
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="url"
+                        name="plexUrl"
+                        value={formData.plexUrl}
+                        onChange={handleChange}
+                        className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg px-4 py-2.5 
+                          text-white placeholder-gray-500 focus:outline-none focus:border-brand-primary-500/50
+                          focus:ring-1 focus:ring-brand-primary-500/50"
+                        placeholder="http://your-plex-server:32400"
+                        required
+                        disabled={testing}
+                      />
+                      <ConnectionStatus type="plex" status={testResults.plex} />
+                    </div>
+                    <p className="mt-1.5 text-xs text-gray-500 flex items-center justify-between">
+                      <span>
+                        The URL where your Plex Media Server is running
+                      </span>
+                      <HelpLink href="https://support.plex.tv/articles/200288666-opening-plex-web-app/">
+                        How to find your server URL
+                      </HelpLink>
+                    </p>
                   </div>
-                  <p className="mt-1.5 text-xs text-gray-500 flex items-center justify-between">
-                    <span>Your Plex authentication token</span>
-                    <HelpLink href="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/">
-                      How to find your token
-                    </HelpLink>
-                  </p>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                      Plex Token
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPasswords.plexToken ? "text" : "password"}
+                        name="plexToken"
+                        value={formData.plexToken}
+                        onChange={handleChange}
+                        className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg px-4 py-2.5 
+                          text-white placeholder-gray-500 focus:outline-none focus:border-brand-primary-500/50
+                          focus:ring-1 focus:ring-brand-primary-500/50 pr-24"
+                        required
+                        disabled={testing}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => togglePasswordVisibility("plexToken")}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 
+                          hover:text-white transition-colors"
+                      >
+                        {showPasswords.plexToken ? (
+                          <Icons.EyeOff size={16} />
+                        ) : (
+                          <Icons.Eye size={16} />
+                        )}
+                      </button>
+                      <ConnectionStatus type="plex" status={testResults.plex} />
+                    </div>
+                    <p className="mt-1.5 text-xs text-gray-500 flex items-center justify-between">
+                      <span>Your Plex authentication token</span>
+                      <HelpLink href="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/">
+                        How to find your token
+                      </HelpLink>
+                    </p>
+                  </div>
                 </div>
               </div>
 
               {/* Tautulli Section */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-gray-700/50">
-                  <Database size={16} className="text-brand-primary-400" />
+                  <Icons.Database
+                    size={16}
+                    className="text-brand-primary-400"
+                  />
                   <h2 className="text-lg font-medium text-white">
                     Tautulli Configuration
                   </h2>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                    Tautulli URL
-                  </label>
-                  <input
-                    type="url"
-                    name="tautulliUrl"
-                    value={formData.tautulliUrl}
-                    onChange={handleChange}
-                    className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg px-4 py-2.5 
-                      text-white placeholder-gray-500 focus:outline-none focus:border-brand-primary-500/50
-                      focus:ring-1 focus:ring-brand-primary-500/50"
-                    placeholder="http://your-tautulli-server:8181"
-                    required
-                    disabled={testing}
-                  />
-                  <p className="mt-1.5 text-xs text-gray-500 flex items-center justify-between">
-                    <span>The URL where your Tautulli instance is running</span>
-                    <HelpLink href="https://github.com/Tautulli/Tautulli/wiki/Installation">
-                      How to install Tautulli
-                    </HelpLink>
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                    Tautulli API Key
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPasswords.tautulliApiKey ? "text" : "password"}
-                      name="tautulliApiKey"
-                      value={formData.tautulliApiKey}
-                      onChange={handleChange}
-                      className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg px-4 py-2.5 
-                        text-white placeholder-gray-500 focus:outline-none focus:border-brand-primary-500/50
-                        focus:ring-1 focus:ring-brand-primary-500/50 pr-24"
-                      required
-                      disabled={testing}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => togglePasswordVisibility("tautulliApiKey")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 
-                        hover:text-white transition-colors"
-                    >
-                      {showPasswords.tautulliApiKey ? (
-                        <EyeOff size={16} />
-                      ) : (
-                        <Eye size={16} />
-                      )}
-                    </button>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                      Tautulli URL
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="url"
+                        name="tautulliUrl"
+                        value={formData.tautulliUrl}
+                        onChange={handleChange}
+                        className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg px-4 py-2.5 
+                          text-white placeholder-gray-500 focus:outline-none focus:border-brand-primary-500/50
+                          focus:ring-1 focus:ring-brand-primary-500/50"
+                        placeholder="http://your-tautulli-server:8181"
+                        required
+                        disabled={testing}
+                      />
+                      <ConnectionStatus
+                        type="tautulli"
+                        status={testResults.tautulli}
+                      />
+                    </div>
+                    <p className="mt-1.5 text-xs text-gray-500 flex items-center justify-between">
+                      <span>
+                        The URL where your Tautulli instance is running
+                      </span>
+                      <HelpLink href="https://github.com/Tautulli/Tautulli/wiki/Installation">
+                        How to install Tautulli
+                      </HelpLink>
+                    </p>
                   </div>
-                  <p className="mt-1.5 text-xs text-gray-500 flex items-center justify-between">
-                    <span>Your Tautulli API key</span>
-                    <HelpLink href="https://github.com/Tautulli/Tautulli/wiki/Frequently-Asked-Questions#general-q14">
-                      How to find your API key
-                    </HelpLink>
-                  </p>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                      Tautulli API Key
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={
+                          showPasswords.tautulliApiKey ? "text" : "password"
+                        }
+                        name="tautulliApiKey"
+                        value={formData.tautulliApiKey}
+                        onChange={handleChange}
+                        className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg px-4 py-2.5 
+                          text-white placeholder-gray-500 focus:outline-none focus:border-brand-primary-500/50
+                          focus:ring-1 focus:ring-brand-primary-500/50 pr-24"
+                        required
+                        disabled={testing}
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          togglePasswordVisibility("tautulliApiKey")
+                        }
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 
+                          hover:text-white transition-colors"
+                      >
+                        {showPasswords.tautulliApiKey ? (
+                          <Icons.EyeOff size={16} />
+                        ) : (
+                          <Icons.Eye size={16} />
+                        )}
+                      </button>
+                      <ConnectionStatus
+                        type="tautulli"
+                        status={testResults.tautulli}
+                      />
+                    </div>
+                    <p className="mt-1.5 text-xs text-gray-500 flex items-center justify-between">
+                      <span>Your Tautulli API key for authentication</span>
+                      <HelpLink href="https://github.com/Tautulli/Tautulli/wiki/Frequently-Asked-Questions#general-q14">
+                        How to find your API key
+                      </HelpLink>
+                    </p>
+                  </div>
                 </div>
               </div>
 

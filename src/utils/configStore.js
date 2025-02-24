@@ -1,8 +1,8 @@
 const fs = require("fs");
 const path = require("path");
 
-// Determine the correct path for the config file
-const CONFIG_FILE = path.join(__dirname, "/configs/config.json");
+// Determine the correct path for the config file in the configs folder in root directory
+const CONFIG_FILE = path.join(process.cwd(), "configs", "config.json");
 
 // Initialize config with default values
 let config = {
@@ -12,14 +12,27 @@ let config = {
   tautulliApiKey: null,
 };
 
-// Ensure the config directory exists
-const ensureConfigDirectoryExists = () => {
+// Ensure the config directory and file exists
+const ensureConfigFileExists = () => {
   const configDir = path.dirname(CONFIG_FILE);
+
+  // Create configs directory if it doesn't exist
   if (!fs.existsSync(configDir)) {
     try {
       fs.mkdirSync(configDir, { recursive: true });
+      console.log(`Created configs directory at: ${configDir}`);
     } catch (error) {
-      console.error("Failed to create config directory:", error);
+      console.error("Failed to create configs directory:", error);
+    }
+  }
+
+  // Create the file with default settings if it doesn't exist
+  if (!fs.existsSync(CONFIG_FILE)) {
+    try {
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+      console.log(`Created config file at: ${CONFIG_FILE}`);
+    } catch (error) {
+      console.error("Failed to create config file:", error);
     }
   }
 };
@@ -27,10 +40,10 @@ const ensureConfigDirectoryExists = () => {
 // Load config from file if it exists
 const loadConfig = () => {
   try {
-    // Ensure directory exists
-    ensureConfigDirectoryExists();
+    // Ensure file exists
+    ensureConfigFileExists();
 
-    // Check if file exists
+    // Read and parse the config file
     if (fs.existsSync(CONFIG_FILE)) {
       const rawData = fs.readFileSync(CONFIG_FILE, "utf8");
       const loadedConfig = JSON.parse(rawData);
@@ -69,9 +82,6 @@ const loadConfig = () => {
 // Save configuration to file
 const saveConfig = () => {
   try {
-    // Ensure directory exists
-    ensureConfigDirectoryExists();
-
     // Prepare config for saving (avoid saving null values)
     const configToSave = {
       plexUrl: config.plexUrl || null,

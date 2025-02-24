@@ -2,16 +2,17 @@ require("dotenv").config({ path: ".env" });
 const express = require("express");
 const cors = require("cors");
 const { createProxyMiddleware } = require("http-proxy-middleware");
-const { getConfig, setConfig } = require("./src/utils/configStore.cjs");
-const { getFormats, saveFormats } = require("./src/utils/formatStore.cjs");
+const { getConfig, setConfig } = require("./src/utils/configStore.js");
+const { getFormats, saveFormats } = require("./src/utils/formatStore.js");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
 // Constants and Configuration
 const SAVED_SECTIONS_PATH = path.join(
-  __dirname,
-  "/src/utils/configs/sections.json"
+  process.cwd(),
+  "configs",
+  "sections.json"
 );
 
 const PROXY_TIMEOUT = parseInt(process.env.PROXY_TIMEOUT) || 30000;
@@ -1066,7 +1067,6 @@ app.post("/api/config", (req, res) => {
 
   const currentConfig = getConfig();
 
-  // Merge new config with existing, preserving existing values if not provided
   const updatedConfig = {
     plexUrl: plexUrl || currentConfig.plexUrl,
     plexToken: plexToken || currentConfig.plexToken,
@@ -1089,7 +1089,6 @@ app.post("/api/config", (req, res) => {
   });
 });
 
-// In server.cjs, add this endpoint
 app.get("/api/config", (req, res) => {
   const config = getConfig();
   res.json({
@@ -1098,6 +1097,70 @@ app.get("/api/config", (req, res) => {
     plexToken: config.plexToken,
     tautulliApiKey: config.tautulliApiKey,
   });
+});
+
+app.post("/api/reset-all", (req, res) => {
+  try {
+    const configPath = path.join(process.cwd(), "configs", "config.json");
+    const formatsPath = path.join(process.cwd(), "configs", "formats.json");
+    const savedSectionsPath = path.join(
+      process.cwd(),
+      "configs",
+      "sections.json"
+    );
+
+    // Reset config.json
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify(
+        {
+          plexUrl: null,
+          plexToken: null,
+          tautulliUrl: null,
+          tautulliApiKey: null,
+        },
+        null,
+        2
+      )
+    );
+
+    // Reset formats.json
+    fs.writeFileSync(
+      formatsPath,
+      JSON.stringify(
+        {
+          downloads: [],
+          recentlyAdded: [],
+          sections: [],
+          users: [],
+        },
+        null,
+        2
+      )
+    );
+
+    // Reset sections.json to an empty array
+    fs.writeFileSync(savedSectionsPath, JSON.stringify([], null, 2));
+
+    // Log the reset action
+    console.log("All configurations have been reset:", {
+      configPath,
+      formatsPath,
+      savedSectionsPath,
+    });
+
+    res.json({
+      status: "success",
+      message: "All configurations reset successfully",
+    });
+  } catch (error) {
+    console.error("Failed to reset configurations:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Failed to reset configurations",
+      details: error.message,
+    });
+  }
 });
 
 const createDynamicProxy = (serviceName, options = {}) => {
@@ -1200,69 +1263,6 @@ const createDynamicProxy = (serviceName, options = {}) => {
     return proxy(req, res, next);
   };
 };
-
-app.post("/api/reset-all", (req, res) => {
-  try {
-    const configPath = path.join(__dirname, "/src/utils/configs/config.json");
-    const formatsPath = path.join(__dirname, "/src/utils/configs/formats.json");
-    const savedSectionsPath = path.join(
-      __dirname,
-      "/src/utils/configs/sections.json"
-    );
-
-    // Reset config.json
-    fs.writeFileSync(
-      configPath,
-      JSON.stringify(
-        {
-          plexUrl: null,
-          plexToken: null,
-          tautulliUrl: null,
-          tautulliApiKey: null,
-        },
-        null,
-        2
-      )
-    );
-
-    // Reset formats.json
-    fs.writeFileSync(
-      formatsPath,
-      JSON.stringify(
-        {
-          downloads: [],
-          recentlyAdded: [],
-          sections: [],
-          users: [],
-        },
-        null,
-        2
-      )
-    );
-
-    // Reset saved_sections.json to an empty array
-    fs.writeFileSync(savedSectionsPath, JSON.stringify([], null, 2));
-
-    // Log the reset action
-    console.log("All configurations have been reset:", {
-      configPath,
-      formatsPath,
-      savedSectionsPath,
-    });
-
-    res.json({
-      status: "success",
-      message: "All configurations reset successfully",
-    });
-  } catch (error) {
-    console.error("Failed to reset configurations:", error);
-    res.status(500).json({
-      status: "error",
-      message: "Failed to reset configurations",
-      details: error.message,
-    });
-  }
-});
 
 // Setup proxies
 app.use("/api/plex", createDynamicProxy("Plex"));

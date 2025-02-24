@@ -1,20 +1,42 @@
 const fs = require("fs");
 const path = require("path");
 
-const FORMATS_FILE = path.join(__dirname, "/configs/formats.json");
+// Define the formats file in the configs folder in root directory
+const FORMATS_FILE = path.join(process.cwd(), "configs", "formats.json");
 
 // Initialize formats file if it doesn't exist
-if (!fs.existsSync(FORMATS_FILE)) {
-  fs.writeFileSync(
-    FORMATS_FILE,
-    JSON.stringify({
-      downloads: [],
-      recentlyAdded: [],
-      users: [],
-      sections: [], // Add sections array to initial structure
-    })
-  );
-}
+const ensureFormatsFileExists = () => {
+  const configDir = path.dirname(FORMATS_FILE);
+
+  // Create configs directory if it doesn't exist
+  if (!fs.existsSync(configDir)) {
+    try {
+      fs.mkdirSync(configDir, { recursive: true });
+      console.log(`Created configs directory at: ${configDir}`);
+    } catch (error) {
+      console.error("Failed to create configs directory:", error);
+    }
+  }
+
+  if (!fs.existsSync(FORMATS_FILE)) {
+    try {
+      // Create default format structure
+      const defaultFormats = {
+        downloads: [],
+        recentlyAdded: [],
+        users: [],
+      };
+
+      fs.writeFileSync(FORMATS_FILE, JSON.stringify(defaultFormats, null, 2));
+      console.log(`Created formats file at: ${FORMATS_FILE}`);
+    } catch (error) {
+      console.error("Failed to create formats file:", error);
+    }
+  }
+};
+
+// Ensure formats file exists on load
+ensureFormatsFileExists();
 
 const getFormats = () => {
   try {
@@ -24,8 +46,8 @@ const getFormats = () => {
     return {
       downloads: formats.downloads || [],
       recentlyAdded: formats.recentlyAdded || [],
-      users: formats.users || [],
-      sections: formats.sections || [], // Add sections to returned object
+      users: formats.users || [], // Add users array
+      sections: formats.sections || [], // Add sections array
     };
   } catch (error) {
     console.error("Error reading formats:", error);
@@ -33,7 +55,7 @@ const getFormats = () => {
       downloads: [],
       recentlyAdded: [],
       users: [],
-      sections: [], // Add sections to default return
+      sections: [],
     };
   }
 };
@@ -45,7 +67,7 @@ const saveFormats = (formats) => {
       downloads: formats.downloads || [],
       recentlyAdded: formats.recentlyAdded || [],
       users: formats.users || [],
-      sections: formats.sections || [], // Add sections to saved structure
+      sections: formats.sections || [],
     };
 
     fs.writeFileSync(FORMATS_FILE, JSON.stringify(updatedFormats, null, 2));

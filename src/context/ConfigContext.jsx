@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
-import { logInfo } from "../utils/logger";
+import { logInfo, logError } from "../utils/logger";
+import axios from "axios";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
@@ -9,19 +10,19 @@ const ConfigContext = createContext(null);
 export const ConfigProvider = ({ children }) => {
   const [config, setConfig] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [forceUpdate, setForceUpdate] = useState(false); // Force re-render
+  const [configError, setConfigError] = useState(null);
 
+  // Check if there's a valid configuration on the server
   const checkExistingConfig = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/config`);
+      setConfigError(null);
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch configuration");
-      }
+      const response = await axios.get(`${API_BASE_URL}/api/config`);
 
-      const configData = await response.json();
+      const configData = response.data;
 
+      // Check if all required config values are present and non-null
       if (
         configData.plexUrl &&
         configData.plexToken &&
@@ -32,64 +33,105 @@ export const ConfigProvider = ({ children }) => {
         logInfo("Existing configuration loaded successfully");
       } else {
         setConfig(null);
+        logInfo("No complete configuration found");
       }
     } catch (error) {
-      console.error("Error checking configuration:", error);
+      logError("Error checking configuration:", error);
+      setConfigError(error.message || "Failed to check configuration");
       setConfig(null);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Verify the loaded configuration by testing the connections
+  const verifyConfig = async (configData) => {
+    try {
+      // TODO: Add actual verification logic if needed
+      return true;
+    } catch (error) {
+      logError("Configuration verification failed:", error);
+      return false;
+    }
+  };
+
+  // Load configuration on component mount
   useEffect(() => {
     checkExistingConfig();
   }, []);
 
+  // Update the configuration on the server
   const updateConfig = async (newConfig) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/config`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(newConfig),
-      });
+      setIsLoading(true);
 
-      if (!response.ok) {
+      const response = await axios.post(
+        `${API_BASE_URL}/api/config`,
+        newConfig
+      );
+
+      if (!response.data || response.data.status !== "ok") {
         throw new Error("Failed to update configuration");
       }
 
-      const updatedConfig = await response.json();
-      setConfig(updatedConfig.config);
-      setForceUpdate((prev) => !prev); // Force re-render
+      // Use the response data to avoid any synchronization issues
+      const serverConfig = {
+        plexUrl: newConfig.plexUrl,
+        plexToken: newConfig.plexToken,
+        tautulliUrl: newConfig.tautulliUrl,
+        tautulliApiKey: newConfig.tautulliApiKey,
+      };
+
+      setConfig(serverConfig);
 
       logInfo("Configuration updated successfully");
+
+      return serverConfig;
     } catch (error) {
-      console.error("Error updating configuration:", error);
+      logError("Error updating configuration:", error);
+      setConfigError(error.message || "Failed to update configuration");
       throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const isConfigured = () => !!config;
+  // Check if the application is configured
+  const isConfigured = () => {
+    return !!(
+      config &&
+      config.plexUrl &&
+      config.plexToken &&
+      config.tautulliUrl &&
+      config.tautulliApiKey
+    );
+  };
 
-  // Clear configuration
+  // Clear all configuration (reset)
   const clearConfig = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/reset-all`, {
-        method: "POST",
-      });
+      setIsLoading(true);
 
-      if (!response.ok) {
+      const response = await axios.post(`${API_BASE_URL}/api/reset-all`);
+
+      if (!response.data || response.data.status !== "success") {
         throw new Error("Failed to reset configuration");
       }
 
-      localStorage.removeItem("plexTautulliConfig");
       setConfig(null);
       logInfo("Configuration cleared successfully");
     } catch (error) {
-      console.error("Error clearing configuration:", error);
+      logError("Error clearing configuration:", error);
+      setConfigError(error.message || "Failed to clear configuration");
       throw error;
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  // Refresh the configuration from the server
+  const refreshConfig = () => {
+    return checkExistingConfig();
   };
 
   return (
@@ -99,7 +141,9 @@ export const ConfigProvider = ({ children }) => {
         updateConfig,
         isConfigured,
         clearConfig,
+        refreshConfig,
         isLoading,
+        configError,
       }}
     >
       {children}
@@ -107,5 +151,14 @@ export const ConfigProvider = ({ children }) => {
   );
 };
 
-export const useConfig = () => useContext(ConfigContext);
+export const useConfig = () => {
+  const context = useContext(ConfigContext);
+
+  if (!context) {
+    throw new Error("useConfig must be used within a ConfigProvider");
+  }
+
+  return context;
+};
+
 export default ConfigContext;

@@ -2,10 +2,9 @@
   "name": "plex-tautulli-dashboard",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
   "scripts": {
     "dev:frontend": "vite --port 3005",
-    "dev:server": "node server.cjs",
+    "dev:server": "node server.js",
     "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:server\"",
     "build": "vite build",
     "preview": "vite preview"
