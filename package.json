@@ -1,10 +1,11 @@
 {
   "name": "plex-tautulli-dashboard",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.5.0",
+  "type": "module",
   "scripts": {
     "dev:frontend": "vite --port 3005",
-    "dev:server": "node server.js",
+    "dev:server": "node server.cjs",
     "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:server\"",
     "build": "vite build",
     "preview": "vite preview"
@@ -39,7 +40,7 @@
     "url": "git+https://github.com/cyb3rgh05t/plex-tautulli-dashboard.git"
   },
   "license": "MIT",
-  "main": "postcss.config.js",
+  "main": "postcss.config.cjs",
   "keywords": [],
   "bugs": {
     "url": "https://github.com/cyb3rgh05t/plex-tautulli-dashboard/issues"

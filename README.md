@@ -1,199 +1,219 @@
 # Plex & Tautulli Dashboard
 
-A web-based dashboard for monitoring and managing your Plex Media Server and Tautulli instances. This dashboard provides an intuitive interface to view Plex download activities, recently added media, library sections, user statistics, and format customization options.
+![Version](https://img.shields.io/badge/version-1.2.0-blue)
+![React](https://img.shields.io/badge/React-18.2.0-61DAFB)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-## Features
+A modern, customizable dashboard for monitoring Plex Media Server and Tautulli statistics. This project provides a clean interface to view Plex activities, recently added media, user statistics, and more, all with customizable formatting options.
 
-- **Plex Download Activities**: Monitor active downloads and their progress with custom formatting options.
-- **Recently Added Media**: View recently added movies, TV shows, and music across your library sections.
-- **Library Sections**: Manage and select which library sections to include in the dashboard.
-- **User Statistics**: View user activity, total plays, watch time, and last seen information.
-- **Format Customization**: Customize the display formats for download activities, recently added media, and user statistics using predefined variables.
-- **Setup Wizard**: Easy configuration of Plex and Tautulli server details through a user-friendly setup process.
+![Dashboard Preview](https://via.placeholder.com/800x450/111827/FFFFFF?text=Plex+%26+Tautulli+Dashboard)
 
-## Prerequisites
+## 🚀 Features
 
-Before running the Plex & Tautulli Dashboard, ensure you have the following:
+- **Real-time Plex Activity Monitoring**: View current downloads, transcodes, and streams
+- **Recently Added Media**: Browse recently added movies, TV shows, and music with customizable display formats
+- **User Statistics**: Track user viewing habits, watch time, and activity
+- **Library Management**: Select which Plex libraries to display in your dashboard
+- **Custom Format Templates**: Create personalized formatting for how media and statistics are displayed
+- **Responsive Design**: Works on desktop and mobile devices
+- **Dark Mode Interface**: Easy on the eyes with a modern dark theme
 
-- Node.js (version 14 or higher)
-- npm (Node Package Manager)
-- Plex Media Server (with a valid API token)
-- Tautulli (with API access enabled)
+## 🛠️ Installation
 
-## Installation
+### Prerequisites
+
+- Node.js (v14 or newer)
+- Plex Media Server with a valid Plex Token
+- Tautulli installed and configured with API Key
+
+### Setup
 
 1. Clone the repository:
 
-   ```bash
-   git clone https://github.com/your-username/plex-tautulli-dashboard.git
-   ```
+```bash
+git clone https://github.com/cyb3rgh05t/plex-tautulli-dashboard.git
+cd plex-tautulli-dashboard
+```
 
-2. Navigate to the project directory:
+2. Install dependencies:
 
-   ```bash
-   cd plex-tautulli-dashboard
-   ```
+```bash
+npm install
+```
 
-3. Install the dependencies:
+3. Create a `.env` file in the root directory with the following content (customize as needed):
 
-   ```bash
-   npm install
-   ```
+```bash
+TZ=Europe/Berlin
+NODE_ENV=development
+ALLOWED_ORIGINS=http://localhost:3005
+PORT=3006
+VITE_BACKEND_URL=http://localhost:3006
+VITE_API_BASE_URL=http://localhost:3006
+PROXY_TIMEOUT=30000
+PROXY_READ_TIMEOUT=30000
+PROXY_WRITE_TIMEOUT=30000
+```
 
 4. Start the development server:
 
-   ```bash
-   npm run dev
-   ```
+```bash
+npm run dev
+```
 
-5. Open your web browser and visit `http://localhost:3005` to access the Plex & Tautulli Dashboard.
+This will start both the frontend (port 3005) and backend (port 3006) servers concurrently.
 
-## Configuration
+## 🔧 Configuration
 
-1. Upon launching the dashboard for the first time, you will be prompted with a setup wizard.
+On first run, you'll be presented with a setup wizard that requires:
 
-2. Enter your Plex server URL, Plex API token, Tautulli server URL, and Tautulli API key in the respective fields.
+1. **Plex Server URL**: The full URL to your Plex Media Server (e.g., `http://your-plex-server:32400`)
+2. **Plex Token**: Your authentication token for Plex API access
+3. **Tautulli URL**: The full URL to your Tautulli instance (e.g., `http://your-tautulli-server:8181`)
+4. **Tautulli API Key**: Your Tautulli API key for authentication
 
-3. Click on the "Save Configuration" button to store the server details.
+### How to find your Plex Token
 
-4. The dashboard will now connect to your Plex and Tautulli instances and display the relevant information.
+1. Log in to Plex Web App
+2. Open any media item
+3. Click the ⋮ (three dots) menu
+4. Select "Get Info"
+5. Open browser developer tools (F12)
+6. Go to the Network tab
+7. Look for API requests to Plex - the `X-Plex-Token` parameter will be visible in the request URL
 
-## Technologies Used
+### How to find your Tautulli API Key
 
-The Plex & Tautulli Dashboard is built using the following technologies:
+1. Open Tautulli web interface
+2. Go to Settings > Web Interface
+3. In the "API" section, you'll find your API key
 
-- **React**: A JavaScript library for building user interfaces.
-- **Vite**: A fast build tool and development server for modern web applications.
-- **Tailwind CSS**: A utility-first CSS framework for rapidly building custom user interfaces.
-- **Express**: A minimal and flexible Node.js web application framework for building APIs and web servers.
-- **Axios**: A promise-based HTTP client for making API requests.
-- **React Query**: A powerful data fetching and caching library for React applications.
-- **React Hot Toast**: A lightweight toast notification library for React.
-- **React Icons**: A collection of popular icons as React components.
+## 📋 Usage
 
-## Troubleshooting
+### Dashboard Navigation
 
-If you encounter any issues while setting up or using the Plex & Tautulli Dashboard, here are some common troubleshooting steps:
+The dashboard is organized into several tabs:
 
-- Ensure that your Plex Media Server and Tautulli instances are running and accessible.
-- Double-check that you have entered the correct URLs and API keys for Plex and Tautulli in the setup wizard.
-- Verify that your Plex and Tautulli API keys have the necessary permissions to access the required data.
-- Check the browser console for any error messages or network issues.
-- Ensure that you have the latest versions of Node.js and npm installed.
-- Try clearing your browser cache and reloading the dashboard.
+- **Plex Activities**: Real-time view of current downloads and streams
+- **Recently Added**: Browse your most recently added media
+- **Libraries**: Select which Plex libraries to display on your dashboard
+- **Users**: View user statistics and activity
+- **Format Settings**: Customize how media information is displayed
+- **API Endpoints**: Documentation for available API endpoints
 
-If the issue persists, please refer to the project's issue tracker on GitHub or reach out to the community for further assistance.
+### Custom Formatting
 
-## Docker Setup
+One of the key features of this dashboard is the ability to create custom formats for displaying information. You can create templates with variables specific to:
 
-You can run the Plex & Tautulli Dashboard using Docker Compose. Here's an example `docker-compose.yml` file:
+- **Downloads**: Format how download activities are displayed
+- **Recently Added Media**: Customize how movies, TV shows, and music appear
+- **Users**: Format how user activity is displayed
+- **Sections**: Format how Sections is displayed
+
+For example, you could create a TV show format like:
+
+```bash
+{grandparent_title} S{parent_media_index}E{media_index} - {title} ({addedAt:relative})
+```
+
+Which would display as:
+
+```bash
+Breaking Bad S05E07 - Say My Name (2 days ago)
+```
+
+## 🌐 API Endpoints
+
+The dashboard includes a full-featured API that can be accessed by other applications:
+
+- `GET /api/downloads`: Get all current Plex downloads
+- `GET /api/formats`: Get all configured format templates
+- `GET /api/sections`: Get all saved library sections
+- `GET /api/users`: Get users with activity information
+- `GET /api/recent/:type`: Get recently added media (movies, shows, music)
+- `GET /api/media/:type`: Get section stats (movies, shows, music)
+- `GET /api/libraries`: Get all Plex libraries
+- `GET /api/config`: Get server configuration
+- `POST /api/formats`: Save format templates
+- `POST /api/sections`: Save selected library sections
+- `POST /api/config`: Update server configuration
+- `POST /api/reset-all`: Reset all configurations
+
+## 🔄 Building for Production
+
+To build the application for production:
+
+```bash
+npm run build
+```
+
+This will create optimized production builds in the `dist` directory.
+
+## 🚢 Deployment
+
+### Docker (Recommended)
+
+A Docker image is available on Docker Hub:
+
+```bash
+docker pull cyb3rgh05t/plex-tautulli-dashboard:latest
+```
 
 ```yaml
-version: "3.9"
+version: "3"
 services:
   plex-tautulli-dashboard:
-    hostname: "plex-tautulli-dashboard"
-    container_name: "plex-tautulli-dashboard"
-    environment:
-      - "TZ=Europe/berlin"
-      - "NODE_ENV=production"
-      - "ALLOWED_ORIGINS=" # CORS ORIGINS
-      - "VITE_ALLOWED_HOSTS=all" # Allow all hosts
-      - "VITE_ALLOW_ALL_HOSTS=true" # Alternative to VITE_ALLOWED_HOSTS=all
-    image: "ghcr.io/cyb3rgh05t/plex-tautulli-dashboard"
-    restart: "unless-stopped"
+    image: cyb3rgh05t/plex-tautulli-dashboard:latest
+    container_name: plex-tautulli-dashboard
     ports:
-      - "3005:3005" # frontend server
-      - "3006:3006" # backend proxyserver
+      - "3005:3005"
+      - "3006:3006"
+    environment:
+      - TZ=Europe/Berlin
+      - NODE_ENV=production
+      - ALLOWED_ORIGINS=http://your-server-ip:3005
+      - PORT=3006
+      - VITE_BACKEND_URL=http://your-server-ip:3006
+      - VITE_API_BASE_URL=http://your-server-ip:3006
     volumes:
-      - "/opt/appdata/plex-tautulli-dashboard:/app/src/utils/configs:rw"
+      - ./configs:/app/src/utils/configs
+    restart: unless-stopped
 ```
 
-These files will be mounted as volumes in the Docker container and will be used to store the application data.
+### Manual Deployment
 
-To start the Plex & Tautulli Dashboard using Docker Compose, run the following command in the directory containing the `docker-compose.yml` file:
+1. Build the application as described above
+2. Set up a web server (nginx, Apache) to serve the static files from the `dist` directory
+3. Configure the server to proxy API requests to the Node.js backend
 
-```bash
-docker-compose up -d
-```
+## 📚 Tech Stack
 
-This will download the required Docker image and start the container in detached mode. You can then access the dashboard by visiting `http://localhost:3005` in your web browser.
+- **Frontend**: React, TailwindCSS, Vite, React Query
+- **Backend**: Node.js, Express
+- **APIs**: Plex API, Tautulli API
 
-To stop the container, run:
+## 🤝 Contributing
 
-```bash
-docker-compose down
-```
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-Make sure to review and customize the `docker-compose.yml` file according to your specific requirements, such as setting the appropriate time zone, CORS origins, and port mappings.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## Local Deployment
+## 📝 License
 
-To deploy the Plex & Tautulli Dashboard for production use, you can follow these general steps:
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-1. Build the optimized production version of the application:
+## 🙏 Acknowledgements
 
-   ```bash
-   npm run build
-   ```
+- [Plex](https://www.plex.tv/) for their amazing media server
+- [Tautulli](https://tautulli.com/) for their Plex monitoring tool
+- [React](https://reactjs.org/) and [Vite](https://vitejs.dev/) for the frontend framework
+- [TailwindCSS](https://tailwindcss.com/) for the styling
+- [Lucide React](https://lucide.dev/) for the icons
 
-2. The production-ready files will be generated in the `dist` directory.
+---
 
-3. Deploy the contents of the `dist` directory to your preferred hosting platform or server.
-
-4. Ensure that your production environment has the necessary dependencies installed, such as Node.js and npm.
-
-5. Start the server in production mode:
-
-   ```bash
-   npm start
-   ```
-
-6. Access the dashboard using the provided URL or domain name.
-
-Note: The specific deployment steps may vary depending on your hosting platform or server setup. Make sure to follow the appropriate deployment guidelines for your chosen environment.
-
-## Security Considerations
-
-When using the Plex & Tautulli Dashboard, keep the following security considerations in mind:
-
-- Protect your Plex and Tautulli API keys and ensure they are not publicly accessible.
-- Use secure communication protocols (HTTPS) when accessing the dashboard, especially if it is exposed to the internet.
-- Regularly update the project dependencies to ensure you have the latest security patches.
-- Implement proper authentication and authorization mechanisms to restrict access to the dashboard and its features.
-- Be cautious when sharing or exposing the dashboard to untrusted networks or users.
-
-Remember to review and adhere to the security best practices recommended by Plex, Tautulli, and the libraries and frameworks used in this project.
-
-## Contributing
-
-Contributions are welcome! If you find any bugs, have feature requests, or want to contribute improvements, please open an issue or submit a pull request on the [GitHub repository](https://github.com/cyb3rgho5t/plex-tautulli-dashboard).
-
-## License
-
-This project is licensed under the [MIT License](LICENSE).
-
-## Acknowledgements
-
-- [React](https://reactjs.org/)
-- [Vite](https://vitejs.dev/)
-- [Tailwind CSS](https://tailwindcss.com/)
-- [Plex API](https://www.plex.tv/)
-- [Tautulli API](https://tautulli.com/)
-
-## Getting Help
-
-If you encounter any issues or have questions about the Plex & Tautulli Dashboard, please feel free to reach out by opening an issue on the [GitHub repository](https://github.com/your-username/plex-tautulli-dashboard/issues). We'll be happy to assist you!
-
-## Future Enhancements
-
-Here are some potential enhancements and features that could be added to the Plex & Tautulli Dashboard in the future:
-
-- Integration with additional Plex and Tautulli APIs for more advanced functionality.
-- Customizable dashboard layouts and themes.
-- Enhanced reporting and analytics features.
-- Notifications and alerts for specific events or thresholds.
-- Multi-user support with role-based access control.
-- Mobile-friendly responsive design.
-
-Feel free to contribute your ideas and suggestions to make the Plex & Tautulli Dashboard even better!
+Created with ❤️ by [cyb3rgh05t](https://github.com/cyb3rgh05t) for the Plex an Tautulli Community.
