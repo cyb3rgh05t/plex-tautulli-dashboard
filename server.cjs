@@ -1179,125 +1179,76 @@ app.get("/api/recent/:type", async (req, res) => {
       return res.status(400).json({ error: "Invalid media type" });
     }
 
-    // Fetch sections
-    const sectionsResponse = await axios.get(
-      "http://localhost:3006/api/sections"
-    );
-    const allSections = sectionsResponse.data.sections;
-
     // Get formats
     const formatsData = getFormats();
     const recentlyAddedFormats = formatsData.recentlyAdded || [];
 
+    // Fetch sections first
+    let allSections;
+    try {
+      const sectionsResponse = await axios.get(`${config.tautulliUrl}/api/v2`, {
+        params: {
+          apikey: config.tautulliApiKey,
+          cmd: "get_libraries_table",
+        },
+      });
+
+      allSections = sectionsResponse.data?.response?.data?.data || [];
+    } catch (sectionsError) {
+      console.error("Error fetching sections:", sectionsError);
+      return res.status(500).json({
+        error: "Failed to fetch library sections",
+        message: sectionsError.message,
+      });
+    }
+
+    // Filter sections by type and optional section ID
     const matchingSections = allSections.filter((s) => {
-      // Check for undefined section or missing type
-      if (!s) return false;
+      // Safely get section type, handling different property names
+      const sectionType = (s.section_type || s.type || "")
+        .toString()
+        .toLowerCase();
+      const matchesType = sectionType === validTypes[type];
 
-      // Try several possible property names for type (type, section_type)
-      // Some sections might have type in section_type instead of type
-      const sectionType = s.type || s.section_type || "";
+      // If specific section is requested, check section ID
+      if (section) {
+        return matchesType && s.section_id.toString() === section.toString();
+      }
 
-      // Safely convert to lowercase and compare
-      const matchesType =
-        sectionType.toString().toLowerCase() === validTypes[type];
       return matchesType;
     });
 
+    // If no matching sections, return empty result
     if (matchingSections.length === 0) {
-      return res.json({ total: 0, media: [] });
+      return res.json({
+        total: 0,
+        media: [],
+        sections: [],
+        error: section
+          ? `No sections found for type ${type} with section ID ${section}`
+          : "No sections found for this media type",
+      });
     }
 
-    // Fetch media for each section and its metadata
+    // Fetch media for matching sections
     const sectionMediaPromises = matchingSections.map(async (section) => {
       try {
-        // First get the recently added items
         const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
           params: {
             apikey: config.tautulliApiKey,
             cmd: "get_recently_added",
             section_id: section.section_id,
-            count: 10,
+            count: 50, // Increased count to ensure we get some results
           },
         });
 
-        const mediaItems = response.data?.response?.data?.recently_added || [];
-
-        // For each media item, fetch its metadata
-        const mediaWithMetadataPromises = mediaItems.map(async (item) => {
-          try {
-            const metadataResponse = await axios.get(
-              `${config.tautulliUrl}/api/v2`,
-              {
-                params: {
-                  apikey: config.tautulliApiKey,
-                  cmd: "get_metadata",
-                  rating_key: item.rating_key,
-                },
-              }
-            );
-
-            // Log the entire metadata response for debugging
-            console.log(
-              `Metadata for rating_key ${item.rating_key}:`,
-              JSON.stringify(
-                {
-                  fullResponse: metadataResponse.data,
-                  responseKeys: Object.keys(
-                    metadataResponse.data?.response || {}
-                  ),
-                  dataKeys: Object.keys(
-                    metadataResponse.data?.response?.data || {}
-                  ),
-                  mediaInfoKeys: Object.keys(
-                    metadataResponse.data?.response?.data?.media_info?.[0] || {}
-                  ),
-                },
-                null,
-                2
-              )
-            );
-
-            // Original media item details
-            const baseMediaDetails = {
-              ...item,
-              section_id: section.section_id,
-            };
-
-            // If no metadata found, return base details
-            if (!metadataResponse.data?.response?.data) {
-              return {
-                ...baseMediaDetails,
-                video_full_resolution: "Unknown",
-                duration: 0,
-              };
-            }
-
-            // Extract all possible duration-related fields
-            const mediaData = metadataResponse.data.response.data;
-
-            return {
-              ...baseMediaDetails,
-              video_full_resolution:
-                mediaData.media_info?.[0]?.video_full_resolution || "Unknown",
-              duration: Number(mediaData.duration) || 0, // Convert to number
-              raw_metadata: mediaData,
-            };
-          } catch (error) {
-            console.error(
-              `Failed to fetch metadata for ${item.rating_key}:`,
-              error
-            );
-            return {
-              ...item,
-              section_id: section.section_id,
-              video_full_resolution: "Unknown",
-              duration: 0,
-            };
-          }
-        });
-
-        // Wait for all metadata requests to complete
-        return Promise.all(mediaWithMetadataPromises);
+        return (response.data?.response?.data?.recently_added || []).map(
+          (item) => ({
+            ...item,
+            section_id: section.section_id,
+            section_name: section.section_name || section.name,
+          })
+        );
       } catch (error) {
         console.error(
           `Error fetching recently added for section ${section.section_id}:`,
@@ -1307,92 +1258,61 @@ app.get("/api/recent/:type", async (req, res) => {
       }
     });
 
-    const allSectionMedia = await Promise.all(sectionMediaPromises);
-    const combinedMedia = allSectionMedia.flat();
+    // Wait for all section media fetches
+    let allMedia = await Promise.all(sectionMediaPromises);
+    allMedia = allMedia.flat();
 
-    // Processing Metadata
-    const processedMedia = await Promise.all(
-      combinedMedia.map(async (media) => {
-        try {
-          // Fetch metadata for each media item
-          const metadataResponse = await axios.get(
-            `${config.tautulliUrl}/api/v2`,
-            {
-              params: {
-                apikey: config.tautulliApiKey,
-                cmd: "get_metadata",
-                rating_key: media.rating_key,
-              },
-            }
-          );
+    // If no media found
+    if (allMedia.length === 0) {
+      return res.json({
+        total: 0,
+        media: [],
+        sections: matchingSections.map((s) => ({
+          id: s.section_id,
+          name: s.section_name || s.name,
+        })),
+        error: "No recently added media found",
+      });
+    }
 
-          const metadata = metadataResponse.data?.response?.data || {};
+    // Process media with formatting
+    const processedMedia = allMedia.map((media) => {
+      const formattedData = {};
 
-          // Explicitly convert duration to number
-          const rawDuration = metadata.duration ? Number(metadata.duration) : 0;
-
-          const baseData = {
-            title: media.title,
-            year: media.year,
-            mediaType: media.media_type,
-            addedAt: media.added_at,
-            summary: media.summary,
-            rating: media.rating,
-            contentRating: media.content_rating,
-            video_full_resolution: media.video_full_resolution,
-            section_id: media.section_id,
-            // Store both raw and formatted duration
-            duration: rawDuration,
-            formatted_duration: formatDuration(rawDuration),
-          };
-
-          // Rest of the processing remains the same...
-          const formattedData = {};
-
-          // Apply formats based on section_id
-          recentlyAddedFormats.forEach((format) => {
-            if (
-              format.type === type &&
-              (format.sectionId === "all" ||
-                format.sectionId === media.section_id.toString())
-            ) {
-              // Use the base data for template processing
-              formattedData[format.name] = processTemplate(format.template, {
-                ...baseData,
-                duration: baseData.formatted_duration, // Override duration with formatted version
-              });
-            }
+      // Apply formats based on media type
+      recentlyAddedFormats
+        .filter(
+          (format) =>
+            format.type === type &&
+            (format.sectionId === "all" ||
+              format.sectionId === media.section_id.toString())
+        )
+        .forEach((format) => {
+          formattedData[format.name] = processTemplate(format.template, {
+            ...media,
+            mediaType: type,
+            formatted_duration: formatDuration(media.duration || 0),
           });
+        });
 
-          return {
-            ...formattedData,
-            raw_data: baseData,
-          };
-        } catch (error) {
-          console.error(
-            `Failed to fetch metadata for ${media.rating_key}:`,
-            error
-          );
-
-          return {
-            raw_data: {
-              ...media,
-              duration: 0,
-              formatted_duration: "0m",
-            },
-          };
-        }
-      })
-    );
+      return {
+        ...formattedData,
+        raw_data: {
+          ...media,
+          formatted_duration: formatDuration(media.duration || 0),
+        },
+      };
+    });
 
     // Sort by added date (newest first)
-    const sortedMedia = processedMedia.sort(
-      (a, b) => parseInt(b.raw_data.addedAt) - parseInt(a.raw_data.addedAt)
+    processedMedia.sort(
+      (a, b) =>
+        parseInt(b.raw_data.added_at || 0) - parseInt(a.raw_data.added_at || 0)
     );
 
     res.json({
-      total: sortedMedia.length,
-      media: sortedMedia,
+      total: processedMedia.length,
+      media: processedMedia,
       sections: matchingSections.map((s) => ({
         id: s.section_id,
         name: s.section_name || s.name,

@@ -128,7 +128,7 @@ const Users = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
   const refreshInterval = useRef(null);
-  const REFRESH_INTERVAL = 15000; // 15 seconds
+  const REFRESH_INTERVAL = 600000; // 60 seconds
 
   const fetchUsers = async () => {
     try {
