@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useConfig } from "../../context/ConfigContext";
 import { testPlexConnection } from "../../services/plexService";
@@ -62,6 +62,33 @@ const DashboardLayout = () => {
     plex: null,
     tautulli: null,
   });
+
+  // Ref to store the navigate function
+  const routerNavigateRef = useRef(navigate);
+
+  useEffect(() => {
+    // Update the ref when navigate changes
+    routerNavigateRef.current = navigate;
+
+    // Attach global navigate function to window for cross-component access
+    window.routerNavigate = navigate;
+
+    // Add event listener for navigateToLibraries
+    const handleNavigateToLibraries = () => {
+      navigate("/libraries");
+    };
+
+    window.addEventListener("navigateToLibraries", handleNavigateToLibraries);
+
+    // Cleanup function
+    return () => {
+      window.removeEventListener(
+        "navigateToLibraries",
+        handleNavigateToLibraries
+      );
+      delete window.routerNavigate;
+    };
+  }, [navigate]);
 
   // Get the current path without the leading slash
   const currentPath = location.pathname.substring(1);

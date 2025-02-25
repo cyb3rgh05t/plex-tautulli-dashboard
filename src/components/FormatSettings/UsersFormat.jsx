@@ -3,6 +3,7 @@ import { Trash2, Code, Plus, Variable } from "lucide-react";
 import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
 import toast from "react-hot-toast";
+import { formatDuration } from "./duration-formatter"; // Import the new formatter
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
@@ -11,10 +12,15 @@ const API_BASE_URL =
 const BASE_VARIABLES = [
   { name: "friendly_name", description: "User's display name" },
   { name: "email", description: "User's email address" },
+  { name: "user_id", description: "Unique user identifier" },
   { name: "plays", description: "Total number of plays" },
   {
     name: "duration",
-    description: "Total watch time (auto-formatted to hours)",
+    description: "Total watch time (raw value in seconds)",
+  },
+  {
+    name: "formatted_duration",
+    description: "Formatted total watch time (e.g., '2h 21m')",
   },
   {
     name: "last_seen",
@@ -22,15 +28,37 @@ const BASE_VARIABLES = [
       "Last activity timestamp (formats: default, short, relative, full, time)",
     isDate: true,
   },
-  { name: "is_active", description: "User's active status (auto-formatted)" },
+  {
+    name: "last_seen_formatted",
+    description: "Pre-formatted last seen time (e.g., '2 hrs ago')",
+  },
+  { name: "is_active", description: "User's active status (true/false)" },
+  {
+    name: "is_watching",
+    description: "Watching status ('Watching'/'Watched')",
+  },
   { name: "state", description: "Current watching state (watching/watched)" },
-  { name: "media_type", description: "Type of media (movie/episode)" },
+  { name: "media_type", description: "Type of media (Movie/Episode)" },
+  {
+    name: "progress_percent",
+    description: "Current viewing progress percentage",
+  },
+  { name: "progress_time", description: "Current viewing progress time" },
+  { name: "last_played", description: "Title of last played content" },
+  {
+    name: "last_played_modified",
+    description: "Modified status of last played content",
+  },
 ];
 
 const MOVIE_VARIABLES = [
   { name: "title", description: "Movie title" },
   { name: "original_title", description: "Original movie title if different" },
   { name: "year", description: "Release year" },
+  {
+    name: "full_title",
+    description: "Complete title including year or additional info",
+  },
 ];
 
 const SHOW_VARIABLES = [
@@ -209,9 +237,14 @@ const formatState = (state) => {
   return state;
 };
 
-// Template processing helper
 const processTemplate = (template, data) => {
   if (!template || !data) return "";
+
+  // Create a combined data object that includes both raw_data and top-level properties
+  const combinedData = {
+    ...(data.raw_data || {}), // Include raw_data properties if they exist
+    ...data, // Include top-level properties (will override any duplicate keys)
+  };
 
   let result = template;
   const variables = template.match(/\{([^}]+)\}/g) || [];
@@ -222,25 +255,55 @@ const processTemplate = (template, data) => {
     const format = match[1] || "default";
 
     let value;
-    switch (key) {
-      case "duration":
-        value = data[key] ? Math.round(data[key] / 3600) + " hrs" : "";
-        break;
-      case "last_seen":
-        value = data[key] ? formatDate(data[key], format) : "Never";
-        break;
-      case "is_active":
-        value = data[key] ? "Active" : "Inactive";
-        break;
-      case "state":
-        value = formatState(data[key]);
-        break;
-      case "media_index":
-      case "parent_media_index":
-        value = data[key] ? String(data[key]).padStart(2, "0") : "";
-        break;
-      default:
-        value = data[key] || "";
+    try {
+      switch (key) {
+        case "duration":
+          // Prefer formatted_duration if available, otherwise format it
+          value =
+            combinedData.formatted_duration ||
+            (combinedData.duration
+              ? formatDuration(Number(combinedData.duration))
+              : "0m");
+          break;
+
+        case "last_seen":
+          // Use formatting if requested, otherwise use pre-formatted value
+          if (format && format !== "default") {
+            value = combinedData.last_seen
+              ? formatDate(combinedData.last_seen, format)
+              : "Never";
+          } else {
+            value =
+              combinedData.last_seen_formatted ||
+              (combinedData.last_seen
+                ? formatDate(combinedData.last_seen, "relative")
+                : "Never");
+          }
+          break;
+
+        case "is_active":
+          value = combinedData[key] ? "Active" : "Inactive";
+          break;
+
+        case "state":
+          value = formatState(combinedData[key] || "watched");
+          break;
+
+        case "media_index":
+        case "parent_media_index":
+          // Format as 2-digit number if present
+          value = combinedData[key]
+            ? String(combinedData[key]).padStart(2, "0")
+            : "";
+          break;
+
+        default:
+          // Use the value from combined data if available
+          value = combinedData[key] !== undefined ? combinedData[key] : "";
+      }
+    } catch (error) {
+      console.error(`Error processing variable ${key}:`, error);
+      value = "";
     }
 
     if (value !== undefined) {
@@ -303,17 +366,67 @@ const UsersFormat = () => {
     }
   };
 
-  // Fetch preview data for testing formats
   const fetchPreviewData = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/users`);
       const data = await response.json();
+
       if (data.users && data.users.length > 0) {
-        // Find a user with the current media type
-        const user =
-          data.users.find((u) => u.media_type === activeMediaType) ||
-          data.users[0];
-        setPreviewData(user);
+        // Convert media type to match the expected format
+        const targetMediaType =
+          activeMediaType === "shows" ? "episode" : "movie";
+
+        // Find a user with the right media type (case insensitive)
+        const matchingTypeUser = data.users.find((u) => {
+          const mediaType = (
+            (u.raw_data && u.raw_data.media_type) ||
+            ""
+          ).toLowerCase();
+          return mediaType === targetMediaType.toLowerCase();
+        });
+
+        // Use the matching type user, or fallback to the first user
+        const selectedUser = matchingTypeUser || data.users[0];
+
+        if (!selectedUser) {
+          const placeholderUser = {
+            raw_data: {
+              friendly_name: "Example User",
+              media_type: targetMediaType,
+              title:
+                targetMediaType === "movie"
+                  ? "Example Movie"
+                  : "Example Episode",
+              grandparent_title: "Example Show",
+              parent_media_index: "01",
+              media_index: "05",
+              state: "watched",
+              duration: 6000,
+              formatted_duration: "1h 40m",
+              last_seen: Date.now() / 1000 - 3600, // 1 hour ago
+              last_seen_formatted: "1 hour ago",
+            },
+          };
+          setPreviewData(placeholderUser);
+          return;
+        }
+
+        console.log("Preview Data:", selectedUser);
+
+        // Extract formatted fields (anything outside raw_data)
+        const formattedFields = Object.keys(selectedUser).filter(
+          (key) => key !== "raw_data"
+        );
+        console.log(
+          "Available formatted fields:",
+          formattedFields.reduce((obj, key) => {
+            obj[key] = selectedUser[key];
+            return obj;
+          }, {})
+        );
+
+        // Use the entire structure for preview data
+        setPreviewData(selectedUser);
       }
     } catch (err) {
       logError("Failed to fetch preview data", err);

@@ -12,10 +12,20 @@ const MediaCard = ({ media }) => {
   const [imageLoading, setImageLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
 
+  // Add safety check for media_type
+  const getMediaType = () => {
+    return media.media_type && typeof media.media_type === "string"
+      ? media.media_type.toLowerCase()
+      : "unknown";
+  };
+
   const getThumbnailUrl = (media, apiKey) => {
     let thumbPath;
 
-    switch (media.media_type.toLowerCase()) {
+    // Use our safe media type getter
+    const mediaType = getMediaType();
+
+    switch (mediaType) {
       case "movie":
         thumbPath = media.parent_thumb;
         break;
@@ -37,12 +47,15 @@ const MediaCard = ({ media }) => {
     }
 
     return `${API_BASE_URL}/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
-      thumbPath
+      thumbPath || ""
     )}&apikey=${apiKey}`;
   };
 
   const getDisplayTitle = () => {
-    switch (media.media_type.toLowerCase()) {
+    // Use our safe media type getter
+    const mediaType = getMediaType();
+
+    switch (mediaType) {
       case "movie":
         return media.title;
       case "episode":
@@ -52,19 +65,22 @@ const MediaCard = ({ media }) => {
       case "show":
         return media.title;
       default:
-        return media.title;
+        return media.title || "Unknown";
     }
   };
 
   const getDisplaySubtitle = () => {
-    switch (media.media_type.toLowerCase()) {
+    // Use our safe media type getter
+    const mediaType = getMediaType();
+
+    switch (mediaType) {
       case "movie":
         return media.year || "";
       case "episode":
-        return `S${String(media.parent_media_index).padStart(
+        return `S${String(media.parent_media_index || "0").padStart(
           2,
           "0"
-        )}・E${String(media.media_index).padStart(2, "0")}`;
+        )}・E${String(media.media_index || "0").padStart(2, "0")}`;
       case "season":
         return `Season ${media.media_index || 1}`;
       case "show":
@@ -97,7 +113,7 @@ const MediaCard = ({ media }) => {
           {!imageError ? (
             <img
               src={getThumbnailUrl(media, media.apiKey)}
-              alt={media.title}
+              alt={media.title || "Media"}
               className={`w-full h-full object-cover transition-all duration-300 
                 group-hover:scale-105 ${
                   imageLoading ? "opacity-0" : "opacity-100"
@@ -162,7 +178,7 @@ const MediaCard = ({ media }) => {
             {media.duration && (
               <div className="flex items-center gap-1 text-gray-400">
                 <Icons.Clock3 size={14} />
-                <span>{Math.round(media.duration / 60000)}m</span>
+                <span>{Math.round((media.duration || 0) / 60000)}m</span>
               </div>
             )}
           </div>
@@ -192,8 +208,16 @@ const LoadingCard = () => (
 );
 
 const EmptySection = ({ type }) => {
+  // Add safety check for type
+  const getSafeType = () => {
+    return type && typeof type === "string" ? type.toLowerCase() : "unknown";
+  };
+
   const getEmptyMessage = () => {
-    switch (type.toLowerCase()) {
+    // Use our safe type getter
+    const safeType = getSafeType();
+
+    switch (safeType) {
       case "movie":
         return {
           icon: Icons.Film,
@@ -245,8 +269,24 @@ const RecentlyAdded = () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/sections`);
       const data = await response.json();
-      setSections(data.sections);
-      return data.sections;
+
+      // Check if sections are available and in the expected format
+      const processedSections = (data.sections || []).map((section) => {
+        // Handle both raw_data and direct section format
+        const sectionData = section.raw_data || section;
+
+        return {
+          ...sectionData,
+          // Ensure type is always available by looking at different possible properties
+          type: sectionData.type || sectionData.section_type || "unknown",
+          // Ensure name is always available
+          name:
+            sectionData.name || sectionData.section_name || "Unknown Section",
+        };
+      });
+
+      setSections(processedSections);
+      return processedSections;
     } catch (error) {
       logError("Failed to fetch sections", error);
       setError("Failed to load sections");
@@ -282,6 +322,12 @@ const RecentlyAdded = () => {
       const sectionMediaResults = {};
 
       for (const section of savedSections) {
+        // Skip if section_id is missing
+        if (!section.section_id) {
+          console.warn("Section missing section_id, skipping:", section);
+          continue;
+        }
+
         const media = await fetchSectionRecentlyAdded(section.section_id);
         const transformedMedia = media.map((item) => ({
           ...item,
@@ -379,9 +425,20 @@ const RecentlyAdded = () => {
             you'd like to display here.
           </p>
           <button
-            onClick={() =>
-              window.dispatchEvent(new CustomEvent("navigateToLibraries"))
-            }
+            onClick={() => {
+              // Multiple navigation methods
+              window.dispatchEvent(new CustomEvent("navigateToLibraries"));
+
+              // Fallback navigation methods
+              if (
+                window.routerNavigate &&
+                typeof window.routerNavigate === "function"
+              ) {
+                window.routerNavigate("/libraries");
+              } else if (window.location) {
+                window.location.href = "/libraries";
+              }
+            }}
             className="px-4 py-2 bg-brand-primary-500/10 text-brand-primary-400 rounded-lg border 
               border-brand-primary-500/20 hover:bg-brand-primary-500/20 transition-all duration-200 
               flex items-center gap-2"
@@ -400,34 +457,53 @@ const RecentlyAdded = () => {
         </div>
       ) : (
         <div className="space-y-12">
-          {Object.entries(sectionMedia).map(([sectionId, sectionData]) => (
-            <div key={sectionId} className="space-y-4">
-              <div className="flex items-center gap-3 pb-2 border-b border-gray-700/50">
-                <h3 className="text-xl font-medium text-white">
-                  {sectionData.name}
-                </h3>
-                <div className="px-2 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
-                  <span className="text-gray-400 text-sm">
-                    {sectionData.type.charAt(0).toUpperCase() +
-                      sectionData.type.slice(1)}
-                  </span>
-                </div>
-              </div>
+          {Object.entries(sectionMedia).map(([sectionId, sectionData]) => {
+            // Check if the section data is valid
+            if (!sectionData || typeof sectionData !== "object") {
+              return null;
+            }
 
-              {sectionData.media.length === 0 ? (
-                <EmptySection type={sectionData.type} />
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                  {sectionData.media.map((media) => (
-                    <MediaCard
-                      key={`${media.media_type}-${media.rating_key}`}
-                      media={media}
-                    />
-                  ))}
+            // Get section type safely
+            const sectionType =
+              sectionData.type || sectionData.section_type || "unknown";
+
+            // Format the type for display
+            const formattedType =
+              typeof sectionType === "string"
+                ? sectionType.charAt(0).toUpperCase() + sectionType.slice(1)
+                : "Unknown";
+
+            return (
+              <div key={sectionId} className="space-y-4">
+                <div className="flex items-center gap-3 pb-2 border-b border-gray-700/50">
+                  <h3 className="text-xl font-medium text-white">
+                    {sectionData.name || "Unknown Section"}
+                  </h3>
+                  <div className="px-2 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
+                    <span className="text-gray-400 text-sm">
+                      {formattedType}
+                    </span>
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
+
+                {!sectionData.media || sectionData.media.length === 0 ? (
+                  <EmptySection type={sectionType} />
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                    {sectionData.media.map((media) => (
+                      <MediaCard
+                        key={`${media.media_type || "unknown"}-${
+                          media.rating_key ||
+                          Math.random().toString(36).substring(2, 9)
+                        }`}
+                        media={media}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

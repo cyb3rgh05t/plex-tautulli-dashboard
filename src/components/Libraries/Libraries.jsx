@@ -26,6 +26,10 @@ const LibraryTypeIcon = ({ type }) => {
 };
 
 const LibraryCard = ({ library, isSelected, onToggleSelect }) => {
+  // Determine section ID and count from either top-level or raw_data
+  const sectionId = library.section_id || library.raw_data?.section_id;
+  const itemCount = library.count || library.raw_data?.count || 0;
+
   return (
     <div
       className={`bg-gray-800/30 hover:bg-gray-800/50 border rounded-xl p-4 transition-all duration-200
@@ -40,17 +44,20 @@ const LibraryCard = ({ library, isSelected, onToggleSelect }) => {
           <input
             type="checkbox"
             checked={isSelected}
-            onChange={() => onToggleSelect(library.section_id)}
+            onChange={() => onToggleSelect(sectionId)}
             className="w-5 h-5 rounded border-gray-600 bg-gray-700 
               text-brand-primary-500 focus:ring-brand-primary-500 focus:ring-offset-gray-800"
           />
           <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700/50">
-            <LibraryTypeIcon type={library.section_type} />
+            <LibraryTypeIcon type={library.section_type || library.type} />
           </div>
           <div>
-            <h3 className="text-white font-medium">{library.section_name}</h3>
+            <h3 className="text-white font-medium">
+              {library.section_name || library.name}
+            </h3>
             <p className="text-gray-400 text-sm">
-              Type: {capitalizeFirstLetter(library.section_type)}
+              Type:{" "}
+              {capitalizeFirstLetter(library.section_type || library.type)}
             </p>
           </div>
         </div>
@@ -58,10 +65,10 @@ const LibraryCard = ({ library, isSelected, onToggleSelect }) => {
           <div className="bg-gray-800/50 px-3 py-1 rounded-lg border border-gray-700/50">
             <span className="text-gray-400 text-sm">Items: </span>
             <span className="text-brand-primary-400 font-medium">
-              {library.count}
+              {itemCount}
             </span>
           </div>
-          <p className="text-gray-500 text-xs mt-1">ID: {library.section_id}</p>
+          <p className="text-gray-500 text-xs mt-1">ID: {sectionId}</p>
         </div>
       </div>
     </div>
@@ -81,10 +88,15 @@ const Libraries = () => {
         const data = await response.json();
 
         if (data.sections && data.sections.length) {
-          const savedSectionIds = new Set(
-            data.sections.map((section) => section.section_id)
+          const savedIds = new Set(
+            data.sections
+              .filter(
+                (section) =>
+                  section && section.raw_data && section.raw_data.section_id
+              )
+              .map((section) => String(section.raw_data.section_id))
           );
-          setSelectedLibraries(savedSectionIds);
+          setSelectedLibraries(savedIds);
         }
       } catch (error) {
         console.error("Failed to fetch saved sections:", error);
@@ -97,10 +109,11 @@ const Libraries = () => {
   const toggleLibrary = (sectionId) => {
     setSelectedLibraries((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(sectionId)) {
-        newSet.delete(sectionId);
+      const strSectionId = String(sectionId);
+      if (newSet.has(strSectionId)) {
+        newSet.delete(strSectionId);
       } else {
-        newSet.add(sectionId);
+        newSet.add(strSectionId);
       }
       return newSet;
     });
@@ -110,7 +123,9 @@ const Libraries = () => {
     if (selectedLibraries.size === libraries.length) {
       setSelectedLibraries(new Set());
     } else {
-      setSelectedLibraries(new Set(libraries.map((lib) => lib.section_id)));
+      setSelectedLibraries(
+        new Set(libraries.map((lib) => String(lib.section_id)))
+      );
     }
   };
 
@@ -142,7 +157,7 @@ const Libraries = () => {
 
     setIsSaving(true);
     const selectedData = libraries
-      .filter((lib) => selectedLibraries.has(lib.section_id))
+      .filter((lib) => selectedLibraries.has(String(lib.section_id)))
       .map((lib) => ({
         section_id: lib.section_id,
         type: lib.section_type,
@@ -277,8 +292,16 @@ const Libraries = () => {
           {libraries.map((library) => (
             <LibraryCard
               key={library.section_id}
-              library={library}
-              isSelected={selectedLibraries.has(library.section_id)}
+              library={{
+                ...library,
+                // Use raw_data as the source of truth if it exists
+                section_id: library.section_id || library.raw_data?.section_id,
+                name: library.section_name || library.name,
+                type: library.section_type || library.type,
+              }}
+              isSelected={selectedLibraries.has(
+                String(library.section_id || library.raw_data?.section_id)
+              )}
               onToggleSelect={toggleLibrary}
             />
           ))}

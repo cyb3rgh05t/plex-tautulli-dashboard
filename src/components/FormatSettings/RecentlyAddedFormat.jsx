@@ -4,6 +4,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { useConfig } from "../../context/ConfigContext";
 import { Trash2, Code, Plus, Variable } from "lucide-react";
+import { formatDuration } from "./duration-formatter"; // Import the new formatter
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
@@ -123,39 +124,69 @@ const VariableButton = ({ variable, onClick }) => (
   </button>
 );
 
-const FormatCard = ({ format, onDelete, previewValue }) => (
-  <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-4 hover:bg-gray-800/70 transition-all duration-200">
-    <div className="flex justify-between items-center mb-3">
-      <h4 className="text-white font-medium">{format.name}</h4>
-      <button
-        onClick={() => onDelete(format.name)}
-        className="text-gray-400 hover:text-red-400 p-1.5 hover:bg-red-400/10 rounded-lg transition-colors"
-      >
-        <Trash2 size={16} />
-      </button>
-    </div>
-    <div className="space-y-3">
-      <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
-        <div className="flex items-center gap-2 text-gray-400 text-sm mb-2">
-          <Code size={14} />
-          <span>Template</span>
+const FormatCard = ({ format, onDelete, previewValue, sections }) => {
+  // Get section name if sectionId is not "all"
+  const getSectionName = () => {
+    if (format.sectionId === "all" || !format.sectionId) {
+      return "All Sections";
+    }
+
+    // Find section with matching ID
+    const matchingSection =
+      sections &&
+      sections.find(
+        (section) =>
+          section.section_id &&
+          section.section_id.toString() === format.sectionId.toString()
+      );
+
+    // Return section name or ID if no matching section found
+    return matchingSection
+      ? matchingSection.name ||
+          matchingSection.section_name ||
+          `Section ${format.sectionId}`
+      : `Section ${format.sectionId}`;
+  };
+
+  return (
+    <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-4 hover:bg-gray-800/70 transition-all duration-200">
+      <div className="flex justify-between items-center mb-3">
+        <div>
+          <h4 className="text-white font-medium">{format.name}</h4>
+          <p className="text-sm text-gray-400">
+            Applied to: {getSectionName()}
+          </p>
         </div>
-        <code className="text-sm text-gray-300 font-mono">
-          {format.template}
-        </code>
+        <button
+          onClick={() => onDelete(format.name)}
+          className="text-gray-400 hover:text-red-400 p-1.5 hover:bg-red-400/10 rounded-lg transition-colors"
+        >
+          <Trash2 size={16} />
+        </button>
       </div>
-      <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
-        <div className="flex items-center gap-2 text-gray-400 text-sm mb-2">
-          <Variable size={14} />
-          <span>Preview</span>
+      <div className="space-y-3">
+        <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+          <div className="flex items-center gap-2 text-gray-400 text-sm mb-2">
+            <Code size={14} />
+            <span>Template</span>
+          </div>
+          <code className="text-sm text-gray-300 font-mono">
+            {format.template}
+          </code>
         </div>
-        <code className="text-sm text-brand-primary-400 font-mono">
-          {previewValue}
-        </code>
+        <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+          <div className="flex items-center gap-2 text-gray-400 text-sm mb-2">
+            <Variable size={14} />
+            <span>Preview</span>
+          </div>
+          <code className="text-sm text-brand-primary-400 font-mono">
+            {previewValue}
+          </code>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 // Updated helper function for date formatting
 // Robust date formatting function
@@ -260,9 +291,15 @@ const processTemplate = (template, data) => {
 
     let value = data[key];
 
-    // Special handling for date formatting
+    // Special handling for timestamp
     if (key === "addedAt") {
       value = formatDate(value, format);
+    }
+
+    // Special handling for duration
+    if (key === "duration") {
+      // Prioritize formatted_duration if available
+      value = data.formatted_duration || formatDuration(Number(data[key]) || 0);
     }
 
     // Special handling for show episode formatting
@@ -303,8 +340,24 @@ const RecentlyAddedFormat = () => {
   const fetchSections = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/sections`);
-      setSections(response.data.sections);
-      return response.data.sections;
+      const fetchedSections = response.data.sections || [];
+
+      // Map sections to ensure they have the required properties
+      const processedSections = fetchedSections.map((section) => {
+        const sectionData = section.raw_data || section;
+        return {
+          ...sectionData,
+          section_id: sectionData.section_id,
+          // Make sure we have a valid type property
+          type: sectionData.type || sectionData.section_type || "unknown",
+          // Make sure we have a name property
+          name:
+            sectionData.name || sectionData.section_name || "Unknown Section",
+        };
+      });
+
+      setSections(processedSections);
+      return processedSections;
     } catch (error) {
       console.error("Failed to fetch sections:", error);
       return [];
@@ -324,9 +377,27 @@ const RecentlyAddedFormat = () => {
         music: "artist",
       };
 
-      const filteredSections = sections.filter(
-        (section) => section.type.toLowerCase() === typeMap[activeMediaType]
-      );
+      // Add null/undefined check for sections
+      if (!sections || !Array.isArray(sections)) {
+        console.warn("No valid sections array provided to fetchRecentMedia");
+        setIsLoading(false);
+        return [];
+      }
+
+      // Filter and handle potential type errors
+      const filteredSections = sections.filter((section) => {
+        // Check if section exists and has a type property
+        if (!section || typeof section !== "object") return false;
+
+        // Get the type safely, with fallbacks
+        const sectionType = section.type || section.section_type || "";
+
+        // Safely compare, handle case-sensitivity
+        return (
+          typeof sectionType === "string" &&
+          sectionType.toLowerCase() === typeMap[activeMediaType]
+        );
+      });
 
       const mediaPromises = filteredSections.map(async (section) => {
         try {
@@ -373,6 +444,13 @@ const RecentlyAddedFormat = () => {
   const fetchMediaMetadata = async (media) => {
     setIsLoading(true);
     try {
+      // Safety check for media
+      if (!media || !Array.isArray(media) || media.length === 0) {
+        console.warn("No valid media array provided to fetchMediaMetadata");
+        setIsLoading(false);
+        return;
+      }
+
       const metadataPromises = media.map(async (item) => {
         try {
           const response = await axios.get(
@@ -422,29 +500,35 @@ const RecentlyAddedFormat = () => {
 
   const getPreviewData = (sectionId) => {
     let previewData = { ...EXAMPLE_DATA[activeMediaType] };
-    const mediaItem =
-      sectionId === "all"
-        ? recentMedia[0]
-        : recentMedia.find((item) => item.section_id === sectionId) ||
-          recentMedia[0];
-    if (mediaItem) {
-      Object.keys(previewData).forEach((key) => {
-        if (mediaItem.hasOwnProperty(key)) {
-          previewData[key] = mediaItem[key];
+
+    // Safely check if recentMedia exists and has items
+    if (recentMedia && recentMedia.length > 0) {
+      const mediaItem =
+        sectionId === "all"
+          ? recentMedia[0]
+          : recentMedia.find((item) => item && item.section_id === sectionId) ||
+            recentMedia[0];
+
+      if (mediaItem) {
+        Object.keys(previewData).forEach((key) => {
+          if (mediaItem.hasOwnProperty(key)) {
+            previewData[key] = mediaItem[key];
+          }
+        });
+        if (activeMediaType === "shows") {
+          previewData.grandparent_title =
+            mediaItem.grandparent_title || previewData.grandparent_title;
+          previewData.parent_media_index =
+            mediaItem.parent_media_index || previewData.parent_media_index;
+          previewData.media_index =
+            mediaItem.media_index || previewData.media_index;
         }
-      });
-      if (activeMediaType === "shows") {
-        previewData.grandparent_title =
-          mediaItem.grandparent_title || previewData.grandparent_title;
-        previewData.parent_media_index =
-          mediaItem.parent_media_index || previewData.parent_media_index;
-        previewData.media_index =
-          mediaItem.media_index || previewData.media_index;
+        previewData.addedAt = mediaItem.added_at || previewData.addedAt;
+        previewData.video_full_resolution =
+          mediaMetadata[mediaItem.rating_key] || "Unknown";
       }
-      previewData.addedAt = mediaItem.added_at || previewData.addedAt;
-      previewData.video_full_resolution =
-        mediaMetadata[mediaItem.rating_key] || "Unknown";
     }
+
     return previewData;
   };
 
@@ -614,22 +698,39 @@ const RecentlyAddedFormat = () => {
   // Load media data when media type changes
   useEffect(() => {
     const loadMediaData = async () => {
-      const savedSections = await fetchSections();
-      const recentMedia = await fetchRecentMedia(savedSections);
-      await fetchMediaMetadata(recentMedia);
+      try {
+        const savedSections = await fetchSections();
+        const recentMedia = await fetchRecentMedia(savedSections);
+        if (recentMedia && recentMedia.length > 0) {
+          await fetchMediaMetadata(recentMedia);
+        }
+      } catch (error) {
+        console.error("Failed to load media data:", error);
+      }
     };
 
     loadMediaData();
   }, [activeMediaType]);
 
-  // Filter sections and formats
+  // Filter sections safely
   const filteredSections = sections.filter((section) => {
+    // Make sure section exists and has properties we need
+    if (!section || typeof section !== "object") return false;
+
     const typeMap = {
       movies: "movie",
       shows: "show",
       music: "artist",
     };
-    return section.type.toLowerCase() === typeMap[activeMediaType];
+
+    // Get the section type safely with fallback
+    const sectionType = section.type || section.section_type || "";
+
+    // Return only if we have a valid string type that matches our expected type
+    return (
+      typeof sectionType === "string" &&
+      sectionType.toLowerCase() === typeMap[activeMediaType]
+    );
   });
 
   return (
@@ -723,7 +824,7 @@ const RecentlyAddedFormat = () => {
               <option value="all">All Sections</option>
               {filteredSections.map((section) => (
                 <option key={section.section_id} value={section.section_id}>
-                  {section.section_name || section.name} (ID:{" "}
+                  {section.name || section.section_name || "Unknown"} (ID:{" "}
                   {section.section_id})
                 </option>
               ))}
@@ -814,6 +915,7 @@ const RecentlyAddedFormat = () => {
                   format={format}
                   onDelete={() => handleDeleteFormat(format.name)}
                   previewValue={previewValue}
+                  sections={sections}
                 />
               );
             })}

@@ -1,4 +1,5 @@
 require("dotenv").config({ path: ".env" });
+
 const express = require("express");
 const cors = require("cors");
 const { createProxyMiddleware } = require("http-proxy-middleware");
@@ -93,6 +94,54 @@ app.use((req, res, next) => {
   });
   next();
 });
+
+// Helper function to format duration
+const formatDuration = (durationMs) => {
+  // Ensure we have a valid number
+  const duration = Number(durationMs);
+
+  // If duration is invalid or 0, return "0m"
+  if (isNaN(duration) || duration <= 0) return "0m";
+
+  // Convert milliseconds to minutes
+  const totalMinutes = Math.floor(duration / 60000);
+
+  // Calculate hours and remaining minutes
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  // Format the output
+  if (hours > 0 && minutes > 0) {
+    return `${hours}h ${minutes}m`;
+  } else if (hours > 0) {
+    return `${hours}h`;
+  } else {
+    return `${minutes}m`;
+  }
+};
+
+// Helper functions (add these near the top of your file)
+function formatTimeHHMM(milliseconds) {
+  if (!milliseconds) return "00:00";
+
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+  return `${hours.toString().padStart(2, "0")}:${minutes
+    .toString()
+    .padStart(2, "0")}`;
+}
+
+function formatTimeDiff(timestamp) {
+  const now = Math.floor(Date.now() / 1000);
+  const diff = now - timestamp;
+
+  if (diff < 60) return "Just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)} mins ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} hrs ago`;
+  return `${Math.floor(diff / 86400)} days ago`;
+}
 
 // Date formatting helper
 // Updated formatDate function for relative time formatting
@@ -473,6 +522,20 @@ app.get("/api/users", async (req, res) => {
     let start = 0;
     let hasMore = true;
 
+    // Get active sessions
+    const activeSessionsResponse = await axios.get(
+      `${config.tautulliUrl}/api/v2`,
+      {
+        params: {
+          apikey: config.tautulliApiKey,
+          cmd: "get_activity",
+        },
+      }
+    );
+
+    const activeSessions =
+      activeSessionsResponse.data?.response?.data?.sessions || [];
+
     // Get all users first
     while (hasMore) {
       const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
@@ -509,110 +572,310 @@ app.get("/api/users", async (req, res) => {
     const usersWithHistory = await Promise.all(
       filteredUsers.map(async (user) => {
         try {
-          const historyResponse = await axios.get(
-            `${config.tautulliUrl}/api/v2`,
-            {
-              params: {
-                apikey: config.tautulliApiKey,
-                cmd: "get_history",
-                user_id: user.user_id,
-                length: 1, // Only get the most recent item
-              },
-            }
+          // First check if user is currently watching something
+          const activeSession = activeSessions.find(
+            (session) =>
+              session.user_id === user.user_id ||
+              session.user === user.friendly_name
           );
 
-          const historyItem =
-            historyResponse.data?.response?.data?.data[0] || {};
+          // If not watching, fetch recent history
+          let historyItem = null;
+          if (!activeSession) {
+            try {
+              const historyResponse = await axios.get(
+                `${config.tautulliUrl}/api/v2`,
+                {
+                  params: {
+                    apikey: config.tautulliApiKey,
+                    cmd: "get_history",
+                    user_id: user.user_id,
+                    length: 1, // Only get the most recent item
+                  },
+                }
+              );
 
-          return {
-            ...user,
-            state:
-              historyItem.state === "playing"
-                ? "watching"
-                : historyItem.state === null
-                ? "watched"
-                : historyItem.state || "watched",
-            last_played_at: historyItem.date || null,
-            media_type: historyItem.media_type || "movie",
-            // Media details - Common
-            title: historyItem.title || "",
-            original_title: historyItem.original_title || "",
-            year: historyItem.year || "",
+              historyItem =
+                historyResponse.data?.response?.data?.data?.[0] || null;
+            } catch (error) {
+              console.error(
+                `Failed to fetch history for user ${user.friendly_name}:`,
+                error
+              );
+            }
+          }
+
+          // Get the active item (either current session or history)
+          const activeItem = activeSession || historyItem;
+
+          // If we have an active item, fetch its metadata
+          let metadata = null;
+          if (activeItem && activeItem.rating_key) {
+            try {
+              const metadataResponse = await axios.get(
+                `${config.tautulliUrl}/api/v2`,
+                {
+                  params: {
+                    apikey: config.tautulliApiKey,
+                    cmd: "get_metadata",
+                    rating_key: activeItem.rating_key,
+                  },
+                }
+              );
+              metadata = metadataResponse.data?.response?.data || null;
+            } catch (error) {
+              console.error(
+                `Failed to fetch metadata for rating_key ${activeItem.rating_key}:`,
+                error
+              );
+            }
+          }
+
+          // Determine current state and duration
+          const isWatching = !!activeSession;
+          const state = isWatching ? "watching" : "watched";
+
+          // Format duration properly - extract it from metadata if possible
+          let duration = "0m";
+          let durationMs = 0;
+          if (metadata && metadata.duration) {
+            durationMs = Number(metadata.duration);
+            // Convert to milliseconds if needed
+            if (durationMs > 0 && durationMs < 10000) {
+              durationMs *= 1000;
+            }
+            // Format duration
+            duration = formatDuration(durationMs);
+          }
+
+          // Calculate progress information
+          let progressPercent = "";
+          let progressTime = "";
+          if (activeSession) {
+            const viewed = Number(activeSession.view_offset || 0);
+            const total = Number(activeSession.duration || 0);
+            if (total > 0) {
+              progressPercent = Math.round((viewed / total) * 100) + "%";
+
+              // Format time as HH:MM / HH:MM
+              const viewedMinutes = Math.floor(viewed / 60000);
+              const totalMinutes = Math.floor(total / 60000);
+              const viewedHours = Math.floor(viewedMinutes / 60);
+              const totalHours = Math.floor(totalMinutes / 60);
+              const viewedRemainingMinutes = viewedMinutes % 60;
+              const totalRemainingMinutes = totalMinutes % 60;
+
+              const viewedFormatted =
+                viewedHours > 0
+                  ? `${viewedHours}:${viewedRemainingMinutes
+                      .toString()
+                      .padStart(2, "0")}`
+                  : `0:${viewedMinutes.toString().padStart(2, "0")}`;
+
+              const totalFormatted =
+                totalHours > 0
+                  ? `${totalHours}:${totalRemainingMinutes
+                      .toString()
+                      .padStart(2, "0")}`
+                  : `0:${totalMinutes.toString().padStart(2, "0")}`;
+
+              progressTime = `${viewedFormatted} / ${totalFormatted}`;
+            }
+          }
+
+          // For last activity time formatting
+          const lastSeen = user.last_seen || "";
+          const lastSeenFormatted = isWatching
+            ? "🟢" // Green circle emoji for watching users
+            : lastSeen
+            ? formatTimeDiff(lastSeen)
+            : "Never";
+
+          // Construct base user object with all fields that could be referenced in templates
+          const userData = {
+            friendly_name: user.friendly_name || "",
+            user_id: user.user_id,
+            email: user.email || "",
+            plays: parseInt(user.plays || "0", 10),
+            duration: user.duration || 0, // Total watch time from stats
+            formatted_duration: duration, // Current item duration
+            last_seen: lastSeen,
+            last_seen_formatted: lastSeenFormatted,
+            is_active: isWatching,
+            is_watching: isWatching ? "Watching" : "Watched",
+            state: state,
+            media_type: activeItem
+              ? activeItem.media_type
+                ? activeItem.media_type.charAt(0).toUpperCase() +
+                  activeItem.media_type.slice(1).toLowerCase()
+                : ""
+              : "",
+            progress_percent: progressPercent,
+            progress_time: progressTime,
+
+            // Media-specific fields
+            title: activeItem?.title || metadata?.title || "",
+            original_title: metadata?.original_title || "",
+            year: activeItem?.year || metadata?.year || "",
+            last_played: activeItem
+              ? activeItem.title || activeItem.full_title || ""
+              : "Nothing",
+            last_played_modified: activeItem ? activeItem.state || "" : "",
+
             // Show-specific details
-            full_title: historyItem.full_title || "",
-            parent_title: historyItem.parent_title || "",
-            grandparent_title: historyItem.grandparent_title || "",
-            media_index: historyItem.media_index || "",
-            parent_media_index: historyItem.parent_media_index || "",
+            full_title: metadata?.full_title || activeItem?.full_title || "",
+            parent_title:
+              metadata?.parent_title || activeItem?.parent_title || "",
+            grandparent_title:
+              metadata?.grandparent_title ||
+              activeItem?.grandparent_title ||
+              "",
+            media_index: metadata?.media_index || activeItem?.media_index || "",
+            parent_media_index:
+              metadata?.parent_media_index ||
+              activeItem?.parent_media_index ||
+              "",
+
+            // Include raw metadata for debugging and additional fields
+            //raw_metadata: metadata,
           };
+
+          return userData;
         } catch (error) {
           console.error(
-            `Failed to fetch history for user ${user.user_id}:`,
+            `Failed to fetch data for user ${user.user_id}:`,
             error
           );
           return {
             ...user,
             state: "watched",
-            last_played_at: null,
-            media_type: "movie",
-            // Set default empty values for all media fields
-            title: "",
-            original_title: "",
-            year: "",
-            full_title: "",
-            parent_title: "",
-            grandparent_title: "",
-            media_index: "",
-            parent_media_index: "",
+            media_type: "",
+            last_seen: user.last_seen || null,
           };
         }
       })
     );
 
-    // Sort by last_played_at
+    // Sort by last_seen (most recent first)
     const sortedUsers = usersWithHistory.sort((a, b) => {
-      if (!a.last_played_at && !b.last_played_at) return 0;
-      if (!a.last_played_at) return 1;
-      if (!b.last_played_at) return -1;
-      return b.last_played_at - a.last_played_at;
+      if (!a.last_seen && !b.last_seen) return 0;
+      if (!a.last_seen) return 1;
+      if (!b.last_seen) return -1;
+      return b.last_seen - a.last_seen;
     });
 
     // Apply formats to each user
-    // Apply formats to each user
     const formattedUsers = sortedUsers.map((user) => {
       const formattedOutput = {};
-      // Filter formats based on media type
-      const applicableFormats = userFormats.filter(
-        (format) => format.mediaType === user.media_type
-      );
 
-      applicableFormats.forEach((format) => {
-        let result = format.template;
-        Object.entries(user).forEach(([key, value]) => {
-          let formattedValue = value;
-          if (key === "duration") {
-            formattedValue = Math.round(value / 3600) + " hrs";
-          } else if (key === "last_seen" || key === "last_played_at") {
-            // Use the formatDate function to handle different formats
-            const match = format.template.match(new RegExp(`{${key}:([^}]+)}`));
-            const formatType = match ? match[1] : "default";
-            formattedValue = value ? formatDate(value, formatType) : "Never";
-          } else if (key === "is_active") {
-            formattedValue = value ? "Active" : "Inactive";
-          } else if (key === "media_index" || key === "parent_media_index") {
-            formattedValue = value ? String(value).padStart(2, "0") : "";
-          }
-          result = result.replace(
-            new RegExp(`{${key}(:[^}]+)?}`, "g"),
-            formattedValue || ""
-          );
-        });
-        formattedOutput[format.name] = result;
+      // Get media type in lowercase for matching
+      const mediaTypeStr = (user.media_type || "").toLowerCase();
+
+      // Find applicable formats for this user's media type
+      const applicableFormats = userFormats.filter((format) => {
+        const formatType = (format.mediaType || "").toLowerCase();
+
+        // If no media type on user or format is empty, apply the format
+        if (!mediaTypeStr || !formatType) return true;
+
+        // Match exact media types (normalize "episode" vs "show")
+        if (formatType === mediaTypeStr) return true;
+        if (mediaTypeStr === "episode" && formatType === "show") return true;
+        if (mediaTypeStr === "show" && formatType === "episode") return true;
+
+        return false;
       });
 
+      // Apply each format to the user data
+      applicableFormats.forEach((format) => {
+        try {
+          let result = format.template;
+
+          // Process variables in template with replacements
+          const variableRegex = /\{([^}:]+)(?::([^}]+))?\}/g;
+          result = result.replace(
+            variableRegex,
+            (match, key, formatModifier) => {
+              // Handle different keys with special formatting
+              switch (key) {
+                case "duration":
+                  return user.formatted_duration || "0m";
+
+                case "last_seen":
+                  // Apply date formatting if available
+                  if (!user.last_seen) return "Never";
+                  return formatModifier
+                    ? formatDate(user.last_seen, formatModifier)
+                    : user.last_seen_formatted ||
+                        formatDate(user.last_seen, "relative");
+
+                case "state":
+                  return user.state || "watched";
+
+                case "media_index":
+                case "parent_media_index":
+                  // Format as 2-digit number
+                  if (!user[key]) return "";
+                  return String(user[key]).padStart(2, "0");
+
+                default:
+                  // Use the value if it exists in the user object
+                  if (user[key] !== undefined && user[key] !== null) {
+                    return String(user[key]);
+                  }
+
+                  // Try to get from raw_metadata if available
+                  if (
+                    user.raw_metadata &&
+                    user.raw_metadata[key] !== undefined
+                  ) {
+                    return String(user.raw_metadata[key]);
+                  }
+
+                  // Return an empty string if not found
+                  return "";
+              }
+            }
+          );
+
+          // Store the formatted output
+          formattedOutput[format.name] = result;
+        } catch (err) {
+          console.error(`Error applying format ${format.name}:`, err);
+          formattedOutput[format.name] = "";
+        }
+      });
+
+      // Return differently formatted output - putting custom formats at the top level
+      // and raw data below as requested
       return {
-        ...user,
-        formatted: formattedOutput,
+        ...formattedOutput, // Custom formats at the top level
+        raw_data: {
+          friendly_name: user.friendly_name || "",
+          user_id: user.user_id,
+          email: user.email || "",
+          plays: parseInt(user.plays || "0", 10),
+          duration: user.duration || 0,
+          formatted_duration: user.formatted_duration,
+          last_seen: user.last_seen,
+          last_seen_formatted: user.last_seen_formatted,
+          is_active: user.is_active,
+          is_watching: user.is_watching,
+          state: user.state,
+          media_type: user.media_type,
+          progress_percent: user.progress_percent,
+          progress_time: user.progress_time,
+          title: user.title,
+          original_title: user.original_title,
+          year: user.year,
+          last_played: user.last_played,
+          last_played_modified: user.last_played_modified,
+          full_title: user.full_title,
+          parent_title: user.parent_title,
+          grandparent_title: user.grandparent_title,
+          media_index: user.media_index,
+          parent_media_index: user.parent_media_index,
+        },
       };
     });
 
@@ -622,7 +885,7 @@ app.get("/api/users", async (req, res) => {
       users: formattedUsers,
     });
   } catch (error) {
-    console.error("Error processing formatted users:", error);
+    console.error("Error processing users:", error);
     res.status(500).json({
       error: "Failed to process users",
       message: error.message,
@@ -660,6 +923,7 @@ app.get("/api/downloads", async (req, res) => {
             type: activity.type,
           };
 
+          // Create formatted data for this activity
           const formattedData = {};
           formats.forEach((format) => {
             formattedData[format.name] = processTemplate(
@@ -668,9 +932,10 @@ app.get("/api/downloads", async (req, res) => {
             );
           });
 
+          // Return with formats at top level and raw data in raw_data object
           return {
-            ...baseData,
-            formatted: formattedData,
+            ...formattedData, // Put custom formats at top level
+            raw_data: baseData, // Put original data in raw_data
           };
         }) || [],
     };
@@ -714,8 +979,6 @@ app.get("/api/libraries", async (req, res) => {
   }
 });
 
-// Saved sections GET endpoint
-// Update the sections GET endpoint
 app.get("/api/sections", async (req, res) => {
   try {
     // Read saved sections
@@ -731,29 +994,45 @@ app.get("/api/sections", async (req, res) => {
 
     // Apply formats to sections
     const formattedSections = savedSections.map((section) => {
+      // Create a processed section with null values converted to "Never"
+      const processedSection = {
+        ...section,
+        last_accessed: section.last_accessed || "Never",
+        last_played: section.last_played || "Never",
+      };
+
+      // Create a base data object with all section fields
+      const baseData = {
+        section_id: section.section_id,
+        section_name: section.name,
+        section_type: section.type,
+        count: section.count || 0,
+        parent_count: section.parent_count || 0,
+        child_count: section.child_count || 0,
+        last_accessed: section.last_accessed || "Never",
+        last_updated: section.last_updated || "Never",
+        last_played: section.last_played || "Never",
+      };
+
+      // Find applicable formats for this section
       const applicableFormats = formats.filter(
         (format) =>
           format.sectionId === "all" ||
           format.sectionId === section.section_id.toString()
       );
 
+      // Apply each format to create formatted data
       const formattedData = {};
       applicableFormats.forEach((format) => {
-        formattedData[format.name] = processTemplate(format.template, {
-          section_id: section.section_id,
-          section_name: section.name,
-          section_type: section.type,
-          count: section.count || 0,
-          parent_count: section.parent_count || 0,
-          child_count: section.child_count || 0,
-          last_accessed: section.last_accessed,
-          last_updated: section.last_updated,
-        });
+        formattedData[format.name] = processTemplate(format.template, baseData);
       });
 
+      // Return with formats at top level and raw data in raw_data object
       return {
-        ...section,
-        formatted: formattedData,
+        ...formattedData, // Custom formats at top level
+        raw_data: {
+          ...processedSection, // Processed section data with nulls as "Never"
+        },
       };
     });
 
@@ -910,9 +1189,17 @@ app.get("/api/recent/:type", async (req, res) => {
     const formatsData = getFormats();
     const recentlyAddedFormats = formatsData.recentlyAdded || [];
 
-    // Filter sections by type
     const matchingSections = allSections.filter((s) => {
-      const matchesType = s.type.toLowerCase() === validTypes[type];
+      // Check for undefined section or missing type
+      if (!s) return false;
+
+      // Try several possible property names for type (type, section_type)
+      // Some sections might have type in section_type instead of type
+      const sectionType = s.type || s.section_type || "";
+
+      // Safely convert to lowercase and compare
+      const matchesType =
+        sectionType.toString().toLowerCase() === validTypes[type];
       return matchesType;
     });
 
@@ -949,12 +1236,51 @@ app.get("/api/recent/:type", async (req, res) => {
               }
             );
 
-            return {
+            // Log the entire metadata response for debugging
+            console.log(
+              `Metadata for rating_key ${item.rating_key}:`,
+              JSON.stringify(
+                {
+                  fullResponse: metadataResponse.data,
+                  responseKeys: Object.keys(
+                    metadataResponse.data?.response || {}
+                  ),
+                  dataKeys: Object.keys(
+                    metadataResponse.data?.response?.data || {}
+                  ),
+                  mediaInfoKeys: Object.keys(
+                    metadataResponse.data?.response?.data?.media_info?.[0] || {}
+                  ),
+                },
+                null,
+                2
+              )
+            );
+
+            // Original media item details
+            const baseMediaDetails = {
               ...item,
               section_id: section.section_id,
+            };
+
+            // If no metadata found, return base details
+            if (!metadataResponse.data?.response?.data) {
+              return {
+                ...baseMediaDetails,
+                video_full_resolution: "Unknown",
+                duration: 0,
+              };
+            }
+
+            // Extract all possible duration-related fields
+            const mediaData = metadataResponse.data.response.data;
+
+            return {
+              ...baseMediaDetails,
               video_full_resolution:
-                metadataResponse.data?.response?.data?.media_info?.[0]
-                  ?.video_full_resolution || "Unknown",
+                mediaData.media_info?.[0]?.video_full_resolution || "Unknown",
+              duration: Number(mediaData.duration) || 0, // Convert to number
+              raw_metadata: mediaData,
             };
           } catch (error) {
             console.error(
@@ -965,6 +1291,7 @@ app.get("/api/recent/:type", async (req, res) => {
               ...item,
               section_id: section.section_id,
               video_full_resolution: "Unknown",
+              duration: 0,
             };
           }
         });
@@ -983,47 +1310,80 @@ app.get("/api/recent/:type", async (req, res) => {
     const allSectionMedia = await Promise.all(sectionMediaPromises);
     const combinedMedia = allSectionMedia.flat();
 
-    // Process media with formats
-    const processedMedia = combinedMedia.map((media) => {
-      const baseData = {
-        title: media.title,
-        year: media.year,
-        mediaType: media.media_type,
-        addedAt: media.added_at,
-        summary: media.summary,
-        rating: media.rating,
-        contentRating: media.content_rating,
-        video_full_resolution: media.video_full_resolution,
-        section_id: media.section_id,
-      };
-
-      if (type === "shows") {
-        baseData.grandparent_title = media.grandparent_title;
-        baseData.parent_media_index = media.parent_media_index;
-        baseData.media_index = media.media_index;
-      }
-
-      const formattedData = {};
-
-      // Apply formats based on section_id
-      recentlyAddedFormats.forEach((format) => {
-        if (
-          format.type === type &&
-          (format.sectionId === "all" ||
-            format.sectionId === media.section_id.toString())
-        ) {
-          formattedData[format.name] = processTemplate(
-            format.template,
-            baseData
+    // Processing Metadata
+    const processedMedia = await Promise.all(
+      combinedMedia.map(async (media) => {
+        try {
+          // Fetch metadata for each media item
+          const metadataResponse = await axios.get(
+            `${config.tautulliUrl}/api/v2`,
+            {
+              params: {
+                apikey: config.tautulliApiKey,
+                cmd: "get_metadata",
+                rating_key: media.rating_key,
+              },
+            }
           );
-        }
-      });
 
-      return {
-        ...formattedData,
-        raw_data: baseData,
-      };
-    });
+          const metadata = metadataResponse.data?.response?.data || {};
+
+          // Explicitly convert duration to number
+          const rawDuration = metadata.duration ? Number(metadata.duration) : 0;
+
+          const baseData = {
+            title: media.title,
+            year: media.year,
+            mediaType: media.media_type,
+            addedAt: media.added_at,
+            summary: media.summary,
+            rating: media.rating,
+            contentRating: media.content_rating,
+            video_full_resolution: media.video_full_resolution,
+            section_id: media.section_id,
+            // Store both raw and formatted duration
+            duration: rawDuration,
+            formatted_duration: formatDuration(rawDuration),
+          };
+
+          // Rest of the processing remains the same...
+          const formattedData = {};
+
+          // Apply formats based on section_id
+          recentlyAddedFormats.forEach((format) => {
+            if (
+              format.type === type &&
+              (format.sectionId === "all" ||
+                format.sectionId === media.section_id.toString())
+            ) {
+              // Use the base data for template processing
+              formattedData[format.name] = processTemplate(format.template, {
+                ...baseData,
+                duration: baseData.formatted_duration, // Override duration with formatted version
+              });
+            }
+          });
+
+          return {
+            ...formattedData,
+            raw_data: baseData,
+          };
+        } catch (error) {
+          console.error(
+            `Failed to fetch metadata for ${media.rating_key}:`,
+            error
+          );
+
+          return {
+            raw_data: {
+              ...media,
+              duration: 0,
+              formatted_duration: "0m",
+            },
+          };
+        }
+      })
+    );
 
     // Sort by added date (newest first)
     const sortedMedia = processedMedia.sort(

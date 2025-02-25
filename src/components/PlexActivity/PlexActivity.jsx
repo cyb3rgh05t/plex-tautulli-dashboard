@@ -1,11 +1,10 @@
+// Fixed version of PlexActivity.jsx
+
 import React from "react";
 import { useQuery } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
 import * as Icons from "lucide-react";
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
 
 const ActivityBadge = ({ type }) => {
   // Map activity types to their visual styles
@@ -40,7 +39,11 @@ const ActivityBadge = ({ type }) => {
     },
   };
 
-  const style = styles[type.toLowerCase()] || styles.download;
+  // Safety check for undefined type
+  const activityType = type ? type.toLowerCase() : "download";
+
+  // Use default style if type is not recognized
+  const style = styles[activityType] || styles.download;
   const Icon = style.icon;
 
   return (
@@ -55,7 +58,8 @@ const ActivityBadge = ({ type }) => {
 };
 
 const ProgressBar = ({ progress }) => {
-  const percent = Math.min(progress, 100);
+  // Ensure progress is a number and capped at 100
+  const percent = typeof progress === "number" ? Math.min(progress, 100) : 0;
 
   return (
     <div className="space-y-1">
@@ -76,6 +80,11 @@ const ProgressBar = ({ progress }) => {
 };
 
 const ActivityItem = ({ activity }) => {
+  // Add a safety check for activity to prevent errors
+  if (!activity || typeof activity !== "object") {
+    return null;
+  }
+
   return (
     <div
       className="group bg-gray-800/30 hover:bg-gray-800/50 border border-gray-700/50 
@@ -85,9 +94,11 @@ const ActivityItem = ({ activity }) => {
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1 flex-1 min-w-0">
             <h3 className="text-white font-medium truncate">
-              {activity.subtitle}
+              {activity.subtitle || "Unknown"}
             </h3>
-            <p className="text-gray-400 text-sm truncate">{activity.title}</p>
+            <p className="text-gray-400 text-sm truncate">
+              {activity.title || "Unknown"}
+            </p>
           </div>
           <ActivityBadge type={activity.type} />
         </div>
@@ -125,10 +136,34 @@ const PlexActivity = () => {
   } = useQuery(
     ["plexActivities", config.plexToken],
     async () => {
-      const response = await fetch(`${API_BASE_URL}/api/downloads`);
-      const data = await response.json();
-      if (data.error) throw new Error(data.message || data.error);
-      return data.activities;
+      try {
+        const response = await fetch("/api/downloads");
+        const data = await response.json();
+
+        if (data.error) throw new Error(data.message || data.error);
+
+        // Ensure activities is an array and process each item to include all required properties
+        const processedActivities = (data.activities || []).map((item) => {
+          // Extract raw_data if available in the new format
+          const rawData = item.raw_data || item;
+
+          return {
+            uuid:
+              rawData.uuid || `id-${Math.random().toString(36).substr(2, 9)}`,
+            title: rawData.title || "Unknown",
+            subtitle: rawData.subtitle || "Unknown",
+            progress:
+              typeof rawData.progress === "number" ? rawData.progress : 0,
+            type: rawData.type || "download",
+            ...item, // Include any custom formats from the top level
+          };
+        });
+
+        return processedActivities;
+      } catch (error) {
+        console.error("Error fetching Plex activities:", error);
+        throw error;
+      }
     },
     {
       refetchInterval: 15000,
@@ -190,7 +225,10 @@ const PlexActivity = () => {
           </div>
         ) : (
           activities.map((activity) => (
-            <ActivityItem key={activity.uuid} activity={activity} />
+            <ActivityItem
+              key={activity.uuid || `activity-${Math.random()}`}
+              activity={activity}
+            />
           ))
         )}
       </div>

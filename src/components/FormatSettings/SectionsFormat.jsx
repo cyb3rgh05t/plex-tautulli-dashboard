@@ -356,7 +356,30 @@ const SectionsFormat = () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/sections`);
       const data = await response.json();
-      setSections(data.sections || []);
+
+      // Process sections to ensure they have the expected structure
+      const processedSections = (data.sections || []).map((section) => {
+        // Extract from raw_data if present, otherwise use direct properties
+        const rawData = section.raw_data || {};
+        return {
+          section_id: rawData.section_id || section.section_id,
+          name:
+            rawData.name ||
+            section.name ||
+            rawData.section_name ||
+            section.section_name ||
+            "Unknown Section",
+          type:
+            rawData.type ||
+            section.type ||
+            rawData.section_type ||
+            section.section_type ||
+            "unknown",
+        };
+      });
+
+      setSections(processedSections);
+      console.log("Processed sections:", processedSections);
     } catch (error) {
       console.error("Failed to fetch sections:", error);
     }
@@ -591,8 +614,12 @@ const SectionsFormat = () => {
             >
               <option value="all">All Sections</option>
               {sections.map((section) => (
-                <option key={section.section_id} value={section.section_id}>
-                  {section.name} (ID: {section.section_id})
+                <option
+                  key={String(section.section_id || `section-${Math.random()}`)}
+                  value={section.section_id}
+                >
+                  {section.name || "Unknown"} (ID: {section.section_id || "N/A"}
+                  )
                 </option>
               ))}
             </select>

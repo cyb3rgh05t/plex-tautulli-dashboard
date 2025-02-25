@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
 import * as Icons from "lucide-react";
@@ -71,7 +71,7 @@ const UsersTable = ({ users }) => (
           <th className="px-4 py-3 text-right bg-gray-800/50 border-b border-gray-700/50">
             <div className="flex items-center justify-end gap-2 text-gray-400 font-medium">
               <Icons.Timer size={14} />
-              Total Duration
+              Last Played Duration
             </div>
           </th>
           <th className="px-4 py-3 text-left bg-gray-800/50 border-b border-gray-700/50">
@@ -86,31 +86,35 @@ const UsersTable = ({ users }) => (
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-700/50">
-        {users.map((user) => (
-          <tr
-            key={user.user_id}
-            className="hover:bg-gray-800/30 transition-colors duration-200"
-          >
-            <td className="px-4 py-3 font-medium text-white">
-              {user.friendly_name}
-            </td>
-            <td className="px-4 py-3 text-gray-300">
-              {user.full_title || "Nothing played yet"}
-            </td>
-            <td className="px-4 py-3 text-right text-brand-primary-400 font-medium">
-              {user.plays.toLocaleString()}
-            </td>
-            <td className="px-4 py-3 text-right text-brand-primary-400 font-medium">
-              {Math.round(user.duration / 3600)} hrs
-            </td>
-            <td className="px-4 py-3 text-gray-300">
-              {user.last_seen ? formatRelativeTime(user.last_seen) : "Never"}
-            </td>
-            <td className="px-4 py-3 text-center">
-              <StatusDot state={user.state} />
-            </td>
-          </tr>
-        ))}
+        {users.map((user) => {
+          // Use raw_data for consistent information retrieval
+          const userData = user.raw_data || user;
+          return (
+            <tr
+              key={userData.user_id || Math.random()}
+              className="hover:bg-gray-800/30 transition-colors duration-200"
+            >
+              <td className="px-4 py-3 font-medium text-white">
+                {userData.friendly_name || "Unknown User"}
+              </td>
+              <td className="px-4 py-3 text-gray-300">
+                {userData.full_title || userData.title || "Nothing played yet"}
+              </td>
+              <td className="px-4 py-3 text-right text-brand-primary-400 font-medium">
+                {userData.plays ? userData.plays.toLocaleString() : "0"}
+              </td>
+              <td className="px-4 py-3 text-right text-brand-primary-400 font-medium">
+                {userData.formatted_duration || "0m"}
+              </td>
+              <td className="px-4 py-3 text-gray-300">
+                {userData.last_seen_formatted || "Never"}
+              </td>
+              <td className="px-4 py-3 text-center">
+                <StatusDot state={userData.state || "watched"} />
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   </div>
@@ -122,6 +126,9 @@ const Users = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState(0);
+  const refreshInterval = useRef(null);
+  const REFRESH_INTERVAL = 15000; // 15 seconds
 
   const fetchUsers = async () => {
     try {
@@ -137,8 +144,10 @@ const Users = () => {
         throw new Error(data.message || "Failed to fetch users data");
       }
 
+      // The new structure already includes raw_data, so no need for additional processing
       setUsers(data.users);
       setError(null);
+      setLastRefreshTime(Date.now());
     } catch (err) {
       const errorMessage = `Failed to load users: ${err.message}`;
       setError(errorMessage);
@@ -150,15 +159,39 @@ const Users = () => {
   };
 
   const handleRefresh = async () => {
+    // Prevent multiple refreshes happening at once
+    if (isRefreshing) return;
+
     setIsRefreshing(true);
     await fetchUsers();
   };
 
+  // Setup auto-refresh interval
   useEffect(() => {
     if (config.tautulliApiKey) {
+      // Initial fetch
       fetchUsers();
+
+      // Setup interval for auto-refresh
+      refreshInterval.current = setInterval(() => {
+        handleRefresh();
+      }, REFRESH_INTERVAL);
+
+      // Cleanup interval on unmount
+      return () => {
+        if (refreshInterval.current) {
+          clearInterval(refreshInterval.current);
+        }
+      };
     }
   }, [config.tautulliApiKey]);
+
+  // Calculate time until next refresh
+  const timeUntilNextRefresh = Math.max(
+    0,
+    REFRESH_INTERVAL - (Date.now() - lastRefreshTime)
+  );
+  const secondsUntilRefresh = Math.ceil(timeUntilNextRefresh / 1000);
 
   if (loading) {
     return (
@@ -208,8 +241,12 @@ const Users = () => {
                 {users.length} Users
               </span>
             </div>
-            {isRefreshing && (
+            {isRefreshing ? (
               <span className="text-xs text-gray-500">Refreshing...</span>
+            ) : (
+              <span className="text-xs text-gray-500">
+                Auto-refresh in {secondsUntilRefresh}s
+              </span>
             )}
           </div>
         </div>
