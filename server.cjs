@@ -1277,6 +1277,20 @@ app.get("/api/recent/:type", async (req, res) => {
 
     // Process media with formatting
     const processedMedia = allMedia.map((media) => {
+      // Calculate formatted duration once
+      const formattedDuration = formatDuration(media.duration || 0);
+
+      // Enhanced media object with both aliases and formatted data
+      const enhancedMedia = {
+        ...media,
+        mediaType: type,
+        media_type: type,
+        formatted_duration: formattedDuration,
+        // Add both key variations for timestamps
+        addedAt: media.added_at,
+        added_at: media.added_at,
+      };
+
       const formattedData = {};
 
       // Apply formats based on media type
@@ -1288,18 +1302,45 @@ app.get("/api/recent/:type", async (req, res) => {
               format.sectionId === media.section_id.toString())
         )
         .forEach((format) => {
-          formattedData[format.name] = processTemplate(format.template, {
-            ...media,
-            mediaType: type,
-            formatted_duration: formatDuration(media.duration || 0),
-          });
+          // Process special variables before template processing
+          let processedTemplate = format.template;
+
+          // Handle added_at:format pattern specifically
+          const dateFormatPattern = /\{added_at:([^}]+)\}/g;
+          processedTemplate = processedTemplate.replace(
+            dateFormatPattern,
+            (match, formatType) => {
+              return formatDate(media.added_at, formatType);
+            }
+          );
+
+          // Same for addedAt:format
+          const dateFormatPattern2 = /\{addedAt:([^}]+)\}/g;
+          processedTemplate = processedTemplate.replace(
+            dateFormatPattern2,
+            (match, formatType) => {
+              return formatDate(media.added_at, formatType);
+            }
+          );
+
+          // Special handling for duration
+          processedTemplate = processedTemplate.replace(
+            /\{duration\}/g,
+            formattedDuration
+          );
+
+          // Now process the template with the enhanced media data
+          formattedData[format.name] = processTemplate(
+            processedTemplate,
+            enhancedMedia
+          );
         });
 
       return {
         ...formattedData,
         raw_data: {
           ...media,
-          formatted_duration: formatDuration(media.duration || 0),
+          formatted_duration: formattedDuration,
         },
       };
     });

@@ -278,6 +278,7 @@ const formatDate = (timestamp, format = "default") => {
 };
 
 // Helper function for processing templates
+// Helper function for processing templates
 const processTemplate = (template, data) => {
   if (!template) return "";
 
@@ -289,27 +290,30 @@ const processTemplate = (template, data) => {
     const key = match[0];
     const format = match[1] || "default";
 
-    let value = data[key];
+    let value;
 
-    // Special handling for timestamp
-    if (key === "addedAt") {
-      value = formatDate(value, format);
+    // Special handling for timestamp - using key aliases for flexibility
+    if (key === "addedAt" || key === "added_at") {
+      // Get timestamp from either key
+      const timestamp = data.addedAt || data.added_at;
+      value = formatDate(timestamp, format);
     }
-
     // Special handling for duration
-    if (key === "duration") {
+    else if (key === "duration") {
       // Prioritize formatted_duration if available
       value = data.formatted_duration || formatDuration(Number(data[key]) || 0);
     }
-
     // Special handling for show episode formatting
-    if (data.mediaType === "show") {
+    else if (data.mediaType === "show" || data.media_type === "show") {
       if (key === "parent_media_index") {
-        value = `S${String(value).padStart(2, "0")}`;
+        value = `S${String(data[key] || "0").padStart(2, "0")}`;
+      } else if (key === "media_index") {
+        value = `E${String(data[key] || "0").padStart(2, "0")}`;
+      } else {
+        value = data[key];
       }
-      if (key === "media_index") {
-        value = `E${String(value).padStart(2, "0")}`;
-      }
+    } else {
+      value = data[key];
     }
 
     if (value !== undefined) {
