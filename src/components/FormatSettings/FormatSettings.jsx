@@ -3,6 +3,7 @@ import DownloadsFormat from "./DownloadsFormat";
 import RecentlyAddedFormat from "./RecentlyAddedFormat";
 import UsersFormat from "./UsersFormat";
 import SectionsFormat from "./SectionsFormat";
+import LibrariesFormat from "./LibrariesFormat";
 
 const SubTabButton = ({ active, onClick, children }) => (
   <button
@@ -42,6 +43,12 @@ const FormatSettings = () => {
           Users
         </SubTabButton>
         <SubTabButton
+          active={activeSubTab === "libraries"}
+          onClick={() => setActiveSubTab("libraries")}
+        >
+          Libraries
+        </SubTabButton>
+        <SubTabButton
           active={activeSubTab === "sections"}
           onClick={() => setActiveSubTab("sections")}
         >
@@ -52,6 +59,7 @@ const FormatSettings = () => {
       {activeSubTab === "downloads" && <DownloadsFormat />}
       {activeSubTab === "recentlyAdded" && <RecentlyAddedFormat />}
       {activeSubTab === "users" && <UsersFormat />}
+      {activeSubTab === "libraries" && <LibrariesFormat />}
       {activeSubTab === "sections" && <SectionsFormat />}
     </div>
   );

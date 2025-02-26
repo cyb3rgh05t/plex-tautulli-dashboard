@@ -974,8 +974,48 @@ app.get("/api/libraries", async (req, res) => {
       throw new Error("Failed to fetch libraries data");
     }
 
-    // Send just the libraries array
-    res.json(response.data.response.data.data);
+    // Get formats
+    const formats = getFormats().sections || [];
+
+    // Process libraries with formatting
+    const libraries = response.data.response.data.data.map((library) => {
+      // Base data object for template processing
+      const baseData = {
+        section_id: library.section_id,
+        section_name: library.section_name || library.name,
+        section_type: library.section_type || library.type,
+        count: library.count || 0,
+        parent_count: library.parent_count || 0,
+        child_count: library.child_count || 0,
+        total_plays: library.plays || 0,
+        last_accessed: library.last_accessed || "Never",
+        last_played: library.last_played || "Never",
+      };
+
+      // Find applicable formats for this library
+      const applicableFormats = formats.filter(
+        (format) =>
+          format.sectionId === "all" ||
+          format.sectionId === library.section_id.toString()
+      );
+
+      // Apply each format to create formatted data
+      const formattedData = {};
+      applicableFormats.forEach((format) => {
+        formattedData[format.name] = processTemplate(format.template, baseData);
+      });
+
+      // Return with formats at top level and raw data in raw_data object
+      return {
+        ...formattedData, // Custom formats at top level
+        raw_data: library, // Full library details
+      };
+    });
+
+    res.json({
+      total: libraries.length,
+      libraries: libraries,
+    });
   } catch (error) {
     console.error("Error fetching libraries:", error);
     res.status(500).json({

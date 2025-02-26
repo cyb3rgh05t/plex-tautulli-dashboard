@@ -26,9 +26,11 @@ const LibraryTypeIcon = ({ type }) => {
 };
 
 const LibraryCard = ({ library, isSelected, onToggleSelect }) => {
-  // Determine section ID and count from either top-level or raw_data
-  const sectionId = library.section_id || library.raw_data?.section_id;
-  const itemCount = library.count || library.raw_data?.count || 0;
+  // Safely extract section ID and count
+  const rawData = library.raw_data || library;
+  const sectionId = rawData.section_id;
+  const itemCount = rawData.count || rawData.parent_count || 0;
+  const libraryType = rawData.section_type || rawData.type;
 
   return (
     <div
@@ -49,15 +51,14 @@ const LibraryCard = ({ library, isSelected, onToggleSelect }) => {
               text-brand-primary-500 focus:ring-brand-primary-500 focus:ring-offset-gray-800"
           />
           <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700/50">
-            <LibraryTypeIcon type={library.section_type || library.type} />
+            <LibraryTypeIcon type={libraryType} />
           </div>
           <div>
             <h3 className="text-white font-medium">
-              {library.section_name || library.name}
+              {rawData.section_name || rawData.name}
             </h3>
             <p className="text-gray-400 text-sm">
-              Type:{" "}
-              {capitalizeFirstLetter(library.section_type || library.type)}
+              Type: {capitalizeFirstLetter(libraryType)}
             </p>
           </div>
         </div>
@@ -65,7 +66,7 @@ const LibraryCard = ({ library, isSelected, onToggleSelect }) => {
           <div className="bg-gray-800/50 px-3 py-1 rounded-lg border border-gray-700/50">
             <span className="text-gray-400 text-sm">Items: </span>
             <span className="text-brand-primary-400 font-medium">
-              {itemCount}
+              {itemCount.toLocaleString()}
             </span>
           </div>
           <p className="text-gray-500 text-xs mt-1">ID: {sectionId}</p>
@@ -129,7 +130,7 @@ const Libraries = () => {
       setSelectedLibraries(new Set());
     } else {
       setSelectedLibraries(
-        new Set(libraries.map((lib) => String(lib.section_id)))
+        new Set(libraries.map((lib) => String(lib.raw_data.section_id)))
       );
     }
   };
@@ -138,7 +139,7 @@ const Libraries = () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/libraries`);
       const data = await response.json();
-      return data;
+      return data.libraries;
     } catch (error) {
       console.error("Fetch error:", error);
       throw error;
@@ -198,11 +199,11 @@ const Libraries = () => {
 
     setIsSaving(true);
     const selectedData = libraries
-      .filter((lib) => selectedLibraries.has(String(lib.section_id)))
+      .filter((lib) => selectedLibraries.has(String(lib.raw_data.section_id)))
       .map((lib) => ({
-        section_id: lib.section_id,
-        type: lib.section_type,
-        name: lib.section_name,
+        section_id: lib.raw_data.section_id,
+        type: lib.raw_data.section_type || lib.raw_data.type,
+        name: lib.raw_data.section_name || lib.raw_data.name,
       }));
 
     try {
@@ -336,16 +337,10 @@ const Libraries = () => {
         <div className="space-y-4">
           {libraries.map((library) => (
             <LibraryCard
-              key={library.section_id}
-              library={{
-                ...library,
-                // Use raw_data as the source of truth if it exists
-                section_id: library.section_id || library.raw_data?.section_id,
-                name: library.section_name || library.name,
-                type: library.section_type || library.type,
-              }}
+              key={library.raw_data.section_id}
+              library={library}
               isSelected={selectedLibraries.has(
-                String(library.section_id || library.raw_data?.section_id)
+                String(library.raw_data.section_id)
               )}
               onToggleSelect={toggleLibrary}
             />
