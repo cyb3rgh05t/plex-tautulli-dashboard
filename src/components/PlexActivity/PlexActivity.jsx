@@ -122,12 +122,58 @@ const LoadingItem = () => (
   </div>
 );
 
+// Pagination component
+const Pagination = ({ currentPage, totalPages, onPageChange }) => {
+  return (
+    <div className="flex justify-center items-center gap-2 mt-6">
+      <button
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={currentPage === 1}
+        className="p-2 rounded-lg border border-gray-700/50 bg-gray-800/50 text-gray-400 
+          hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <Icons.ChevronLeft size={16} />
+      </button>
+
+      <div className="flex items-center gap-1">
+        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+          <button
+            key={page}
+            onClick={() => onPageChange(page)}
+            className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors
+              ${
+                currentPage === page
+                  ? "bg-brand-primary-500 text-white"
+                  : "bg-gray-800/50 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700/50"
+              }`}
+          >
+            {page}
+          </button>
+        ))}
+      </div>
+
+      <button
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={currentPage === totalPages}
+        className="p-2 rounded-lg border border-gray-700/50 bg-gray-800/50 text-gray-400 
+          hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <Icons.ChevronRight size={16} />
+      </button>
+    </div>
+  );
+};
+
 const PlexActivity = () => {
   const { config } = useConfig();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
   const refreshInterval = useRef(null);
   const REFRESH_INTERVAL = 30000; // 30 seconds in milliseconds - shorter interval for downloads
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const fetchActivities = async () => {
     try {
@@ -205,6 +251,31 @@ const PlexActivity = () => {
   );
   const secondsUntilRefresh = Math.ceil(timeUntilNextRefresh / 1000);
 
+  // Calculate pagination values
+  const totalItems = activities?.length || 0;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+
+  // If current page is higher than total pages (e.g. after refresh), reset to page 1
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [totalPages, currentPage]);
+
+  // Get current page items
+  const currentItems = activities
+    ? activities.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+      )
+    : [];
+
+  const handlePageChange = (pageNumber) => {
+    setCurrentPage(pageNumber);
+    // Scroll to top of the component
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -262,12 +333,33 @@ const PlexActivity = () => {
             <p className="text-gray-400">No active downloads</p>
           </div>
         ) : (
-          activities.map((activity) => (
-            <ActivityItem
-              key={activity.uuid || `activity-${Math.random()}`}
-              activity={activity}
-            />
-          ))
+          <>
+            {/* Current page items */}
+            {currentItems.map((activity) => (
+              <ActivityItem
+                key={activity.uuid || `activity-${Math.random()}`}
+                activity={activity}
+              />
+            ))}
+
+            {/* Pagination controls */}
+            {totalPages > 1 && (
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
+            )}
+
+            {/* Page indicator */}
+            {totalPages > 1 && (
+              <div className="text-center text-sm text-gray-400">
+                Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+                {Math.min(currentPage * itemsPerPage, totalItems)} of{" "}
+                {totalItems} activities
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
