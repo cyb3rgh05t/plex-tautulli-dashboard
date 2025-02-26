@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   FaServer,
   FaCheck,
@@ -87,6 +87,54 @@ const EndpointCard = ({
   const [testError, setTestError] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // For dynamic URL parameters
+  const [modifiedEndpoint, setModifiedEndpoint] = useState(endpoint);
+  const [paramValues, setParamValues] = useState({});
+
+  // Function to detect URL parameters in endpoint
+  const detectUrlParams = (endpointStr) => {
+    const regex = /:([\w]+)/g;
+    const params = [];
+    let match;
+    while ((match = regex.exec(endpointStr)) !== null) {
+      params.push(match[1]);
+    }
+    return params;
+  };
+
+  // Get URL parameters from endpoint
+  const urlParams = detectUrlParams(endpoint);
+
+  // Initialize param values if they don't exist
+  useEffect(() => {
+    if (urlParams.length > 0) {
+      const initialValues = {};
+      urlParams.forEach((param) => {
+        initialValues[param] = paramValues[param] || "";
+      });
+      setParamValues(initialValues);
+    }
+  }, [endpoint]);
+
+  // Update modified endpoint when params change
+  useEffect(() => {
+    let updatedEndpoint = endpoint;
+    Object.entries(paramValues).forEach(([param, value]) => {
+      if (value) {
+        updatedEndpoint = updatedEndpoint.replace(`:${param}`, value);
+      }
+    });
+    setModifiedEndpoint(updatedEndpoint);
+  }, [endpoint, paramValues]);
+
+  // Handle parameter input change
+  const handleParamChange = (param, value) => {
+    setParamValues((prev) => ({
+      ...prev,
+      [param]: value,
+    }));
+  };
+
   const handleTest = async () => {
     setLoading(true);
     setTestResponse(null);
@@ -94,10 +142,11 @@ const EndpointCard = ({
 
     try {
       let response;
+      // Use the modified endpoint with replaced parameter values
       if (method === "GET") {
-        response = await axios.get(`${baseUrl}${endpoint}`);
+        response = await axios.get(`${baseUrl}${modifiedEndpoint}`);
       } else if (method === "POST") {
-        response = await axios.post(`${baseUrl}${endpoint}`, payload);
+        response = await axios.post(`${baseUrl}${modifiedEndpoint}`, payload);
       }
 
       setTestResponse(response.data);
@@ -109,9 +158,16 @@ const EndpointCard = ({
   };
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(`${baseUrl}${endpoint}`);
+    navigator.clipboard.writeText(`${baseUrl}${modifiedEndpoint}`);
     toast.success("Endpoint URL copied to clipboard");
   };
+
+  // Check if we have a valid endpoint for testing
+  const canTest =
+    urlParams.length === 0 ||
+    urlParams.every(
+      (param) => paramValues[param] && paramValues[param].trim() !== ""
+    );
 
   return (
     <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6 shadow-lg mb-4 hover:bg-gray-800/70 transition-all duration-200">
@@ -131,7 +187,7 @@ const EndpointCard = ({
             {method}
           </span>
           <code className="text-white font-mono bg-gray-900/50 px-4 py-2 rounded-lg border border-gray-700/50">
-            {endpoint}
+            {modifiedEndpoint}
           </code>
         </div>
         <div className="flex gap-2">
@@ -145,7 +201,7 @@ const EndpointCard = ({
           {(method === "GET" || method === "POST") && (
             <button
               onClick={handleTest}
-              disabled={loading}
+              disabled={loading || !canTest}
               className="px-4 py-2 bg-brand-primary-500 text-white rounded-lg hover:bg-brand-primary-600 
                 transition-all duration-200 shadow-lg shadow-brand-primary-500/20 
                 hover:shadow-brand-primary-500/40 flex items-center gap-2
@@ -157,6 +213,33 @@ const EndpointCard = ({
         </div>
       </div>
       <p className="text-gray-400 mb-4">{description}</p>
+
+      {/* URL Parameters Input Fields */}
+      {urlParams.length > 0 && (
+        <div className="mb-4 bg-gray-900/20 p-4 rounded-lg border border-gray-700/30">
+          <h4 className="text-white font-medium mb-3">URL Parameters</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {urlParams.map((param) => (
+              <div key={param} className="flex items-center gap-2">
+                <div className="text-gray-400 text-sm min-w-[80px]">
+                  :{param}
+                </div>
+                <input
+                  type="text"
+                  value={paramValues[param] || ""}
+                  onChange={(e) => handleParamChange(param, e.target.value)}
+                  placeholder={`Replace :${param}`}
+                  className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 
+                    text-white placeholder-gray-500 text-sm focus:ring-brand-primary-500 focus:border-brand-primary-500"
+                />
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 text-xs text-gray-500">
+            Replace parameters in the URL before testing
+          </div>
+        </div>
+      )}
 
       {/* Request Examples Section */}
       {requestExamples && (
