@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
@@ -79,6 +79,10 @@ const Libraries = () => {
   const { config } = useConfig();
   const [selectedLibraries, setSelectedLibraries] = useState(new Set());
   const [isSaving, setIsSaving] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState(0);
+  const refreshInterval = useRef(null);
+  const REFRESH_INTERVAL = 600000; // 10 minutes in milliseconds
 
   // Fetch saved sections on component mount
   useEffect(() => {
@@ -104,6 +108,7 @@ const Libraries = () => {
     };
 
     fetchSavedSections();
+    setLastRefreshTime(Date.now());
   }, []);
 
   const toggleLibrary = (sectionId) => {
@@ -129,28 +134,64 @@ const Libraries = () => {
     }
   };
 
+  const fetchLibraries = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/libraries`);
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Fetch error:", error);
+      throw error;
+    }
+  };
+
   const {
     data: libraries,
     isLoading,
-    isFetching,
     error,
     refetch,
-  } = useQuery(
-    ["libraries"],
-    async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/libraries`);
-        const data = await response.json();
-        return data;
-      } catch (error) {
-        console.error("Fetch error:", error);
-        throw error;
-      }
-    },
-    {
-      enabled: !!config.tautulliApiKey,
+  } = useQuery(["libraries"], fetchLibraries, {
+    enabled: !!config.tautulliApiKey,
+    refetchOnWindowFocus: false,
+    staleTime: 300000, // 5 minutes
+  });
+
+  const handleRefresh = async () => {
+    // Prevent multiple refreshes happening at once
+    if (isRefreshing) return;
+
+    setIsRefreshing(true);
+    await refetch();
+    setIsRefreshing(false);
+    setLastRefreshTime(Date.now());
+  };
+
+  // Setup auto-refresh interval
+  useEffect(() => {
+    if (config.tautulliApiKey) {
+      // Setup interval for auto-refresh
+      refreshInterval.current = setInterval(() => {
+        handleRefresh();
+      }, REFRESH_INTERVAL);
+
+      // Cleanup interval on unmount
+      return () => {
+        if (refreshInterval.current) {
+          clearInterval(refreshInterval.current);
+        }
+      };
     }
+  }, [config.tautulliApiKey]);
+
+  // Calculate time until next refresh
+  const timeUntilNextRefresh = Math.max(
+    0,
+    REFRESH_INTERVAL - (Date.now() - lastRefreshTime)
   );
+  const secondsUntilRefresh = Math.ceil(timeUntilNextRefresh / 1000);
+  const minutesUntilRefresh = Math.floor(secondsUntilRefresh / 60);
+  const remainingSeconds = secondsUntilRefresh % 60;
+  const formattedTimeUntilRefresh = `${minutesUntilRefresh}`;
 
   const handleSaveSections = async () => {
     if (selectedLibraries.size === 0) return;
@@ -203,8 +244,12 @@ const Libraries = () => {
                 {Array.isArray(libraries) ? libraries.length : 0} Libraries
               </span>
             </div>
-            {isFetching && !isLoading && (
+            {isRefreshing ? (
               <span className="text-xs text-gray-500">Refreshing...</span>
+            ) : (
+              <span className="text-xs text-gray-500">
+                Auto-refresh in {formattedTimeUntilRefresh}min
+              </span>
             )}
           </div>
         </div>
@@ -242,8 +287,8 @@ const Libraries = () => {
             )}
           </button>
           <button
-            onClick={() => refetch()}
-            disabled={isFetching}
+            onClick={handleRefresh}
+            disabled={isRefreshing}
             className={`px-4 py-2 rounded-lg bg-brand-primary-500/10 text-brand-primary-400 
               border border-brand-primary-500/20 hover:bg-brand-primary-500/20 
               transition-all duration-200 flex items-center gap-2
@@ -251,9 +296,9 @@ const Libraries = () => {
           >
             <RefreshCw
               size={16}
-              className={`${isFetching ? "animate-spin" : ""}`}
+              className={`${isRefreshing ? "animate-spin" : ""}`}
             />
-            {isFetching ? "Refreshing..." : "Refresh"}
+            {isRefreshing ? "Refreshing..." : "Refresh"}
           </button>
         </div>
       </div>

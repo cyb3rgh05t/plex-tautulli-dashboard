@@ -1,6 +1,4 @@
-// Fixed version of PlexActivity.jsx
-
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
@@ -126,50 +124,86 @@ const LoadingItem = () => (
 
 const PlexActivity = () => {
   const { config } = useConfig();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState(0);
+  const refreshInterval = useRef(null);
+  const REFRESH_INTERVAL = 30000; // 30 seconds in milliseconds - shorter interval for downloads
+
+  const fetchActivities = async () => {
+    try {
+      const response = await fetch("/api/downloads");
+      const data = await response.json();
+
+      if (data.error) throw new Error(data.message || data.error);
+
+      // Ensure activities is an array and process each item to include all required properties
+      const processedActivities = (data.activities || []).map((item) => {
+        // Extract raw_data if available in the new format
+        const rawData = item.raw_data || item;
+
+        return {
+          uuid: rawData.uuid || `id-${Math.random().toString(36).substr(2, 9)}`,
+          title: rawData.title || "Unknown",
+          subtitle: rawData.subtitle || "Unknown",
+          progress: typeof rawData.progress === "number" ? rawData.progress : 0,
+          type: rawData.type || "download",
+          ...item, // Include any custom formats from the top level
+        };
+      });
+
+      return processedActivities;
+    } catch (error) {
+      console.error("Error fetching Plex activities:", error);
+      throw error;
+    }
+  };
 
   const {
     data: activities,
     isLoading,
-    isFetching,
     error,
     refetch,
-  } = useQuery(
-    ["plexActivities", config.plexToken],
-    async () => {
-      try {
-        const response = await fetch("/api/downloads");
-        const data = await response.json();
+  } = useQuery(["plexActivities", config.plexToken], fetchActivities, {
+    enabled: !!config.plexToken,
+    refetchInterval: false, // We'll handle manual refresh
+    refetchOnWindowFocus: false,
+    staleTime: 10000, // 10 seconds
+  });
 
-        if (data.error) throw new Error(data.message || data.error);
+  const handleRefresh = async () => {
+    // Prevent multiple refreshes happening at once
+    if (isRefreshing) return;
 
-        // Ensure activities is an array and process each item to include all required properties
-        const processedActivities = (data.activities || []).map((item) => {
-          // Extract raw_data if available in the new format
-          const rawData = item.raw_data || item;
+    setIsRefreshing(true);
+    await refetch();
+    setIsRefreshing(false);
+    setLastRefreshTime(Date.now());
+  };
 
-          return {
-            uuid:
-              rawData.uuid || `id-${Math.random().toString(36).substr(2, 9)}`,
-            title: rawData.title || "Unknown",
-            subtitle: rawData.subtitle || "Unknown",
-            progress:
-              typeof rawData.progress === "number" ? rawData.progress : 0,
-            type: rawData.type || "download",
-            ...item, // Include any custom formats from the top level
-          };
-        });
+  // Setup auto-refresh interval on component mount
+  useEffect(() => {
+    // Set initial refresh time
+    setLastRefreshTime(Date.now());
 
-        return processedActivities;
-      } catch (error) {
-        console.error("Error fetching Plex activities:", error);
-        throw error;
+    // Setup interval for auto-refresh
+    refreshInterval.current = setInterval(() => {
+      handleRefresh();
+    }, REFRESH_INTERVAL);
+
+    // Cleanup interval on unmount
+    return () => {
+      if (refreshInterval.current) {
+        clearInterval(refreshInterval.current);
       }
-    },
-    {
-      refetchInterval: 15000,
-      enabled: !!config.plexToken,
-    }
+    };
+  }, []);
+
+  // Calculate time until next refresh
+  const timeUntilNextRefresh = Math.max(
+    0,
+    REFRESH_INTERVAL - (Date.now() - lastRefreshTime)
   );
+  const secondsUntilRefresh = Math.ceil(timeUntilNextRefresh / 1000);
 
   return (
     <div className="space-y-6">
@@ -185,15 +219,19 @@ const PlexActivity = () => {
                 {activities?.length || 0} Active
               </span>
             </div>
-            {isFetching && !isLoading && (
+            {isRefreshing ? (
               <span className="text-xs text-gray-500">Refreshing...</span>
+            ) : (
+              <span className="text-xs text-gray-500">
+                Auto-refresh in {secondsUntilRefresh}s
+              </span>
             )}
           </div>
         </div>
 
         <button
-          onClick={() => refetch()}
-          disabled={isFetching}
+          onClick={handleRefresh}
+          disabled={isRefreshing}
           className={`px-4 py-2 rounded-lg bg-brand-primary-500/10 text-brand-primary-400 
             border border-brand-primary-500/20 hover:bg-brand-primary-500/20 
             transition-all duration-200 flex items-center gap-2
@@ -201,9 +239,9 @@ const PlexActivity = () => {
         >
           <Icons.RefreshCw
             size={16}
-            className={`${isFetching ? "animate-spin" : ""}`}
+            className={`${isRefreshing ? "animate-spin" : ""}`}
           />
-          {isFetching ? "Refreshing..." : "Refresh"}
+          {isRefreshing ? "Refreshing..." : "Refresh"}
         </button>
       </div>
 

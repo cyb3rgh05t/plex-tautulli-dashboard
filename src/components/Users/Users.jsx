@@ -6,32 +6,6 @@ import * as Icons from "lucide-react";
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
 
-const formatRelativeTime = (timestamp) => {
-  const now = new Date();
-  const date = new Date(timestamp * 1000);
-  const diffMs = now - date;
-  const diffSecs = Math.floor(diffMs / 1000);
-  const diffMins = Math.floor(diffSecs / 60);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-  const diffMonths = Math.floor(diffDays / 30);
-  const diffYears = Math.floor(diffDays / 365);
-
-  if (diffSecs < 60) {
-    return `${diffSecs} second${diffSecs !== 1 ? "s" : ""} ago`;
-  } else if (diffMins < 60) {
-    return `${diffMins} minute${diffMins !== 1 ? "s" : ""} ago`;
-  } else if (diffHours < 24) {
-    return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
-  } else if (diffDays < 30) {
-    return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`;
-  } else if (diffMonths < 12) {
-    return `${diffMonths} month${diffMonths !== 1 ? "s" : ""} ago`;
-  } else {
-    return `${diffYears} year${diffYears !== 1 ? "s" : ""} ago`;
-  }
-};
-
 const StatusDot = ({ state }) => {
   const isActive = state === "watching";
   return (
@@ -92,7 +66,9 @@ const UsersTable = ({ users }) => (
           return (
             <tr
               key={userData.user_id || Math.random()}
-              className="hover:bg-gray-800/30 transition-colors duration-200"
+              className={`hover:bg-gray-800/30 transition-colors duration-200 ${
+                userData.state === "watching" ? "bg-gray-800/20" : ""
+              }`}
             >
               <td className="px-4 py-3 font-medium text-white">
                 {userData.friendly_name || "Unknown User"}
@@ -128,7 +104,7 @@ const Users = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
   const refreshInterval = useRef(null);
-  const REFRESH_INTERVAL = 600000; // 60 seconds
+  const REFRESH_INTERVAL = 60000; // 60 seconds
 
   const fetchUsers = async () => {
     try {
@@ -144,8 +120,33 @@ const Users = () => {
         throw new Error(data.message || "Failed to fetch users data");
       }
 
-      // The new structure already includes raw_data, so no need for additional processing
-      setUsers(data.users);
+      // Sort users - active users first, then by last_seen time (most recent first)
+      const sortedUsers = [...data.users].sort((a, b) => {
+        // Get user data from raw_data if available, otherwise use the user object directly
+        const userA = a.raw_data || a;
+        const userB = b.raw_data || b;
+
+        // First priority: Active users (is_watching/state is "watching")
+        const isActiveA =
+          userA.state === "watching" || userA.is_watching === "Watching";
+        const isActiveB =
+          userB.state === "watching" || userB.is_watching === "Watching";
+
+        // If one is active and the other is not, the active one goes first
+        if (isActiveA && !isActiveB) return -1;
+        if (!isActiveA && isActiveB) return 1;
+
+        // If both have same active status, sort by last_seen (most recent first)
+        // Handle users with no last_seen (they go to the end)
+        if (!userA.last_seen && !userB.last_seen) return 0;
+        if (!userA.last_seen) return 1;
+        if (!userB.last_seen) return -1;
+
+        // Sort by timestamp (higher/more recent first)
+        return userB.last_seen - userA.last_seen;
+      });
+
+      setUsers(sortedUsers);
       setError(null);
       setLastRefreshTime(Date.now());
     } catch (err) {

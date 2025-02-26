@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
 import * as Icons from "lucide-react";
@@ -256,6 +256,15 @@ const EmptySection = ({ type }) => {
   );
 };
 
+// Helper function to get type priority for sorting
+const getTypePriority = (type) => {
+  const typeStr = (type || "").toString().toLowerCase();
+  if (typeStr === "movie") return 1;
+  if (typeStr === "show") return 2;
+  if (typeStr === "artist") return 3;
+  return 4; // other types
+};
+
 const RecentlyAdded = () => {
   const { config } = useConfig();
   const [sections, setSections] = useState([]);
@@ -263,6 +272,9 @@ const RecentlyAdded = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState(0);
+  const refreshInterval = useRef(null);
+  const REFRESH_INTERVAL = 600000; // 10 minutes in milliseconds
 
   // Fetch saved sections
   const fetchSections = async () => {
@@ -316,6 +328,9 @@ const RecentlyAdded = () => {
   };
 
   const handleRefresh = async () => {
+    // Prevent multiple refreshes happening at once
+    if (isRefreshing) return;
+
     setIsRefreshing(true);
     try {
       const savedSections = await fetchSections();
@@ -341,6 +356,7 @@ const RecentlyAdded = () => {
       }
 
       setSectionMedia(sectionMediaResults);
+      setLastRefreshTime(Date.now());
     } catch (error) {
       logError("Failed to refresh media", error);
       setError("Failed to refresh media");
@@ -360,8 +376,40 @@ const RecentlyAdded = () => {
 
     if (config.tautulliApiKey) {
       loadSectionMedia();
+      setLastRefreshTime(Date.now());
+
+      // Setup interval for auto-refresh
+      refreshInterval.current = setInterval(() => {
+        handleRefresh();
+      }, REFRESH_INTERVAL);
+
+      // Cleanup interval on unmount
+      return () => {
+        if (refreshInterval.current) {
+          clearInterval(refreshInterval.current);
+        }
+      };
     }
   }, [config.tautulliApiKey]);
+
+  // Calculate time until next refresh
+  const timeUntilNextRefresh = Math.max(
+    0,
+    REFRESH_INTERVAL - (Date.now() - lastRefreshTime)
+  );
+  const secondsUntilRefresh = Math.ceil(timeUntilNextRefresh / 1000);
+  const minutesUntilRefresh = Math.floor(secondsUntilRefresh / 60);
+  const remainingSeconds = secondsUntilRefresh % 60;
+  const formattedTimeUntilRefresh = `${minutesUntilRefresh}`;
+
+  // Sort sections by media type: Movies, Shows, Music
+  const getSortedSectionEntries = () => {
+    return Object.entries(sectionMedia).sort((a, b) => {
+      const typeA = a[1]?.type || a[1]?.section_type || "unknown";
+      const typeB = b[1]?.type || b[1]?.section_type || "unknown";
+      return getTypePriority(typeA) - getTypePriority(typeB);
+    });
+  };
 
   return (
     <div className="space-y-8">
@@ -377,8 +425,12 @@ const RecentlyAdded = () => {
                 {sections.length} Sections
               </span>
             </div>
-            {isRefreshing && (
+            {isRefreshing ? (
               <span className="text-xs text-gray-500">Refreshing...</span>
+            ) : (
+              <span className="text-xs text-gray-500">
+                Auto-refresh in {formattedTimeUntilRefresh}min
+              </span>
             )}
           </div>
         </div>
@@ -457,7 +509,7 @@ const RecentlyAdded = () => {
         </div>
       ) : (
         <div className="space-y-12">
-          {Object.entries(sectionMedia).map(([sectionId, sectionData]) => {
+          {getSortedSectionEntries().map(([sectionId, sectionData]) => {
             // Check if the section data is valid
             if (!sectionData || typeof sectionData !== "object") {
               return null;
