@@ -82,8 +82,17 @@ const UsersTable = ({ users }) => (
               <td className="px-4 py-3 text-right text-brand-primary-400 font-medium">
                 {userData.formatted_duration || "0m"}
               </td>
-              <td className="px-4 py-3 text-gray-300">
-                {userData.last_seen_formatted || "Never"}
+              <td className="px-4 py-3">
+                {userData.state === "watching" ? (
+                  <span className="font-medium text-green-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                    Is Watching
+                  </span>
+                ) : (
+                  <span className="text-gray-300">
+                    {userData.last_seen_formatted || "Never"}
+                  </span>
+                )}
               </td>
               <td className="px-4 py-3 text-center">
                 <StatusDot state={userData.state || "watched"} />
