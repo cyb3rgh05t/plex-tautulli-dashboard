@@ -210,7 +210,7 @@ const PlexActivity = () => {
       <div className="flex justify-between items-center">
         <div className="space-y-1">
           <h2 className="text-2xl font-semibold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-            Plex Activities
+            Sync Activities
           </h2>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">

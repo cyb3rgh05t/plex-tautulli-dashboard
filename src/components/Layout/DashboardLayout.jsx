@@ -199,7 +199,7 @@ const DashboardLayout = () => {
               onClick={() => navigateTo("/activities")}
               icon={ActivitySquare}
             >
-              Plex Activities
+              Sync Activities
             </TabButton>
             <TabButton
               active={isActiveRoute("/recent")}
@@ -220,7 +220,7 @@ const DashboardLayout = () => {
               onClick={() => navigateTo("/users")}
               icon={UsersGroup}
             >
-              Users
+              Users Activities
             </TabButton>
           </div>
           <div className="flex gap-2">
