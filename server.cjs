@@ -518,6 +518,9 @@ app.get("/api/media/:type", async (req, res) => {
 app.get("/api/users", async (req, res) => {
   try {
     const config = getConfig();
+    const { count = 50 } = req.query; // Default to 50 if not specified
+    const requestedCount = Math.max(1, parseInt(count, 10) || 50);
+
     let allUsers = [];
     let start = 0;
     let hasMore = true;
@@ -536,7 +539,7 @@ app.get("/api/users", async (req, res) => {
     const activeSessions =
       activeSessionsResponse.data?.response?.data?.sessions || [];
 
-    // Get all users first
+    // Get all users
     while (hasMore) {
       const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
         params: {
@@ -764,8 +767,11 @@ app.get("/api/users", async (req, res) => {
       return b.last_seen - a.last_seen;
     });
 
+    // Limit the number of users based on count parameter
+    const limitedUsers = sortedUsers.slice(0, requestedCount);
+
     // Apply formats to each user
-    const formattedUsers = sortedUsers.map((user) => {
+    const formattedUsers = limitedUsers.map((user) => {
       const formattedOutput = {};
 
       // Get media type in lowercase for matching
@@ -882,6 +888,7 @@ app.get("/api/users", async (req, res) => {
     res.json({
       success: true,
       total: formattedUsers.length,
+      requestedCount: requestedCount,
       users: formattedUsers,
     });
   } catch (error) {
@@ -1166,7 +1173,8 @@ app.get("/api/recent/:type", async (req, res) => {
   try {
     const config = getConfig();
     const { type } = req.params;
-    const { section } = req.query;
+    const { section, count = 50 } = req.query; // Default to 50 if not specified
+    const requestedCount = parseInt(count, 10); // Ensure it's parsed as an integer
 
     // Validate type
     const validTypes = {
@@ -1238,7 +1246,7 @@ app.get("/api/recent/:type", async (req, res) => {
             apikey: config.tautulliApiKey,
             cmd: "get_recently_added",
             section_id: section.section_id,
-            count: 50, // Increased count to ensure we get some results
+            count: 50, // Fetch enough items to ensure we have at least the requested count
           },
         });
 
@@ -1275,8 +1283,76 @@ app.get("/api/recent/:type", async (req, res) => {
       });
     }
 
+    // Sort by added date (newest first)
+    allMedia.sort(
+      (a, b) => parseInt(b.added_at || 0) - parseInt(a.added_at || 0)
+    );
+
+    // *** APPLY COUNT LIMIT HERE ***
+    // This is the fix: we limit all results to the requested count after sorting
+    // Previously this limit might have been applied before or not at all
+    const limitedMedia = allMedia.slice(0, requestedCount);
+
+    // Enhanced processTemplate function that properly handles season/episode formatting
+    const enhancedProcessTemplate = (template, data) => {
+      if (!template) return "";
+
+      let result = template;
+      const variables = template.match(/\{([^}]+)\}/g) || [];
+
+      variables.forEach((variable) => {
+        const match = variable.slice(1, -1).split(":");
+        const key = match[0];
+        const format = match[1] || "default";
+
+        let value;
+
+        // Special handling for timestamp
+        if (key === "addedAt" || key === "added_at") {
+          const timestamp = data.addedAt || data.added_at;
+          value = formatDate(timestamp, format);
+        }
+        // Special handling for duration
+        else if (key === "duration") {
+          value =
+            data.formatted_duration || formatDuration(Number(data[key]) || 0);
+        }
+        // Special handling for season and episode numbers
+        else if (key === "parent_media_index" || key === "media_index") {
+          // Get raw value with fallback to "0"
+          const rawValue = data[key] || "0";
+
+          // Parse to number (important for proper padding)
+          const numberValue =
+            typeof rawValue === "number" ? rawValue : parseInt(rawValue, 10);
+
+          // Apply 2-digit padding
+          value = String(numberValue).padStart(2, "0");
+
+          // Add S or E prefix for show/episode media types
+          if (data.media_type === "show" || data.media_type === "episode") {
+            if (key === "parent_media_index") {
+              value = `S${value}`;
+            } else if (key === "media_index") {
+              value = `E${value}`;
+            }
+          }
+        }
+        // Default handling for all other variables
+        else {
+          value = data[key];
+        }
+
+        if (value !== undefined) {
+          result = result.replace(variable, value);
+        }
+      });
+
+      return result;
+    };
+
     // Process media with formatting
-    const processedMedia = allMedia.map((media) => {
+    const processedMedia = limitedMedia.map((media) => {
       // Calculate formatted duration once
       const formattedDuration = formatDuration(media.duration || 0);
 
@@ -1330,7 +1406,7 @@ app.get("/api/recent/:type", async (req, res) => {
           );
 
           // Now process the template with the enhanced media data
-          formattedData[format.name] = processTemplate(
+          formattedData[format.name] = enhancedProcessTemplate(
             processedTemplate,
             enhancedMedia
           );
@@ -1344,12 +1420,6 @@ app.get("/api/recent/:type", async (req, res) => {
         },
       };
     });
-
-    // Sort by added date (newest first)
-    processedMedia.sort(
-      (a, b) =>
-        parseInt(b.raw_data.added_at || 0) - parseInt(a.raw_data.added_at || 0)
-    );
 
     res.json({
       total: processedMedia.length,

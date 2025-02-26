@@ -3,8 +3,8 @@ import { useQuery } from "react-query";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { useConfig } from "../../context/ConfigContext";
-import { Trash2, Code, Plus, Variable } from "lucide-react";
-import { formatDuration } from "./duration-formatter"; // Import the new formatter
+import { Trash2, Code, Plus, Variable, AlertCircle } from "lucide-react";
+import { formatDuration } from "./duration-formatter";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
@@ -158,7 +158,7 @@ const FormatCard = ({ format, onDelete, previewValue, sections }) => {
           </p>
         </div>
         <button
-          onClick={() => onDelete(format.name)}
+          onClick={() => onDelete(format)}
           className="text-gray-400 hover:text-red-400 p-1.5 hover:bg-red-400/10 rounded-lg transition-colors"
         >
           <Trash2 size={16} />
@@ -278,7 +278,6 @@ const formatDate = (timestamp, format = "default") => {
 };
 
 // Helper function for processing templates
-// Helper function for processing templates
 const processTemplate = (template, data) => {
   if (!template) return "";
 
@@ -303,16 +302,25 @@ const processTemplate = (template, data) => {
       // Prioritize formatted_duration if available
       value = data.formatted_duration || formatDuration(Number(data[key]) || 0);
     }
-    // Special handling for show episode formatting
-    else if (data.mediaType === "show" || data.media_type === "show") {
-      if (key === "parent_media_index") {
-        value = `S${String(data[key] || "0").padStart(2, "0")}`;
-      } else if (key === "media_index") {
-        value = `E${String(data[key] || "0").padStart(2, "0")}`;
-      } else {
-        value = data[key];
+    // Special handling for season and episode numbers - always show as 2 digits
+    else if (key === "parent_media_index" || key === "media_index") {
+      // Ensure all season and episode numbers are padded to 2 digits
+      const rawValue = data[key] || "0";
+      const numberValue =
+        typeof rawValue === "number" ? rawValue : parseInt(rawValue, 10);
+      value = String(numberValue).padStart(2, "0");
+
+      // Add S or E prefix for show episode context
+      if (data.mediaType === "show" || data.media_type === "show") {
+        if (key === "parent_media_index") {
+          value = `S${value}`;
+        } else if (key === "media_index") {
+          value = `E${value}`;
+        }
       }
-    } else {
+    }
+    // Handle all other variables
+    else {
       value = data[key];
     }
 
@@ -338,6 +346,7 @@ const RecentlyAddedFormat = () => {
     sectionId: "all",
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [validationErrors, setValidationErrors] = useState(null);
   const templateInputRef = useRef(null);
 
   // Fetch sections
@@ -580,6 +589,26 @@ const RecentlyAddedFormat = () => {
     }
   };
 
+  // Validate a format to check for duplicates
+  const validateFormat = (formatToCheck, currentFormats) => {
+    // Allow duplicate names for different sections - only check within same sectionId
+    const duplicateFormat = currentFormats.find(
+      (f) =>
+        f.name === formatToCheck.name &&
+        f.type === formatToCheck.type &&
+        f.sectionId === formatToCheck.sectionId
+    );
+
+    if (duplicateFormat) {
+      return {
+        valid: false,
+        error: `A format named "${formatToCheck.name}" already exists for this section. You can use the same name for different sections.`,
+      };
+    }
+
+    return { valid: true };
+  };
+
   const handleAddFormat = async () => {
     if (newFormat.name && newFormat.template && newFormat.type) {
       const newFormatItem = {
@@ -590,18 +619,22 @@ const RecentlyAddedFormat = () => {
       };
 
       try {
+        setValidationErrors(null);
+
         // Get current formats
         const response = await fetch(`${API_BASE_URL}/api/formats`);
         const data = await response.json();
         const currentFormats = data.recentlyAdded || [];
 
+        // Validate the new format
+        const validation = validateFormat(newFormatItem, currentFormats);
+        if (!validation.valid) {
+          setValidationErrors(validation.error);
+          return;
+        }
+
         // Create a new array of formats
-        const updatedFormats = [
-          ...currentFormats.filter(
-            (f) => f.type !== activeMediaType || f.name !== newFormatItem.name
-          ),
-          newFormatItem,
-        ];
+        const updatedFormats = [...currentFormats, newFormatItem];
 
         // Save formats
         const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
@@ -619,7 +652,7 @@ const RecentlyAddedFormat = () => {
           throw new Error("Failed to save format");
         }
 
-        // Update local state
+        // Update local state with formats of the current media type
         setFormats(updatedFormats.filter((f) => f.type === activeMediaType));
 
         toast.success(`Format created successfully`);
@@ -638,17 +671,21 @@ const RecentlyAddedFormat = () => {
     }
   };
 
-  const handleDeleteFormat = async (formatName) => {
+  const handleDeleteFormat = async (formatToDelete) => {
     try {
       // Get current formats
       const response = await fetch(`${API_BASE_URL}/api/formats`);
       const data = await response.json();
       const currentFormats = data.recentlyAdded || [];
 
-      // Remove the specific format
+      // Remove the specific format by matching name, type AND sectionId
       const updatedFormats = currentFormats.filter(
         (format) =>
-          !(format.name === formatName && format.type === activeMediaType)
+          !(
+            format.name === formatToDelete.name &&
+            format.type === formatToDelete.type &&
+            format.sectionId === formatToDelete.sectionId
+          )
       );
 
       // Save updated formats
@@ -747,6 +784,7 @@ const RecentlyAddedFormat = () => {
             onClick={() => {
               setActiveMediaType(type);
               setNewFormat((prev) => ({ ...prev, type }));
+              setValidationErrors(null);
             }}
             className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
               activeMediaType === type
@@ -802,14 +840,18 @@ const RecentlyAddedFormat = () => {
             <input
               type="text"
               value={newFormat.name}
-              onChange={(e) =>
-                setNewFormat({ ...newFormat, name: e.target.value })
-              }
+              onChange={(e) => {
+                setNewFormat({ ...newFormat, name: e.target.value });
+                setValidationErrors(null);
+              }}
               className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-4 py-3
                 focus:ring-2 focus:ring-brand-primary-500 focus:border-brand-primary-500 
                 transition-all duration-200"
               placeholder="e.g., Custom Recently Added Format"
             />
+            <p className="text-green-400 text-xs mt-2">
+              You can reuse the same format name for different sections
+            </p>
           </div>
 
           <div>
@@ -818,9 +860,10 @@ const RecentlyAddedFormat = () => {
             </label>
             <select
               value={newFormat.sectionId}
-              onChange={(e) =>
-                setNewFormat({ ...newFormat, sectionId: e.target.value })
-              }
+              onChange={(e) => {
+                setNewFormat({ ...newFormat, sectionId: e.target.value });
+                setValidationErrors(null);
+              }}
               className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-4 py-3
                 focus:ring-2 focus:ring-brand-primary-500 focus:border-brand-primary-500 
                 transition-all duration-200"
@@ -865,6 +908,16 @@ const RecentlyAddedFormat = () => {
               relative, full, time
             </p>
           </div>
+
+          {/* Validation Error */}
+          {validationErrors && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-red-400">
+                <AlertCircle size={16} />
+                <p className="text-sm">{validationErrors}</p>
+              </div>
+            </div>
+          )}
 
           {/* Live Preview */}
           {newFormat.template && (
@@ -915,9 +968,9 @@ const RecentlyAddedFormat = () => {
 
               return (
                 <FormatCard
-                  key={index}
+                  key={`${format.name}-${format.sectionId}-${index}`}
                   format={format}
-                  onDelete={() => handleDeleteFormat(format.name)}
+                  onDelete={handleDeleteFormat}
                   previewValue={previewValue}
                   sections={sections}
                 />
