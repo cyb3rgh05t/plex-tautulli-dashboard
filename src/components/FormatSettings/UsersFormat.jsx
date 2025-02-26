@@ -32,6 +32,11 @@ const BASE_VARIABLES = [
     name: "last_seen_formatted",
     description: "Pre-formatted last seen time (e.g., '2 hrs ago')",
   },
+  {
+    name: "is_online",
+    description:
+      "Shows a green dot (🟢) if user is currently watching something",
+  },
   { name: "is_active", description: "User's active status (true/false)" },
   {
     name: "is_watching",
@@ -45,10 +50,6 @@ const BASE_VARIABLES = [
   },
   { name: "progress_time", description: "Current viewing progress time" },
   { name: "last_played", description: "Title of last played content" },
-  {
-    name: "last_played_modified",
-    description: "Modified status of last played content",
-  },
 ];
 
 const MOVIE_VARIABLES = [
@@ -237,6 +238,7 @@ const formatState = (state) => {
   return state;
 };
 
+// Template processing function for user format variables
 const processTemplate = (template, data) => {
   if (!template || !data) return "";
 
@@ -279,6 +281,11 @@ const processTemplate = (template, data) => {
                 ? formatDate(combinedData.last_seen, "relative")
                 : "Never");
           }
+          break;
+
+        case "is_online":
+          // Simply use the is_online value which will be the green dot emoji if watching
+          value = combinedData.is_online || "";
           break;
 
         case "is_active":
