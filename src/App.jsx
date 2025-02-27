@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  BrowserRouter as Router,
+  HashRouter as Router, // Changed from BrowserRouter to HashRouter
   Routes,
   Route,
   Navigate,
@@ -98,7 +98,6 @@ const ProtectedRoute = ({ children }) => {
   const [isPreloading, setIsPreloading] = useState(true);
   const queryClient = useQueryClient();
   const hasPreloaded = useRef(false);
-  const navigate = useNavigate();
 
   useEffect(() => {
     if (!isLoading && isConfigured() && !hasPreloaded.current) {

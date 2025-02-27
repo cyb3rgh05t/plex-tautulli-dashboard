@@ -35,11 +35,16 @@ const Settings = ({ onClose }) => {
   const [activeSubTab, setActiveSubTab] = useState("api");
 
   const handleApiDocumentationClick = () => {
-    // Dispatch custom event to change tab
-    window.dispatchEvent(
-      new CustomEvent("changeTab", { detail: "apiEndpoints" })
-    );
+    // Close settings first
     onClose();
+
+    // Try to use the routerNavigate function if available
+    if (window.routerNavigate && typeof window.routerNavigate === "function") {
+      window.routerNavigate("/api-endpoints");
+    } else {
+      // Fallback to directly modifying the URL
+      window.location.href = "/api-endpoints";
+    }
   };
 
   return (
