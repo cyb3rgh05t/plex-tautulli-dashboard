@@ -92,7 +92,18 @@ const DashboardLayout = () => {
   }, [navigate]);
 
   // Get the current path without the leading slash
-  const currentPath = location.pathname.substring(1);
+  // Important: Adjusted for HashRouter's pathname format
+  const getCurrentPath = () => {
+    // With HashRouter, pathname will be like "#/activities" instead of "/activities"
+    // We need to handle this appropriately
+    const path = location.pathname;
+
+    // If the path is empty, we're at the root
+    if (path === "/") return "";
+
+    // Otherwise, return the path without leading slash
+    return path.substring(1);
+  };
 
   // Create memoized navigation handlers to prevent unnecessary rerenders
   const navigateTo = useCallback(
@@ -106,7 +117,7 @@ const DashboardLayout = () => {
     [navigate, location.pathname]
   );
 
-  // Check active route
+  // Check active route - updated for HashRouter
   const isActiveRoute = useCallback(
     (path) => {
       return location.pathname === path;
