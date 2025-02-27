@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { FaGithub } from "react-icons/fa";
 import Settings from "../Settings/Settings";
+import ThemeSelector from "../common/ThemeSelector"; // Import the ThemeSelector
 
 // Update the TabButton to ensure proper navigation
 const TabButton = ({ active, onClick, children, icon: Icon }) => {
@@ -138,8 +139,20 @@ const DashboardLayout = () => {
   }, [config, isConfigured]);
 
   return (
-    <div className="min-h-screen bg-gray-900 bg-[radial-gradient(at_0%_0%,rgba(0,112,243,0.1)_0px,transparent_50%),radial-gradient(at_98%_100%,rgba(82,0,243,0.1)_0px,transparent_50%)]">
-      <header className="bg-gray-800/90 backdrop-blur-sm border-b border-gray-700/50 shadow-xl">
+    <div
+      className="min-h-screen"
+      style={{
+        backgroundColor: "var(--background-color)",
+        backgroundImage: "var(--background-gradient)",
+      }}
+    >
+      <header
+        className="backdrop-blur-sm border-b shadow-xl"
+        style={{
+          backgroundColor: "var(--color-dark-100, #2d3748)",
+          borderColor: "var(--color-dark-200, #4a5568)",
+        }}
+      >
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
@@ -169,6 +182,11 @@ const DashboardLayout = () => {
                   type="Tautulli"
                   icon={Database}
                 />
+              </div>
+
+              {/* Add Theme Selector here with improved positioning */}
+              <div style={{ position: "relative", zIndex: 50 }}>
+                <ThemeSelector />
               </div>
 
               <a
@@ -242,7 +260,14 @@ const DashboardLayout = () => {
         </div>
 
         {/* Content */}
-        <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6 shadow-lg">
+        <div
+          className="backdrop-blur-sm rounded-xl p-6 shadow-lg"
+          style={{
+            backgroundColor: "var(--color-dark-100, #2d3748)",
+            borderColor: "var(--color-dark-200, #4a5568)",
+            border: "1px solid var(--color-dark-200, #4a5568)",
+          }}
+        >
           <Outlet />
         </div>
       </main>

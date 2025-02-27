@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
+import { useTheme } from "../../context/ThemeContext";
 import { logError } from "../../utils/logger";
 import * as Icons from "lucide-react";
 
@@ -11,28 +12,28 @@ const ActivityBadge = ({ type }) => {
       icon: Icons.Download,
       bg: "bg-brand-primary-500/10",
       text: "text-brand-primary-400",
-      border: "border-brand-primary-500/20",
+      border: "border-brand-primary-400",
       label: "Downloading....",
     },
     transcode: {
       icon: Icons.Play,
       bg: "bg-green-500/10",
       text: "text-green-400",
-      border: "border-green-500/20",
+      border: "border-green-400",
       label: "Transcoding...",
     },
     stream: {
       icon: Icons.Play,
       bg: "bg-purple-500/10",
       text: "text-purple-400",
-      border: "border-purple-500/20",
+      border: "border-purple-400",
       label: "Streaming...",
     },
     pause: {
       icon: Icons.Pause,
       bg: "bg-yellow-500/10",
       text: "text-yellow-400",
-      border: "border-yellow-500/20",
+      border: "border-yellow-400",
       label: "Paused",
     },
   };
@@ -166,6 +167,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
 
 const PlexActivity = () => {
   const { config } = useConfig();
+  const { theme } = useTheme();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
   const refreshInterval = useRef(null);
@@ -225,6 +227,14 @@ const PlexActivity = () => {
     setIsRefreshing(false);
     setLastRefreshTime(Date.now());
   };
+
+  // Listen for theme changes
+  useEffect(() => {
+    // Trigger reflow to ensure styles are updated
+    document.body.style.display = "none";
+    void document.body.offsetHeight;
+    document.body.style.display = "";
+  }, [theme]);
 
   // Setup auto-refresh interval on component mount
   useEffect(() => {
@@ -303,10 +313,10 @@ const PlexActivity = () => {
         <button
           onClick={handleRefresh}
           disabled={isRefreshing}
-          className={`px-4 py-2 rounded-lg bg-brand-primary-500/10 text-brand-primary-400 
-            border border-brand-primary-500/20 hover:bg-brand-primary-500/20 
+          className={`px-4 py-2 rounded-lg bg-gray-800/50 text-brand-primary-400 
+            border border-brand-primary-400 hover:bg-gray-700/50 
             transition-all duration-200 flex items-center gap-2
-            disabled:opacity-50 disabled:cursor-not-allowed`}
+            disabled:opacity-50 disabled:cursor-not-allowed themed-button`}
         >
           <Icons.RefreshCw
             size={16}

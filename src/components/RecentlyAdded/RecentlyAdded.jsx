@@ -438,10 +438,10 @@ const RecentlyAdded = () => {
         <button
           onClick={handleRefresh}
           disabled={isRefreshing}
-          className={`px-4 py-2 rounded-lg bg-brand-primary-500/10 text-brand-primary-400 
-            border border-brand-primary-500/20 hover:bg-brand-primary-500/20 
+          className={`px-4 py-2 rounded-lg bg-gray-800/50 text-brand-primary-400 
+            border border-brand-primary-400 hover:bg-gray-700/50 
             transition-all duration-200 flex items-center gap-2
-            disabled:opacity-50 disabled:cursor-not-allowed`}
+            disabled:opacity-50 disabled:cursor-not-allowed themed-button`}
         >
           <Icons.RefreshCw
             size={16}

@@ -10,6 +10,7 @@ import {
 import { QueryClient, QueryClientProvider, useQueryClient } from "react-query";
 import { Toaster } from "react-hot-toast";
 import { ConfigProvider, useConfig } from "./context/ConfigContext";
+import { ThemeProvider } from "./context/ThemeContext";
 import SetupWizard from "./components/SetupWizard/SetupWizard";
 import DashboardLayout from "./components/Layout/DashboardLayout";
 import LoadingScreen from "./components/common/LoadingScreen";
@@ -98,7 +99,6 @@ const ProtectedRoute = ({ children }) => {
   const [isPreloading, setIsPreloading] = useState(true);
   const queryClient = useQueryClient();
   const hasPreloaded = useRef(false);
-  const navigate = useNavigate();
 
   useEffect(() => {
     if (!isLoading && isConfigured() && !hasPreloaded.current) {
@@ -163,51 +163,48 @@ const AppRoutes = () => {
   const [setupComplete, setSetupComplete] = useState(false);
 
   return (
-    <>
-      <SetupCompletionHandler onComplete={() => setSetupComplete(true)} />
-      <Routes>
-        <Route path="/setup" element={<SetupWizard />} />
+    <Routes>
+      <Route path="/setup" element={<SetupWizard />} />
 
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Navigate to="/activities" replace />} />
-          <Route path="activities" element={<PlexActivity />} />
-          <Route path="recent" element={<RecentlyAdded />} />
-          <Route path="libraries" element={<Libraries />} />
-          <Route path="users" element={<Users />} />
-          <Route path="format" element={<FormatSettings />} />
-          <Route path="api-endpoints" element={<ApiEndpoints />} />
-        </Route>
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="/activities" replace />} />
+        <Route path="activities" element={<PlexActivity />} />
+        <Route path="recent" element={<RecentlyAdded />} />
+        <Route path="libraries" element={<Libraries />} />
+        <Route path="users" element={<Users />} />
+        <Route path="format" element={<FormatSettings />} />
+        <Route path="api-endpoints" element={<ApiEndpoints />} />
+      </Route>
 
-        <Route
-          path="*"
-          element={
-            <div className="flex items-center justify-center h-screen">
-              <div className="text-center">
-                <h1 className="text-3xl font-bold text-red-500 mb-4">
-                  Page Not Found
-                </h1>
-                <p className="text-gray-400 mb-6">
-                  The page you're looking for doesn't exist.
-                </p>
-                <button
-                  onClick={() => (window.location.href = "/")}
-                  className="px-4 py-2 bg-brand-primary-500 text-white rounded-lg"
-                >
-                  Go to Dashboard
-                </button>
-              </div>
+      <Route
+        path="*"
+        element={
+          <div className="flex items-center justify-center h-screen">
+            <div className="text-center">
+              <h1 className="text-3xl font-bold text-red-500 mb-4">
+                Page Not Found
+              </h1>
+              <p className="text-gray-400 mb-6">
+                The page you're looking for doesn't exist.
+              </p>
+              <button
+                onClick={() => (window.location.href = "/")}
+                className="px-4 py-2 bg-brand-primary-500 text-white rounded-lg"
+              >
+                Go to Dashboard
+              </button>
             </div>
-          }
-        />
-      </Routes>
-    </>
+          </div>
+        }
+      />
+    </Routes>
   );
 };
 
@@ -216,41 +213,43 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <ConfigProvider>
-        <Router>
-          <AppRoutes />
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 3000,
-              style: {
-                background: "#1F2937",
-                color: "#fff",
-              },
-              success: {
+        <ThemeProvider>
+          <Router>
+            <AppRoutes />
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                duration: 3000,
                 style: {
-                  border: "1px solid #059669",
-                  padding: "16px",
-                  background: "#064E3B",
+                  background: "#1F2937",
+                  color: "#fff",
                 },
-                iconTheme: {
-                  primary: "#10B981",
-                  secondary: "#fff",
+                success: {
+                  style: {
+                    border: "1px solid #059669",
+                    padding: "16px",
+                    background: "#064E3B",
+                  },
+                  iconTheme: {
+                    primary: "#10B981",
+                    secondary: "#fff",
+                  },
                 },
-              },
-              error: {
-                style: {
-                  border: "1px solid #DC2626",
-                  padding: "16px",
-                  background: "#7F1D1D",
+                error: {
+                  style: {
+                    border: "1px solid #DC2626",
+                    padding: "16px",
+                    background: "#7F1D1D",
+                  },
+                  iconTheme: {
+                    primary: "#EF4444",
+                    secondary: "#fff",
+                  },
                 },
-                iconTheme: {
-                  primary: "#EF4444",
-                  secondary: "#fff",
-                },
-              },
-            }}
-          />
-        </Router>
+              }}
+            />
+          </Router>
+        </ThemeProvider>
       </ConfigProvider>
     </QueryClientProvider>
   );

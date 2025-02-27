@@ -83,6 +83,7 @@ const Libraries = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
   const refreshInterval = useRef(null);
+  const initialFetchDone = useRef(false);
   const REFRESH_INTERVAL = 600000; // 10 minutes in milliseconds
 
   // Fetch saved sections on component mount
@@ -138,6 +139,9 @@ const Libraries = () => {
   const fetchLibraries = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/libraries`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       const data = await response.json();
       return data.libraries;
     } catch (error) {
@@ -153,19 +157,108 @@ const Libraries = () => {
     refetch,
   } = useQuery(["libraries"], fetchLibraries, {
     enabled: !!config.tautulliApiKey,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true, // Enable refetch on window focus for page reloads
+    refetchOnMount: true, // Always refetch when component mounts
+    refetchOnReconnect: true, // Refetch on network reconnection
     staleTime: 300000, // 5 minutes
   });
 
   const handleRefresh = async () => {
     // Prevent multiple refreshes happening at once
-    if (isRefreshing) return;
+    if (isRefreshing) {
+      console.log("Skipping refresh - already in progress");
+      return;
+    }
 
+    console.log("Starting libraries refresh");
     setIsRefreshing(true);
-    await refetch();
-    setIsRefreshing(false);
-    setLastRefreshTime(Date.now());
+    try {
+      const result = await refetch();
+      console.log("Libraries refresh completed:", {
+        success: !!result,
+        libraryCount: result?.length || 0,
+      });
+    } catch (err) {
+      console.error("Error refreshing libraries:", err);
+      // Try a direct fetch as fallback if refetch fails
+      try {
+        console.log("Attempting direct fetch as fallback");
+        const response = await fetch(`${API_BASE_URL}/api/libraries`);
+        const data = await response.json();
+        if (data && data.libraries) {
+          console.log(
+            "Direct fetch succeeded with",
+            data.libraries.length,
+            "libraries"
+          );
+        }
+      } catch (fallbackErr) {
+        console.error("Fallback fetch also failed:", fallbackErr);
+      }
+    } finally {
+      setIsRefreshing(false);
+      setLastRefreshTime(Date.now());
+      initialFetchDone.current = true;
+    }
   };
+
+  // Add a ref to detect initial render vs page reload
+  const isFirstRender = useRef(true);
+
+  // Initial fetch when component mounts - with page reload detection
+  useEffect(() => {
+    // Always fetch on first visit to ensure data loads
+    if (config.tautulliApiKey) {
+      // This is more reliable for detecting when we need to load data
+      const shouldFetch =
+        !initialFetchDone.current || // Not fetched yet
+        !libraries?.length || // No data available
+        isFirstRender.current; // First render after navigation/reload
+
+      if (shouldFetch) {
+        console.log("Libraries - triggering data fetch on mount");
+        // Small timeout to ensure component is fully mounted and React Query is ready
+        setTimeout(() => {
+          handleRefresh();
+          isFirstRender.current = false;
+        }, 300);
+      }
+    }
+
+    // Return cleanup that forces refresh on next mount
+    return () => {
+      initialFetchDone.current = false;
+    };
+  }, [config.tautulliApiKey]);
+
+  // Additional useEffect specifically for page reloads
+  useEffect(() => {
+    // Add event listener for page visibility changes (handles page reload)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        console.log("Page became visible - checking if libraries need refresh");
+        if (!libraries?.length) {
+          console.log("No libraries data after visibility change - refreshing");
+          handleRefresh();
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Also handle focus events, which can occur on page reload
+    window.addEventListener("focus", () => {
+      console.log("Window focus event - checking library data");
+      if (!libraries?.length) {
+        handleRefresh();
+      }
+    });
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", () => {});
+    };
+  }, [libraries]);
 
   // Setup auto-refresh interval
   useEffect(() => {
@@ -270,10 +363,10 @@ const Libraries = () => {
           <button
             onClick={handleSaveSections}
             disabled={selectedLibraries.size === 0 || isSaving}
-            className={`px-4 py-2 rounded-lg bg-brand-primary-500/10 text-brand-primary-400 
-              border border-brand-primary-500/20 hover:bg-brand-primary-500/20 
+            className={`px-4 py-2 rounded-lg bg-gray-800/50 text-brand-primary-400 
+              border border-brand-primary-400 hover:bg-gray-700/50 
               transition-all duration-200 flex items-center gap-2
-              disabled:opacity-50 disabled:cursor-not-allowed`}
+              disabled:opacity-50 disabled:cursor-not-allowed themed-button`}
           >
             {isSaving ? (
               <>
@@ -290,10 +383,10 @@ const Libraries = () => {
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className={`px-4 py-2 rounded-lg bg-brand-primary-500/10 text-brand-primary-400 
-              border border-brand-primary-500/20 hover:bg-brand-primary-500/20 
+            className={`px-4 py-2 rounded-lg bg-gray-800/50 text-brand-primary-400 
+              border border-brand-primary-400 hover:bg-gray-700/50 
               transition-all duration-200 flex items-center gap-2
-              disabled:opacity-50 disabled:cursor-not-allowed`}
+              disabled:opacity-50 disabled:cursor-not-allowed themed-button`}
           >
             <RefreshCw
               size={16}
