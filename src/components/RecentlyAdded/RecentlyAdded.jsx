@@ -1,8 +1,14 @@
+// with theme styling applied
+
 import React, { useState, useEffect, useRef } from "react";
 import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
 import * as Icons from "lucide-react";
 import MediaModal from "./MediaModal";
+import ThemedButton from "../common/ThemedButton";
+import ThemedCard from "../common/ThemedCard";
+import { useTheme } from "../../context/ThemeContext";
+import axios from "axios";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
@@ -11,44 +17,60 @@ const MediaCard = ({ media }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [resolution, setResolution] = useState(null);
 
-  // Add safety check for media_type
-  const getMediaType = () => {
-    return media.media_type && typeof media.media_type === "string"
-      ? media.media_type.toLowerCase()
-      : "unknown";
-  };
+  // Fetch resolution metadata
+  useEffect(() => {
+    const fetchResolution = async () => {
+      try {
+        const response = await axios.get(
+          `${API_BASE_URL}/api/tautulli/api/v2`,
+          {
+            params: {
+              apikey: media.apiKey,
+              cmd: "get_metadata",
+              rating_key: media.rating_key,
+            },
+          }
+        );
 
-  const getThumbnailUrl = (media, apiKey) => {
-    let thumbPath;
+        const mediaInfo = response.data?.response?.data?.media_info?.[0];
+        if (mediaInfo) {
+          const videoResolution = mediaInfo.video_full_resolution;
+          setResolution(videoResolution);
+        }
+      } catch (error) {
+        console.error("Failed to fetch resolution:", error);
+      }
+    };
 
-    // Use our safe media type getter
-    const mediaType = getMediaType();
-
-    switch (mediaType) {
-      case "movie":
-        thumbPath = media.parent_thumb;
-        break;
-      case "show":
-        thumbPath = media.parent_thumb;
-        break;
-      case "episode":
-        thumbPath = media.grandparent_thumb;
-        break;
-      case "season":
-        thumbPath = media.grandparent_thumb;
-        break;
-      default:
-        thumbPath = media.thumb;
+    // Only fetch if rating_key exists
+    if (media.rating_key) {
+      fetchResolution();
     }
+  }, [media.rating_key, media.apiKey]);
 
-    if (!thumbPath) {
-      thumbPath = media.thumb;
-    }
+  // Date formatting helper for relative added time
+  const getRelativeAddedTime = (timestamp) => {
+    if (!timestamp) return "Recently";
 
-    return `${API_BASE_URL}/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
-      thumbPath || ""
-    )}&apikey=${apiKey}`;
+    // Convert timestamp to milliseconds if needed
+    const timestampMs =
+      String(timestamp).length === 10 ? timestamp * 1000 : timestamp;
+
+    const now = new Date();
+    const addedDate = new Date(timestampMs);
+    const diffMs = now - addedDate;
+
+    const diffSeconds = Math.floor(diffMs / 1000);
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffSeconds < 60) return "Just now";
+    if (diffMinutes < 60) return `${diffMinutes}m`;
+    if (diffHours < 24) return `${diffHours}h`;
+    return `${diffDays}d`;
   };
 
   const getDisplayTitle = () => {
@@ -90,6 +112,45 @@ const MediaCard = ({ media }) => {
     }
   };
 
+  // Add safety check for media_type
+  const getMediaType = () => {
+    return media.media_type && typeof media.media_type === "string"
+      ? media.media_type.toLowerCase()
+      : "unknown";
+  };
+
+  const getThumbnailUrl = (media, apiKey) => {
+    let thumbPath;
+
+    // Use our safe media type getter
+    const mediaType = getMediaType();
+
+    switch (mediaType) {
+      case "movie":
+        thumbPath = media.parent_thumb;
+        break;
+      case "show":
+        thumbPath = media.parent_thumb;
+        break;
+      case "episode":
+        thumbPath = media.grandparent_thumb;
+        break;
+      case "season":
+        thumbPath = media.grandparent_thumb;
+        break;
+      default:
+        thumbPath = media.thumb;
+    }
+
+    if (!thumbPath) {
+      thumbPath = media.thumb;
+    }
+
+    return `${API_BASE_URL}/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
+      thumbPath || ""
+    )}&apikey=${apiKey}`;
+  };
+
   return (
     <>
       <div
@@ -99,13 +160,15 @@ const MediaCard = ({ media }) => {
         <div
           className="relative aspect-[2/3] rounded-xl overflow-hidden 
           bg-gray-800/50 border border-gray-700/50 
-          group-hover:border-brand-primary-500/50 group-hover:shadow-lg 
-          group-hover:shadow-brand-primary-500/10 transition-all duration-200"
+          group-hover:border-accent group-hover:shadow-accent-lg
+          transition-all duration-200"
         >
           {/* Loading State */}
           {imageLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-800/50 backdrop-blur-sm">
-              <div className="w-8 h-8 border-2 border-brand-primary-500/20 border-t-brand-primary-500 rounded-full animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center bg-modal backdrop-blur-sm">
+              <div className="animate-spin mr-2">
+                <Icons.Loader2 className="h-8 w-8 text-accent-base" />
+              </div>
             </div>
           )}
 
@@ -127,7 +190,7 @@ const MediaCard = ({ media }) => {
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-800/50">
               <Icons.Film size={32} className="text-gray-500 mb-2" />
-              <span className="text-gray-400 text-sm">No Preview</span>
+              <span className="text-theme-muted text-sm">No Preview</span>
             </div>
           )}
 
@@ -143,14 +206,26 @@ const MediaCard = ({ media }) => {
 
           {/* Badges */}
           <div className="absolute top-2 right-2 flex flex-col gap-1">
-            {media.video_full_resolution && (
+            {/* Added Time Badge */}
+            <div
+              className="px-2 py-1 bg-gray-900/70 backdrop-blur-sm rounded-lg 
+              border border-gray-700/50 text-theme-muted text-xs font-medium 
+              flex items-center gap-1"
+            >
+              <Icons.Clock3 size={12} />
+              {getRelativeAddedTime(media.added_at)}
+            </div>
+
+            {/* Resolution Badge */}
+            {resolution && (
               <div
-                className="px-2 py-1 bg-brand-primary-500/20 backdrop-blur-sm rounded-lg 
-                border border-brand-primary-500/20 text-brand-primary-400 text-xs font-medium"
+                className="px-2 py-1 bg-accent-base/20 backdrop-blur-sm rounded-lg 
+                border border-accent/20 text-accent-base text-xs font-medium"
               >
-                {media.video_full_resolution}
+                {resolution}
               </div>
             )}
+
             {media.rating && (
               <div
                 className="px-2 py-1 bg-yellow-500/20 backdrop-blur-sm rounded-lg 
@@ -169,11 +244,9 @@ const MediaCard = ({ media }) => {
           <h3 className="text-white font-medium truncate">
             {getDisplayTitle()}
           </h3>
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-sm accent-base">
             {getDisplaySubtitle() && (
-              <span className="text-brand-primary-400">
-                {getDisplaySubtitle()}
-              </span>
+              <span className="text-accent-base">{getDisplaySubtitle()}</span>
             )}
             {media.duration && (
               <div className="flex items-center gap-1 text-gray-400">
@@ -199,10 +272,10 @@ const MediaCard = ({ media }) => {
 
 const LoadingCard = () => (
   <div className="space-y-2 animate-pulse">
-    <div className="aspect-[2/3] rounded-xl bg-gray-800/50 border border-gray-700/50" />
+    <div className="aspect-[2/3] rounded-xl bg-modal border border-gray-700/50" />
     <div className="space-y-2 px-1">
-      <div className="h-4 bg-gray-800/50 rounded w-3/4" />
-      <div className="h-3 bg-gray-800/50 rounded w-1/2" />
+      <div className="h-4 bg-modal rounded w-3/4" />
+      <div className="h-3 bg-modal rounded w-1/2" />
     </div>
   </div>
 );
@@ -248,11 +321,11 @@ const EmptySection = ({ type }) => {
   const { icon: Icon, message, hint } = getEmptyMessage();
 
   return (
-    <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-8 text-center flex flex-col items-center">
+    <ThemedCard className="p-8 text-center flex flex-col items-center">
       <Icon size={32} className="text-gray-500 mb-3" />
-      <p className="text-gray-400 font-medium mb-1">{message}</p>
-      <p className="text-sm text-gray-500">{hint}</p>
-    </div>
+      <p className="text-theme-muted font-medium mb-1">{message}</p>
+      <p className="text-sm text-theme-muted">{hint}</p>
+    </ThemedCard>
   );
 };
 
@@ -265,6 +338,77 @@ const getTypePriority = (type) => {
   return 4; // other types
 };
 
+const MediaTypeSubTab = ({ active, onClick, icon: Icon, children }) => (
+  <button
+    onClick={onClick}
+    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+      active
+        ? "bg-accent-light text-accent-base"
+        : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+    }`}
+  >
+    {Icon && <Icon size={16} />}
+    {children}
+  </button>
+);
+
+// Updated NoLibrariesCard component with centered layout
+
+const NoLibrariesCard = ({ type }) => {
+  const typeIcons = {
+    movies: Icons.Film,
+    shows: Icons.Tv,
+    music: Icons.Music,
+  };
+
+  const typeDescriptions = {
+    movies: "movie libraries",
+    shows: "TV show libraries",
+    music: "music libraries",
+  };
+
+  const Icon = typeIcons[type] || Icons.Library;
+  const description = typeDescriptions[type] || "media libraries";
+
+  return (
+    <div className="flex items-center justify-center min-h-[300px] bg-green-900/20 border border-green-500/30 rounded-xl p-8">
+      <div className="text-center">
+        <div className="flex justify-center mb-4">
+          <Icon size={48} className="text-green-500 opacity-70" />
+        </div>
+        <h3 className="text-green-400 text-xl font-semibold mb-2">
+          No {description} have been saved yet
+        </h3>
+        <p className="text-green-300 text-sm max-w-md mx-auto mb-6">
+          Visit the Libraries tab to add and configure your {description}.
+          Select the libraries you want to display in the Recently Added
+          section.
+        </p>
+        <ThemedButton
+          onClick={() => {
+            // Multiple navigation methods
+            window.dispatchEvent(new CustomEvent("navigateToLibraries"));
+
+            // Fallback navigation methods
+            if (
+              window.routerNavigate &&
+              typeof window.routerNavigate === "function"
+            ) {
+              window.routerNavigate("/#/libraries");
+            } else if (window.location) {
+              window.location.href = "/#/libraries";
+            }
+          }}
+          variant="accent"
+          icon={Icons.Library}
+        >
+          Go to Libraries
+        </ThemedButton>
+      </div>
+    </div>
+  );
+};
+
 const RecentlyAdded = () => {
   const { config } = useConfig();
   const [sections, setSections] = useState([]);
@@ -275,6 +419,9 @@ const RecentlyAdded = () => {
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
   const refreshInterval = useRef(null);
   const REFRESH_INTERVAL = 600000; // 10 minutes in milliseconds
+
+  // New state for media type filtering
+  const [activeMediaTypeFilter, setActiveMediaTypeFilter] = useState("all");
 
   // Fetch saved sections
   const fetchSections = async () => {
@@ -402,12 +549,55 @@ const RecentlyAdded = () => {
   const remainingSeconds = secondsUntilRefresh % 60;
   const formattedTimeUntilRefresh = `${minutesUntilRefresh}`;
 
-  // Sort sections by media type: Movies, Shows, Music
   const getSortedSectionEntries = () => {
-    return Object.entries(sectionMedia).sort((a, b) => {
+    const allEntries = Object.entries(sectionMedia);
+
+    // Filter based on media type
+    const filteredEntries = allEntries.filter(([_, sectionData]) => {
+      // Check if no filter is selected or matches current media type
+      if (activeMediaTypeFilter === "all") return true;
+
+      const sectionType = (
+        sectionData.type ||
+        sectionData.section_type ||
+        "unknown"
+      ).toLowerCase();
+
+      // Map filter to actual type
+      const typeMap = {
+        movies: "movie",
+        shows: "show",
+        music: "artist",
+      };
+
+      return sectionType === typeMap[activeMediaTypeFilter];
+    });
+
+    // Sort as before
+    return filteredEntries.sort((a, b) => {
       const typeA = a[1]?.type || a[1]?.section_type || "unknown";
       const typeB = b[1]?.type || b[1]?.section_type || "unknown";
       return getTypePriority(typeA) - getTypePriority(typeB);
+    });
+  };
+
+  // Check if there are any sections for the current media type filter
+  const hasSectionsForCurrentFilter = () => {
+    const typeMap = {
+      movies: "movie",
+      shows: "show",
+      music: "artist",
+    };
+
+    if (activeMediaTypeFilter === "all") return sections.length > 0;
+
+    return sections.some((section) => {
+      const sectionType = (
+        section.type ||
+        section.section_type ||
+        "unknown"
+      ).toLowerCase();
+      return sectionType === typeMap[activeMediaTypeFilter];
     });
   };
 
@@ -420,63 +610,94 @@ const RecentlyAdded = () => {
           </h2>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
-              <Icons.Film size={14} className="text-brand-primary-400" />
-              <span className="text-gray-400 text-sm">
+              <Icons.Film size={14} className="text-accent-base" />
+              <span className="text-theme-muted text-sm">
                 {sections.length} Sections
               </span>
             </div>
             {isRefreshing ? (
-              <span className="text-xs text-gray-500">Refreshing...</span>
+              <span className="text-xs text-theme-muted">Refreshing...</span>
             ) : (
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-theme-muted">
                 Auto-refresh in {formattedTimeUntilRefresh}min
               </span>
             )}
           </div>
         </div>
 
-        <button
+        <ThemedButton
           onClick={handleRefresh}
           disabled={isRefreshing}
-          className={`px-4 py-2 rounded-lg bg-gray-800/50 text-brand-primary-400 
-            border border-brand-primary-400 hover:bg-gray-700/50 
-            transition-all duration-200 flex items-center gap-2
-            disabled:opacity-50 disabled:cursor-not-allowed themed-button`}
+          variant="accent"
+          icon={
+            isRefreshing
+              ? () => <Icons.RefreshCw className="animate-spin" />
+              : Icons.RefreshCw
+          }
         >
-          <Icons.RefreshCw
-            size={16}
-            className={`${isRefreshing ? "animate-spin" : ""}`}
-          />
           {isRefreshing ? "Refreshing..." : "Refresh"}
-        </button>
+        </ThemedButton>
       </div>
 
+      {/* Media Type Subtabs */}
+      <div className="flex gap-2 mb-4">
+        <MediaTypeSubTab
+          active={activeMediaTypeFilter === "all"}
+          onClick={() => setActiveMediaTypeFilter("all")}
+          icon={Icons.Grid}
+        >
+          All Media
+        </MediaTypeSubTab>
+        <MediaTypeSubTab
+          active={activeMediaTypeFilter === "movies"}
+          onClick={() => setActiveMediaTypeFilter("movies")}
+          icon={Icons.Film}
+        >
+          Movies
+        </MediaTypeSubTab>
+        <MediaTypeSubTab
+          active={activeMediaTypeFilter === "shows"}
+          onClick={() => setActiveMediaTypeFilter("shows")}
+          icon={Icons.Tv}
+        >
+          TV Shows
+        </MediaTypeSubTab>
+        <MediaTypeSubTab
+          active={activeMediaTypeFilter === "music"}
+          onClick={() => setActiveMediaTypeFilter("music")}
+          icon={Icons.Music}
+        >
+          Music
+        </MediaTypeSubTab>
+      </div>
+
+      {/* Existing rendering logic remains the same */}
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center flex flex-col items-center">
+        <ThemedCard className="bg-red-500/10 border-red-500/20 p-6 text-center flex flex-col items-center">
           <Icons.AlertCircle size={24} className="text-red-400 mb-2" />
           <p className="text-red-400">{error}</p>
-          <button
+          <ThemedButton
             onClick={handleRefresh}
-            className="mt-4 px-4 py-2 bg-red-500/10 text-red-400 rounded-lg border border-red-500/20 
-            hover:bg-red-500/20 transition-all duration-200 flex items-center gap-2"
+            className="mt-4"
+            variant="danger"
+            icon={Icons.RefreshCw}
           >
-            <Icons.RefreshCw size={16} />
             Try Again
-          </button>
-        </div>
+          </ThemedButton>
+        </ThemedCard>
       )}
 
       {!sections.length && (
-        <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-8 text-center flex flex-col items-center">
+        <ThemedCard className="p-8 text-center flex flex-col items-center">
           <Icons.Film size={32} className="text-gray-500 mb-3" />
-          <p className="text-gray-400 mb-2">
+          <p className="text-theme-muted mb-2">
             No library sections have been saved yet
           </p>
-          <p className="text-sm text-gray-500 max-w-md mb-4">
+          <p className="text-sm text-theme-muted max-w-md mb-4">
             To get started, visit the Libraries tab and select which sections
             you'd like to display here.
           </p>
-          <button
+          <ThemedButton
             onClick={() => {
               // Multiple navigation methods
               window.dispatchEvent(new CustomEvent("navigateToLibraries"));
@@ -491,14 +712,17 @@ const RecentlyAdded = () => {
                 window.location.href = "/libraries";
               }
             }}
-            className="px-4 py-2 bg-brand-primary-500/10 text-brand-primary-400 rounded-lg border 
-              border-brand-primary-500/20 hover:bg-brand-primary-500/20 transition-all duration-200 
-              flex items-center gap-2"
+            variant="accent"
+            icon={Icons.Library}
           >
-            <Icons.Library size={16} />
             Go to Libraries
-          </button>
-        </div>
+          </ThemedButton>
+        </ThemedCard>
+      )}
+
+      {/* New condition for no libraries of specific type */}
+      {sections.length > 0 && !hasSectionsForCurrentFilter() && (
+        <NoLibrariesCard type={activeMediaTypeFilter} />
       )}
 
       {isLoading ? (
@@ -532,7 +756,7 @@ const RecentlyAdded = () => {
                     {sectionData.name || "Unknown Section"}
                   </h3>
                   <div className="px-2 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
-                    <span className="text-gray-400 text-sm">
+                    <span className="text-theme-muted text-sm">
                       {formattedType}
                     </span>
                   </div>

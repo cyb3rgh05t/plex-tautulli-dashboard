@@ -1,6 +1,9 @@
+// with theme styling applied
+
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useConfig } from "../../context/ConfigContext";
+import { useTheme } from "../../context/ThemeContext"; // Import the theme hook
 import { testPlexConnection } from "../../services/plexService";
 import { testTautulliConnection } from "../../services/tautulliService";
 import { appVersion } from "../../../version";
@@ -14,14 +17,16 @@ import {
   Code,
   Clock,
   SlidersHorizontal,
+  Moon,
+  Sun,
+  Palette,
 } from "lucide-react";
 import { FaGithub } from "react-icons/fa";
 import Settings from "../Settings/Settings";
 import ThemeSelector from "../common/ThemeSelector"; // Import the ThemeSelector
 
-// Update the TabButton to ensure proper navigation
+// Update the TabButton to ensure proper navigation and theme styling
 const TabButton = ({ active, onClick, children, icon: Icon }) => {
-  // Simple button without any additional logic that might interfere
   return (
     <button
       onClick={onClick}
@@ -53,6 +58,21 @@ const ConnectionBadge = ({ status, type, icon: Icon }) => (
     <span className="text-xs font-medium">{type}</span>
   </div>
 );
+
+// Mini theme toggle for header
+const ThemeToggle = () => {
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <button
+      onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+      className="text-gray-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-gray-700/50"
+      title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+    >
+      {theme === "light" ? <Moon size={20} /> : <Sun size={20} />}
+    </button>
+  );
+};
 
 const DashboardLayout = () => {
   const navigate = useNavigate();

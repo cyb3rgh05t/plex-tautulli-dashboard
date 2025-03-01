@@ -1,3 +1,12 @@
+/* src/styles/globals.css */
+/* Import theme CSS files first */
+@import "./themes/base.css";
+@import "./themes/accents.css";
+@import "./themes/variables.css";
+@import "./themes/theme-fixes.css";
+@import "./themes/accent-theme.css";
+
+/* Then include Tailwind directives */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -239,6 +248,29 @@ body {
   scroll-behavior: smooth;
 }
 
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--main-bg-color);
+  color: var(--text);
+}
+
+/* Dashboard gradient background base styles */
+.dashboard-accent-gradient {
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+.dashboard-accent-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
@@ -287,76 +319,58 @@ body {
 }
 
 .animated-gradient-bg {
-  background: var(--gradient-brand);
+  background: linear-gradient(
+    -45deg,
+    rgb(var(--accent-color)),
+    rgb(var(--accent-color), 0.5)
+  );
   background-size: 400% 400%;
   animation: bg-shift 15s ease infinite;
 }
 
-/* Added CSS rules */
-@layer base {
-  * {
-    @apply transition-colors duration-200 ease-in-out;
-  }
-
-  /* Add data-theme attribute to force style recalculation */
-  [data-theme="light"] .themed-button {
-    border-color: var(--color-primary-500) !important;
-  }
-
-  [data-theme="blue"] .themed-button {
-    border-color: #0070f3 !important;
-  }
-
-  [data-theme="purple"] .themed-button {
-    border-color: #7000f3 !important;
-  }
-
-  [data-theme="green"] .themed-button {
-    border-color: #00b467 !important;
-  }
-
-  [data-theme="dark"] .themed-button {
-    border-color: #0070f3 !important;
-  }
+/* Theme-specific overrides for common elements */
+button {
+  color: var(--button-text);
 }
 
-/* Base button styling with themed borders */
-button.themed-button,
-.themed-button {
-  border-color: transparent !important;
-  color: var(--color-primary-400) !important;
+button:hover {
+  color: var(--button-text-hover);
 }
 
-/* Theme-specific border colors */
-html.light .themed-button {
-  border-color: #000000 !important;
+a {
+  color: var(--link-color);
 }
 
-html.blue .themed-button {
-  border-color: transparent !important;
+a:hover {
+  color: var(--link-color-hover);
 }
 
-html.purple .themed-button {
-  border-color: transparent !important;
+/* Reusable themed components */
+.card {
+  @apply bg-gray-800/30 border border-gray-700/50 rounded-xl p-4 hover:bg-gray-800/50 transition-all duration-200;
 }
 
-html.green .themed-button {
-  border-color: transparent !important;
+.input {
+  @apply bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-4 py-2 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent;
 }
 
-/* Progress bars */
-.progress-bar {
-  background-color: var(--color-primary-500) !important;
+.badge {
+  @apply px-2 py-1 text-xs font-medium rounded-full;
 }
 
-html.blue .progress-bar {
-  background-color: #0070f3 !important;
+.badge-accent {
+  @apply bg-accent-light text-accent-base;
 }
 
-html.purple .progress-bar {
-  background-color: #7000f3 !important;
+.btn {
+  @apply px-4 py-2 rounded-lg transition-all duration-200 inline-flex items-center gap-2;
 }
 
-html.green .progress-bar {
-  background-color: #00b467 !important;
+.btn-accent {
+  @apply bg-accent-base text-white shadow-accent-md hover:shadow-accent-lg;
+}
+
+.gradient-overlay {
+  @apply absolute inset-0;
+  background: var(--overseerr-gradient);
 }

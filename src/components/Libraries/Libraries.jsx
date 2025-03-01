@@ -1,9 +1,14 @@
+// with theme styling applied
+
 import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
-import { Film, Tv, Music, Book, RefreshCw, Check, Save } from "lucide-react";
+import * as Icons from "lucide-react";
 import toast from "react-hot-toast";
+import ThemedCard from "../common/ThemedCard";
+import ThemedButton from "../common/ThemedButton";
+import { useTheme } from "../../context/ThemeContext";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
@@ -15,61 +20,82 @@ const capitalizeFirstLetter = (string) => {
 const LibraryTypeIcon = ({ type }) => {
   switch (type.toLowerCase()) {
     case "movie":
-      return <Film className="text-brand-primary-400" />;
+      return <Icons.Film className="text-accent-base" />;
     case "show":
-      return <Tv className="text-green-400" />;
+      return <Icons.Tv className="text-green-400" />;
     case "artist":
-      return <Music className="text-purple-400" />;
+      return <Icons.Music className="text-purple-400" />;
     default:
-      return <Book className="text-yellow-400" />;
+      return <Icons.Book className="text-yellow-400" />;
   }
 };
 
 const LibraryCard = ({ library, isSelected, onToggleSelect }) => {
+  const { accentColor } = useTheme();
+
   // Safely extract section ID and count
   const rawData = library.raw_data || library;
   const sectionId = rawData.section_id;
   const itemCount = rawData.count || rawData.parent_count || 0;
   const libraryType = rawData.section_type || rawData.type;
 
+  // Get RGB value for current accent
+  const getAccentRgb = () => {
+    const accentColorMap = {
+      default: "167, 139, 250",
+      green: "109, 247, 81",
+      purple: "166, 40, 140",
+      orange: "255, 153, 0",
+      blue: "0, 98, 255",
+      red: "232, 12, 11",
+    };
+
+    return accentColorMap[accentColor] || accentColorMap.default;
+  };
+
+  const accentRgb = getAccentRgb();
+
   return (
     <div
-      className={`bg-gray-800/30 hover:bg-gray-800/50 border rounded-xl p-4 transition-all duration-200
-      ${
-        isSelected
-          ? "border-brand-primary-500/50 shadow-lg shadow-brand-primary-500/10"
-          : "border-gray-700/50"
+      className={`transition-all duration-200 rounded-xl p-4 hover:bg-gray-800/50 ${
+        isSelected ? "shadow-accent-md" : ""
       }`}
+      style={{
+        backgroundColor: "rgba(31, 41, 55, 0.5)",
+        border: `1px solid rgba(${accentRgb}, ${isSelected ? "0.5" : "0.3"})`,
+        marginBottom: "1rem",
+      }}
     >
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={() => onToggleSelect(sectionId)}
-            className="w-5 h-5 rounded border-gray-600 bg-gray-700 
-              text-brand-primary-500 focus:ring-brand-primary-500 focus:ring-offset-gray-800"
-          />
-          <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700/50">
-            <LibraryTypeIcon type={libraryType} />
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onToggleSelect(sectionId)}
+              className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-accent-base focus:ring-accent focus:ring-offset-gray-800"
+            />
+            <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700/50">
+              <LibraryTypeIcon type={libraryType} />
+            </div>
+            <div>
+              <h3 className="text-white font-medium">
+                {rawData.section_name || rawData.name}
+              </h3>
+              <p className="text-theme-muted text-sm">
+                Type: {capitalizeFirstLetter(libraryType)}
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-white font-medium">
-              {rawData.section_name || rawData.name}
-            </h3>
-            <p className="text-gray-400 text-sm">
-              Type: {capitalizeFirstLetter(libraryType)}
-            </p>
+          <div className="text-right">
+            <div className="bg-gray-800/50 px-3 py-1 rounded-lg border border-gray-700/50">
+              <span className="text-theme-muted text-sm">Items: </span>
+              <span className="text-accent-base font-medium">
+                {itemCount.toLocaleString()}
+              </span>
+            </div>
+            <p className="text-theme-muted text-xs mt-1">ID: {sectionId}</p>
           </div>
-        </div>
-        <div className="text-right">
-          <div className="bg-gray-800/50 px-3 py-1 rounded-lg border border-gray-700/50">
-            <span className="text-gray-400 text-sm">Items: </span>
-            <span className="text-brand-primary-400 font-medium">
-              {itemCount.toLocaleString()}
-            </span>
-          </div>
-          <p className="text-gray-500 text-xs mt-1">ID: {sectionId}</p>
         </div>
       </div>
     </div>
@@ -284,7 +310,6 @@ const Libraries = () => {
   );
   const secondsUntilRefresh = Math.ceil(timeUntilNextRefresh / 1000);
   const minutesUntilRefresh = Math.floor(secondsUntilRefresh / 60);
-  const remainingSeconds = secondsUntilRefresh % 60;
   const formattedTimeUntilRefresh = `${minutesUntilRefresh}`;
 
   const handleSaveSections = async () => {
@@ -333,15 +358,15 @@ const Libraries = () => {
           </h2>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
-              <Film size={14} className="text-brand-primary-400" />
-              <span className="text-gray-400 text-sm">
+              <Icons.Film size={14} className="text-accent-base" />
+              <span className="text-theme-muted text-sm">
                 {Array.isArray(libraries) ? libraries.length : 0} Libraries
               </span>
             </div>
             {isRefreshing ? (
-              <span className="text-xs text-gray-500">Refreshing...</span>
+              <span className="text-xs text-theme-muted">Refreshing...</span>
             ) : (
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-theme-muted">
                 Auto-refresh in {formattedTimeUntilRefresh}min
               </span>
             )}
@@ -350,50 +375,32 @@ const Libraries = () => {
 
         <div className="flex items-center gap-4">
           {Array.isArray(libraries) && libraries.length > 0 && (
-            <button
-              onClick={() => toggleAll(libraries)}
-              className="px-4 py-2 bg-gray-800/50 text-gray-300 hover:text-white 
-                hover:bg-gray-700 rounded-lg transition-colors border border-gray-700/50"
-            >
+            <ThemedButton variant="ghost" onClick={() => toggleAll(libraries)}>
               {selectedLibraries.size === libraries.length
                 ? "Deselect All"
                 : "Select All"}
-            </button>
+            </ThemedButton>
           )}
-          <button
+          <ThemedButton
             onClick={handleSaveSections}
             disabled={selectedLibraries.size === 0 || isSaving}
-            className={`px-4 py-2 rounded-lg bg-gray-800/50 text-brand-primary-400 
-              border border-brand-primary-400 hover:bg-gray-700/50 
-              transition-all duration-200 flex items-center gap-2
-              disabled:opacity-50 disabled:cursor-not-allowed themed-button`}
+            variant="accent"
+            icon={isSaving ? Icons.Loader2 : Icons.Save}
           >
-            {isSaving ? (
-              <>
-                <RefreshCw className="animate-spin" size={16} />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save size={16} />
-                Save Selection
-              </>
-            )}
-          </button>
-          <button
+            {isSaving ? "Saving..." : "Save Selection"}
+          </ThemedButton>
+          <ThemedButton
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className={`px-4 py-2 rounded-lg bg-gray-800/50 text-brand-primary-400 
-              border border-brand-primary-400 hover:bg-gray-700/50 
-              transition-all duration-200 flex items-center gap-2
-              disabled:opacity-50 disabled:cursor-not-allowed themed-button`}
+            variant="accent"
+            icon={
+              isRefreshing
+                ? () => <Icons.RefreshCw className="animate-spin" />
+                : Icons.RefreshCw
+            }
           >
-            <RefreshCw
-              size={16}
-              className={`${isRefreshing ? "animate-spin" : ""}`}
-            />
             {isRefreshing ? "Refreshing..." : "Refresh"}
-          </button>
+          </ThemedButton>
         </div>
       </div>
 
@@ -402,7 +409,7 @@ const Libraries = () => {
           {[1, 2, 3].map((n) => (
             <div
               key={n}
-              className="bg-gray-800/30 rounded-xl p-4 animate-pulse border border-gray-700/50"
+              className="bg-modal rounded-xl p-4 animate-pulse border border-gray-700/50"
             >
               <div className="flex items-center gap-4">
                 <div className="w-5 h-5 bg-gray-700 rounded" />
@@ -416,16 +423,16 @@ const Libraries = () => {
           ))}
         </div>
       ) : error ? (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center">
+        <ThemedCard className="text-center bg-red-500/10 border-red-500/20">
           <p className="text-red-400">
             Error loading libraries: {error.message}
           </p>
-        </div>
+        </ThemedCard>
       ) : !libraries?.length ? (
-        <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-8 text-center">
-          <Film size={24} className="text-gray-500 mx-auto mb-3" />
-          <p className="text-gray-400">No libraries found</p>
-        </div>
+        <ThemedCard className="text-center">
+          <Icons.Film size={24} className="text-theme-muted mx-auto mb-3" />
+          <p className="text-theme-muted">No libraries found</p>
+        </ThemedCard>
       ) : (
         <div className="space-y-4">
           {libraries.map((library) => (

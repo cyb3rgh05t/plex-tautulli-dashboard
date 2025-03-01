@@ -1,100 +1,105 @@
+// with theme styling applied
+
 import React, { useState } from "react";
-import { useTheme } from "../../context/ThemeContext";
 import DownloadsFormat from "./DownloadsFormat";
 import RecentlyAddedFormat from "./RecentlyAddedFormat";
 import UsersFormat from "./UsersFormat";
 import SectionsFormat from "./SectionsFormat";
 import LibrariesFormat from "./LibrariesFormat";
+import ThemedCard from "../common/ThemedCard";
+import * as Icons from "lucide-react";
 
-const ThemedSubTabButton = ({ active, onClick, children }) => {
-  const { theme } = useTheme();
-
-  // Get theme-specific styles
-  const getThemeStyles = () => {
-    if (active) {
-      switch (theme) {
-        case "light":
-          return "bg-gray-200 text-gray-800";
-        case "blue":
-          return "bg-blue-500 text-white";
-        case "purple":
-          return "bg-purple-500 text-white";
-        case "green":
-          return "bg-green-500 text-white";
-        default: // dark
-          return "bg-gray-700 text-white";
-      }
-    } else {
-      // Non-active states
-      switch (theme) {
-        case "light":
-          return "text-gray-600 hover:text-gray-800 hover:bg-gray-100";
-        case "blue":
-          return "text-gray-400 hover:text-white hover:bg-blue-700/50";
-        case "purple":
-          return "text-gray-400 hover:text-white hover:bg-purple-700/50";
-        case "green":
-          return "text-gray-400 hover:text-white hover:bg-green-700/50";
-        default: // dark
-          return "text-gray-400 hover:text-white hover:bg-gray-700/50";
-      }
-    }
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${getThemeStyles()}`}
-    >
-      {children}
-    </button>
-  );
-};
+const SubTabButton = ({ active, onClick, children }) => (
+  <button
+    onClick={onClick}
+    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+      active
+        ? "bg-accent-light text-accent-base"
+        : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+    }`}
+  >
+    {children}
+  </button>
+);
 
 const FormatSettings = () => {
   const [activeSubTab, setActiveSubTab] = useState("downloads");
-  const { theme } = useTheme();
+
+  // Map tab IDs to their corresponding icon and title for the card header
+  const tabInfo = {
+    downloads: {
+      icon: Icons.Download,
+      title: "Sync Format Settings",
+    },
+    recentlyAdded: {
+      icon: Icons.Clock,
+      title: "Recently Added Format Settings",
+    },
+    users: {
+      icon: Icons.Users,
+      title: "Users Format Settings",
+    },
+    libraries: {
+      icon: Icons.Database,
+      title: "Libraries Format Settings",
+    },
+    sections: {
+      icon: Icons.Layers,
+      title: "Metadata Format Settings",
+    },
+  };
+
+  // Get current tab's icon and title
+  const currentTab = tabInfo[activeSubTab];
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 mb-6">
-        <ThemedSubTabButton
+      {/* Tab navigation */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        <SubTabButton
           active={activeSubTab === "downloads"}
           onClick={() => setActiveSubTab("downloads")}
         >
-          Downloads
-        </ThemedSubTabButton>
-        <ThemedSubTabButton
+          Sync
+        </SubTabButton>
+        <SubTabButton
           active={activeSubTab === "recentlyAdded"}
           onClick={() => setActiveSubTab("recentlyAdded")}
         >
           Recently Added
-        </ThemedSubTabButton>
-        <ThemedSubTabButton
+        </SubTabButton>
+        <SubTabButton
           active={activeSubTab === "users"}
           onClick={() => setActiveSubTab("users")}
         >
           Users
-        </ThemedSubTabButton>
-        <ThemedSubTabButton
+        </SubTabButton>
+        <SubTabButton
           active={activeSubTab === "libraries"}
           onClick={() => setActiveSubTab("libraries")}
         >
           Libraries
-        </ThemedSubTabButton>
-        <ThemedSubTabButton
+        </SubTabButton>
+        <SubTabButton
           active={activeSubTab === "sections"}
           onClick={() => setActiveSubTab("sections")}
         >
-          Sections
-        </ThemedSubTabButton>
+          Media Metadata
+        </SubTabButton>
       </div>
 
-      {activeSubTab === "downloads" && <DownloadsFormat />}
-      {activeSubTab === "recentlyAdded" && <RecentlyAddedFormat />}
-      {activeSubTab === "users" && <UsersFormat />}
-      {activeSubTab === "libraries" && <LibrariesFormat />}
-      {activeSubTab === "sections" && <SectionsFormat />}
+      {/* Tab content wrapper */}
+      <ThemedCard
+        title={currentTab.title}
+        icon={currentTab.icon}
+        className="p-6"
+      >
+        {activeSubTab === "downloads" && <DownloadsFormat />}
+        {activeSubTab === "recentlyAdded" && <RecentlyAddedFormat />}
+        {activeSubTab === "users" && <UsersFormat />}
+        {activeSubTab === "libraries" && <LibrariesFormat />}
+        {activeSubTab === "sections" && <SectionsFormat />}
+      </ThemedCard>
     </div>
   );
 };

@@ -1,8 +1,11 @@
+// with theme styling applied
+
 import React, { useState, useEffect, useRef } from "react";
-import { Trash2, Code, Plus, Variable } from "lucide-react";
-import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
 import toast from "react-hot-toast";
+import ThemedButton from "../common/ThemedButton";
+import ThemedCard from "../common/ThemedCard";
+import * as Icons from "lucide-react";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
@@ -239,38 +242,6 @@ const SECTION_VARIABLES = [
   { name: "collections", description: "Collection memberships" },
 ];
 
-// Example data for previewing formats
-const EXAMPLE_DATA = {
-  section_id: "1",
-  section_name: "Movies",
-  section_type: "movie",
-  media_type: "movie",
-  title: "The Matrix",
-  original_title: "The Matrix",
-  full_title: "The Matrix (1999)",
-  tagline: "Welcome to the Real World",
-  summary:
-    "A computer programmer discovers that reality as he knows it is a simulation created by machines, and joins a rebellion to break free.",
-  rating: "8.7",
-  content_rating: "R",
-  duration: "8160000", // 2 hours 16 minutes in milliseconds
-  year: "1999",
-  studio: "Warner Bros.",
-  count: 1250,
-  parent_count: 1250,
-  child_count: 0,
-  added_at: Math.floor(Date.now() / 1000) - 3600, // 1 hour ago
-  updated_at: Math.floor(Date.now() / 1000) - 7200, // 2 hours ago
-  last_viewed_at: Math.floor(Date.now() / 1000) - 86400, // 1 day ago
-  originally_available_at: "1999-03-31",
-  directors: ["Lana Wachowski", "Lilly Wachowski"],
-  writers: ["Lana Wachowski", "Lilly Wachowski"],
-  actors: ["Keanu Reeves", "Laurence Fishburne", "Carrie-Anne Moss"],
-  genres: ["Action", "Sci-Fi"],
-  labels: ["Favorite"],
-  collections: ["The Matrix Collection"],
-};
-
 // Component subcomponents
 const VariableButton = ({ variable, onClick }) => (
   <button
@@ -280,65 +251,74 @@ const VariableButton = ({ variable, onClick }) => (
   >
     <div className="flex items-start justify-between">
       <div>
-        <code className="text-brand-primary-400 font-mono">
+        <code className="text-accent-base font-mono">
           {variable.isDate
             ? `{${variable.name}:relative}`
             : `{${variable.name}}`}
         </code>
-        <p className="text-gray-400 text-sm mt-2">{variable.description}</p>
+        <p className="text-theme-muted text-sm mt-2">{variable.description}</p>
       </div>
       <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-        <Plus className="text-brand-primary-400" size={16} />
+        <Icons.Plus className="text-accent-base" size={16} />
       </div>
     </div>
   </button>
 );
 
 const FormatCard = ({ format, onDelete, previewValue }) => (
-  <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-4 hover:bg-gray-800/70 transition-all duration-200">
-    <div className="flex justify-between items-center mb-3">
-      <div>
-        <h4 className="text-white font-medium">{format.name}</h4>
-        <p className="text-sm text-gray-400">
-          Applied to:{" "}
-          {format.sectionId === "all"
-            ? "All Sections"
-            : `Section ${format.sectionId}`}
-        </p>
-      </div>
-      <button
+  <ThemedCard
+    className="hover:bg-gray-800/70 transition-all duration-200"
+    isInteractive
+    hasBorder
+    useAccentBorder={true}
+    action={
+      <ThemedButton
+        variant="ghost"
+        size="sm"
+        icon={Icons.Trash2}
         onClick={() => onDelete(format.name)}
-        className="text-gray-400 hover:text-red-400 p-1.5 hover:bg-red-400/10 rounded-lg transition-colors"
-      >
-        <Trash2 size={16} />
-      </button>
-    </div>
-    <div className="space-y-3">
-      <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
-        <div className="flex items-center gap-2 text-gray-400 text-sm mb-2">
-          <Code size={14} />
-          <span>Template</span>
+        className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
+      />
+    }
+  >
+    <div>
+      <div className="flex justify-between items-center mb-3">
+        <div>
+          <h4 className="text-white font-medium">{format.name}</h4>
+          <p className="text-sm text-theme-muted">
+            Applied to:{" "}
+            {format.sectionId === "all"
+              ? "All Sections"
+              : `Section ${format.sectionId}`}
+          </p>
         </div>
-        <code className="text-sm text-gray-300 font-mono">
-          {format.template}
-        </code>
       </div>
-      <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
-        <div className="flex items-center gap-2 text-gray-400 text-sm mb-2">
-          <Variable size={14} />
-          <span>Preview</span>
+      <div className="space-y-3">
+        <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+          <div className="flex items-center gap-2 text-theme-muted text-sm mb-2">
+            <Icons.Code size={14} className="text-accent-base" />
+            <span>Template</span>
+          </div>
+          <code className="text-sm text-gray-300 font-mono">
+            {format.template}
+          </code>
         </div>
-        <code className="text-sm text-brand-primary-400 font-mono">
-          {previewValue}
-        </code>
+        <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+          <div className="flex items-center gap-2 text-theme-muted text-sm mb-2">
+            <Icons.Variable size={14} className="text-accent-base" />
+            <span>Preview</span>
+          </div>
+          <code className="text-sm text-accent-base font-mono">
+            {previewValue}
+          </code>
+        </div>
       </div>
     </div>
-  </div>
+  </ThemedCard>
 );
 
 // Main component
 const SectionsFormat = () => {
-  const { config } = useConfig();
   const [formats, setFormats] = useState([]);
   const [sections, setSections] = useState([]);
   const [newFormat, setNewFormat] = useState({
@@ -347,7 +327,36 @@ const SectionsFormat = () => {
     sectionId: "all",
   });
   const [loading, setLoading] = useState(true);
-  const [previewData, setPreviewData] = useState(EXAMPLE_DATA);
+  const [previewData, setPreviewData] = useState({
+    section_id: "1",
+    section_name: "Movies",
+    section_type: "movie",
+    media_type: "movie",
+    title: "The Matrix",
+    original_title: "The Matrix",
+    full_title: "The Matrix (1999)",
+    tagline: "Welcome to the Real World",
+    summary:
+      "A computer programmer discovers that reality as he knows it is a simulation created by machines, and joins a rebellion to break free.",
+    rating: "8.7",
+    content_rating: "R",
+    duration: "8160000", // 2 hours 16 minutes in milliseconds
+    year: "1999",
+    studio: "Warner Bros.",
+    count: 1250,
+    parent_count: 1250,
+    child_count: 0,
+    added_at: Math.floor(Date.now() / 1000) - 3600, // 1 hour ago
+    updated_at: Math.floor(Date.now() / 1000) - 7200, // 2 hours ago
+    last_viewed_at: Math.floor(Date.now() / 1000) - 86400, // 1 day ago
+    originally_available_at: "1999-03-31",
+    directors: ["Lana Wachowski", "Lilly Wachowski"],
+    writers: ["Lana Wachowski", "Lilly Wachowski"],
+    actors: ["Keanu Reeves", "Laurence Fishburne", "Carrie-Anne Moss"],
+    genres: ["Action", "Sci-Fi"],
+    labels: ["Favorite"],
+    collections: ["The Matrix Collection"],
+  });
   const [error, setError] = useState(null);
   const templateInputRef = useRef(null);
 
@@ -533,38 +542,54 @@ const SectionsFormat = () => {
       );
       if (selectedSection) {
         setPreviewData({
-          ...EXAMPLE_DATA,
+          ...previewData,
           section_id: selectedSection.section_id,
           section_name: selectedSection.name,
           section_type: selectedSection.type,
         });
       }
     } else {
-      setPreviewData(EXAMPLE_DATA);
+      // Reset to default preview data
+      setPreviewData({
+        ...previewData,
+        section_id: "1",
+        section_name: "Movies",
+        section_type: "movie",
+      });
     }
   }, [newFormat.sectionId, sections]);
 
+  // Render loading state
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center py-12">
+        <div className="animate-spin mr-2">
+          <Icons.Loader2 className="h-8 w-8 text-accent-base" />
+        </div>
+        <span className="text-theme">Loading Formats...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
-      {/* Loading Indicator */}
-      {loading && (
-        <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6 text-center">
-          <div className="animate-spin w-6 h-6 border-2 border-brand-primary-500 border-t-transparent rounded-full mx-auto mb-3"></div>
-          <p className="text-gray-400">Loading Formats...</p>
-        </div>
-      )}
-
+      {/* Error message */}
       {error && (
         <div className="bg-red-900/20 border border-red-500/50 rounded-xl p-4">
-          <p className="text-red-400">{error}</p>
+          <div className="flex items-center gap-2">
+            <Icons.AlertCircle className="text-red-400" size={18} />
+            <p className="text-red-400">{error}</p>
+          </div>
         </div>
       )}
 
       {/* Available Variables Section */}
-      <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6 shadow-lg">
-        <h3 className="text-lg font-semibold text-white mb-4">
-          Available Variables
-        </h3>
+      <ThemedCard
+        title="Available Variables"
+        icon={Icons.Code}
+        className="p-6"
+        useAccentBorder={true}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {SECTION_VARIABLES.map((variable) => (
             <VariableButton
@@ -574,16 +599,18 @@ const SectionsFormat = () => {
             />
           ))}
         </div>
-      </div>
+      </ThemedCard>
 
       {/* Create New Format Section */}
-      <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6 shadow-lg">
-        <h3 className="text-lg font-semibold text-white mb-6">
-          Create New Format
-        </h3>
+      <ThemedCard
+        title="Create New Format"
+        icon={Icons.FilePlus}
+        className="p-6"
+        useAccentBorder={true}
+      >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-gray-300 font-medium mb-2">
+            <label className="block text-theme font-medium mb-2">
               Format Name
             </label>
             <input
@@ -593,23 +620,21 @@ const SectionsFormat = () => {
                 setNewFormat({ ...newFormat, name: e.target.value })
               }
               className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-4 py-3
-                focus:ring-2 focus:ring-brand-primary-500 focus:border-brand-primary-500 
+                focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200"
               placeholder="e.g., Section Status"
             />
           </div>
 
           <div>
-            <label className="block text-gray-300 font-medium mb-2">
-              Section
-            </label>
+            <label className="block text-theme font-medium mb-2">Section</label>
             <select
               value={newFormat.sectionId}
               onChange={(e) =>
                 setNewFormat({ ...newFormat, sectionId: e.target.value })
               }
               className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-4 py-3
-                focus:ring-2 focus:ring-brand-primary-500 focus:border-brand-primary-500 
+                focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200"
             >
               <option value="all">All Sections</option>
@@ -626,9 +651,9 @@ const SectionsFormat = () => {
           </div>
 
           <div>
-            <label className="block text-gray-300 font-medium mb-2">
+            <label className="block text-theme font-medium mb-2">
               Template
-              <span className="text-gray-400 text-sm ml-2">
+              <span className="text-theme-muted text-sm ml-2">
                 (click variables above to add them)
               </span>
             </label>
@@ -640,11 +665,11 @@ const SectionsFormat = () => {
                 setNewFormat({ ...newFormat, template: e.target.value })
               }
               className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-4 py-3
-                focus:ring-2 focus:ring-brand-primary-500 focus:border-brand-primary-500 
+                focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200 font-mono"
               placeholder="e.g., {title} ({year}) - Added {added_at:relative}"
             />
-            <p className="text-gray-400 text-xs mt-2">
+            <p className="text-theme-muted text-xs mt-2">
               Tip: For timestamps, you can use formats: default, short,
               relative, full, time (e.g., {"{added_at:relative}"})
             </p>
@@ -653,38 +678,36 @@ const SectionsFormat = () => {
           {/* Live Preview */}
           {newFormat.template && (
             <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700/50">
-              <label className="block text-gray-300 font-medium mb-2">
+              <label className="block text-theme font-medium mb-2">
                 Preview
               </label>
-              <code className="text-brand-primary-400 font-mono block">
+              <code className="text-accent-base font-mono block">
                 {processTemplate(newFormat.template, previewData)}
               </code>
             </div>
           )}
 
-          <button
+          <ThemedButton
             type="submit"
+            variant="accent"
             disabled={!newFormat.name || !newFormat.template}
-            className="px-6 py-2 bg-brand-primary-500 text-white rounded-lg hover:bg-brand-primary-600 
-              transition-all duration-200 shadow-lg shadow-brand-primary-500/20 
-              hover:shadow-brand-primary-500/40 disabled:opacity-50 disabled:cursor-not-allowed
-              flex items-center gap-2"
+            icon={Icons.Plus}
           >
-            <Plus size={16} />
             Add Format
-          </button>
+          </ThemedButton>
         </form>
-      </div>
+      </ThemedCard>
 
       {/* Existing Formats Section */}
       {formats.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Icons.List className="text-accent-base" size={18} />
               Existing Formats
             </h3>
             <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-gray-700/50">
-              <span className="text-sm font-medium text-gray-400">
+              <span className="text-sm font-medium text-theme-muted">
                 {formats.length} Format{formats.length !== 1 ? "s" : ""}
               </span>
             </div>

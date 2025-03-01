@@ -51,28 +51,63 @@ module.exports = {
         },
         // Background and text colors - overridden by themes
         dark: {
-          50: "var(--color-dark-50)",
-          100: "var(--color-dark-100)",
-          200: "var(--color-dark-200)",
-          300: "var(--color-dark-300)",
-          400: "var(--color-dark-400)",
-          500: "var(--color-dark-500)",
-          600: "var(--color-dark-600)",
-          700: "var(--color-dark-700)",
-          800: "var(--color-dark-800)",
-          900: "var(--color-dark-900)",
+          50: "#171923",
+          100: "#2d3748",
+          200: "#4a5568",
+          300: "#718096",
+          400: "#a0aec0",
+          500: "#cbd5e0",
+          600: "#e2e8f0",
+          700: "#edf2f7",
+          800: "#f7fafc",
+          900: "#ffffff",
+        },
+        // Theme CSS variables integration
+        theme: {
+          bg: "var(--main-bg-color)",
+          modal: "var(--modal-bg-color)",
+          text: "var(--text)",
+          muted: "var(--text-muted)",
+          hover: "var(--text-hover)",
+          button: "var(--button-color)",
+          buttonHover: "var(--button-color-hover)",
+        },
+        accent: {
+          base: "rgb(var(--accent-color))",
+          hover: "var(--accent-color-hover)",
+          light: "rgba(var(--accent-color), 0.2)",
+          dark: "rgba(var(--accent-color), 0.8)",
         },
       },
       backgroundImage: {
-        "gradient-brand": "var(--gradient-brand)",
-        "gradient-dark": "var(--gradient-dark)",
+        "gradient-brand":
+          "linear-gradient(to right, #0070f3, #5200f3, #8c4dff)",
+        "gradient-dark": "linear-gradient(to right, #171923, #2d3748, #4a5568)",
+        "gradient-accent": "var(--overseerr-gradient)",
+        modal: "var(--modal-bg-color)",
+        main: "var(--main-bg-color)",
       },
       boxShadow: {
-        "brand-lg": "var(--shadow-brand-lg)",
-        "brand-xl": "var(--shadow-brand-xl)",
+        "brand-lg":
+          "0 10px 25px -5px rgba(0, 112, 243, 0.2), 0 5px 15px -5px rgba(82, 0, 243, 0.1)",
+        "brand-xl":
+          "0 15px 35px -5px rgba(0, 112, 243, 0.3), 0 10px 20px -5px rgba(82, 0, 243, 0.2)",
+        "accent-sm": "0 1px 2px 0 rgba(var(--accent-color), 0.05)",
+        "accent-md":
+          "0 4px 6px -1px rgba(var(--accent-color), 0.1), 0 2px 4px -1px rgba(var(--accent-color), 0.06)",
+        "accent-lg":
+          "0 10px 15px -3px rgba(var(--accent-color), 0.1), 0 4px 6px -2px rgba(var(--accent-color), 0.05)",
       },
       animation: {
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+      },
+      // For themed border colors
+      borderColor: {
+        accent: "rgba(var(--accent-color), 0.3)",
+        "accent-hover": "rgba(var(--accent-color), 0.5)",
+      },
+      ringColor: {
+        accent: "rgba(var(--accent-color), 0.5)",
       },
     },
   },
