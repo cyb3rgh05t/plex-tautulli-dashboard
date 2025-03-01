@@ -1,32 +1,47 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 const LoadingScreen = ({ message = "Loading Dashboard" }) => {
+  // Make sure we're in a browser environment before manipulating DOM
+  useEffect(() => {
+    // Safe DOM manipulation that only runs on the client side
+    const bodyElement = document.body;
+    if (bodyElement) {
+      // Apply loading state styles directly to body
+      bodyElement.style.overflow = "hidden";
+
+      return () => {
+        // Clean up when component unmounts
+        bodyElement.style.overflow = "";
+      };
+    }
+  }, []);
+
   return (
-    <div className="fixed inset-0 bg-gray-900 bg-[radial-gradient(at_0%_0%,rgba(0,112,243,0.1)_0px,transparent_50%),radial-gradient(at_98%_100%,rgba(82,0,243,0.1)_0px,transparent_50%)] flex items-center justify-center">
+    <div className="fixed inset-0 bg-main flex items-center justify-center">
       <div className="relative">
         {/* Background blur effect */}
-        <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-xl rounded-2xl" />
+        <div className="absolute inset-0 bg-modal backdrop-blur-xl rounded-2xl" />
 
         {/* Content */}
         <div className="relative px-12 py-8 text-center">
           {/* Primary loader */}
           <div className="relative mb-6">
-            {/* Outer ring */}
-            <div className="w-16 h-16 rounded-full border-2 border-brand-primary-500/20 border-t-brand-primary-500 animate-spin" />
+            {/* Outer ring - using accent color */}
+            <div className="w-16 h-16 rounded-full border-2 border-accent/20 border-t-accent-base animate-spin" />
 
             {/* Inner ring */}
-            <div className="absolute inset-0 m-2 rounded-full border-2 border-brand-secondary-500/20 border-t-brand-secondary-500 animate-spin animate-delay-150" />
+            <div className="absolute inset-0 m-2 rounded-full border-2 border-accent/20 border-t-accent-base animate-spin animate-delay-150" />
 
             {/* Center dot */}
-            <div className="absolute inset-0 m-7 rounded-full bg-white/10 animate-pulse" />
+            <div className="absolute inset-0 m-7 rounded-full bg-accent/10 animate-pulse" />
           </div>
 
           {/* Text content */}
-          <h2 className="text-2xl font-semibold bg-gradient-to-r from-brand-primary-400 to-brand-secondary-400 bg-clip-text text-transparent mb-3">
+          <h2 className="text-2xl font-semibold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent mb-3">
             {message}
           </h2>
 
-          <p className="text-gray-400 text-sm max-w-sm">
+          <p className="text-theme-muted text-sm max-w-sm">
             Please wait while we connect to your services...
           </p>
 
@@ -35,7 +50,7 @@ const LoadingScreen = ({ message = "Loading Dashboard" }) => {
             {[...Array(3)].map((_, i) => (
               <div
                 key={i}
-                className="w-2 h-2 rounded-full bg-brand-primary-500 animate-pulse"
+                className="w-2 h-2 rounded-full bg-accent-base animate-pulse"
                 style={{ animationDelay: `${i * 200}ms` }}
               />
             ))}

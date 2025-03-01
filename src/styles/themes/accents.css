@@ -1,0 +1,399 @@
+/* Green Accent */
+.accent-green {
+  /* Gradient backgrounds */
+  --main-bg-color: radial-gradient(
+      ellipse at center bottom,
+      rgba(109, 247, 81, 0.7) 0%,
+      #00130c 80%,
+      rgb(0, 0, 0) 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-bg-color: linear-gradient(180deg, rgba(2, 77, 0, 1) 0%, #00130c 100%)
+    center center/cover no-repeat fixed;
+  --modal-header-color: linear-gradient(
+      180deg,
+      rgba(2, 77, 0, 1) 0%,
+      #00130c 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-footer-color: linear-gradient(
+      180deg,
+      rgba(2, 77, 0, 1) 0%,
+      #00130c 100%
+    )
+    center center/cover no-repeat fixed;
+  --drop-down-menu-bg: linear-gradient(
+      180deg,
+      rgba(2, 77, 0, 1) 0%,
+      #00130c 100%
+    )
+    center center/cover no-repeat fixed;
+
+  /* Button styles */
+  --button-color: rgb(4, 168, 0);
+  --button-color-hover: rgba(4, 168, 0, 0.8);
+  --button-text: #eee;
+  --button-text-hover: #fff;
+
+  /* Accent colors */
+  --accent-color: 109, 247, 81;
+  --accent-color-hover: rgba(var(--accent-color), 0.8);
+  --link-color: rgb(109, 247, 81);
+  --link-color-hover: rgba(109, 247, 81, 0.8);
+  --label-text-color: #000;
+
+  /* Special elements */
+  --arr-queue-color: #6df751cc;
+  --plex-poster-unwatched: rgb(109, 247, 81);
+  --petio-spinner: invert(73%) sepia(74%) saturate(428%) hue-rotate(55deg)
+    brightness(101%) contrast(96%);
+  --gitea-color-primary-dark-4: 109, 247, 81;
+  --overseerr-gradient: linear-gradient(
+    rgba(var(--accent-color), 0.3) 0%,
+    rgba(0, 0, 0) 100%
+  );
+}
+
+/* Grey Accent - Renamed from "light" */
+.accent-grey {
+  /* Gradient backgrounds */
+  --main-bg-color: radial-gradient(
+      ellipse at center bottom,
+      rgba(220, 220, 220, 0.7) 0%,
+      #1a1a1a 80%,
+      rgb(0, 0, 0) 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-bg-color: linear-gradient(
+      180deg,
+      rgba(60, 60, 60, 1) 0%,
+      #1a1a1a 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-header-color: linear-gradient(
+      180deg,
+      rgba(60, 60, 60, 1) 0%,
+      #1a1a1a 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-footer-color: linear-gradient(
+      180deg,
+      rgba(60, 60, 60, 1) 0%,
+      #1a1a1a 100%
+    )
+    center center/cover no-repeat fixed;
+  --drop-down-menu-bg: linear-gradient(
+      180deg,
+      rgba(60, 60, 60, 1) 0%,
+      #1a1a1a 100%
+    )
+    center center/cover no-repeat fixed;
+
+  /* Button styles */
+  --button-color: rgb(180, 180, 180);
+  --button-color-hover: rgba(200, 200, 200, 0.8);
+  --button-text: #111;
+  --button-text-hover: #000;
+
+  /* Accent colors */
+  --accent-color: 220, 220, 220;
+  --accent-color-hover: rgba(var(--accent-color), 0.8);
+  --link-color: rgb(220, 220, 220);
+  --link-color-hover: rgba(255, 255, 255, 0.9);
+  --label-text-color: #fff;
+
+  /* Special elements */
+  --arr-queue-color: rgba(220, 220, 220, 0.8);
+  --plex-poster-unwatched: rgb(220, 220, 220);
+  --petio-spinner: invert(100%) sepia(0%) saturate(0%) hue-rotate(176deg)
+    brightness(107%) contrast(86%);
+  --gitea-color-primary-dark-4: 220, 220, 220;
+  --overseerr-gradient: linear-gradient(
+    rgba(var(--accent-color), 0.3) 0%,
+    rgba(0, 0, 0) 100%
+  );
+}
+
+/* Maroon Accent - Renamed from "purple" */
+.accent-maroon {
+  /* Gradient backgrounds */
+  --main-bg-color: radial-gradient(
+      ellipse at center bottom,
+      rgba(166, 40, 140, 0.7) 0%,
+      rgba(11, 8, 51, 1) 80%,
+      rgba(0, 0, 0, 1) 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-bg-color: linear-gradient(180deg, rgba(35, 0, 57, 1) 0%, #000 100%)
+    center center/cover no-repeat fixed;
+  --modal-header-color: linear-gradient(
+      180deg,
+      rgba(35, 0, 57, 1) 0%,
+      #000 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-footer-color: linear-gradient(
+      180deg,
+      rgba(35, 0, 57, 1) 0%,
+      #000 100%
+    )
+    center center/cover no-repeat fixed;
+  --drop-down-menu-bg: linear-gradient(180deg, rgba(35, 0, 57, 1) 0%, #000 100%)
+    center center/cover no-repeat fixed;
+
+  /* Button styles */
+  --button-color: #85096b;
+  --button-color-hover: #85096bcc;
+  --button-text: #eee;
+  --button-text-hover: #fff;
+
+  /* Accent colors */
+  --accent-color: 166, 40, 140;
+  --accent-color-hover: rgba(var(--accent-color), 0.8);
+  --link-color: rgb(223, 21, 179);
+  --link-color-hover: rgb(255, 0, 200);
+  --label-text-color: #fff;
+
+  /* Special elements */
+  --arr-queue-color: rgb(216, 22, 174);
+  --plex-poster-unwatched: rgb(216, 22, 174);
+  --petio-spinner: invert(8%) sepia(62%) saturate(6812%) hue-rotate(304deg)
+    brightness(108%) contrast(98%);
+  --gitea-color-primary-dark-4: 166, 40, 140;
+  --overseerr-gradient: linear-gradient(
+    rgba(var(--accent-color), 0.3) 0%,
+    rgba(0, 0, 0) 100%
+  );
+}
+
+/* Orange Accent */
+.accent-orange {
+  /* Gradient backgrounds */
+  --main-bg-color: radial-gradient(
+      ellipse at center bottom,
+      rgba(255, 153, 0, 0.7) 0%,
+      #3c0015 80%,
+      rgba(0, 0, 0, 1) 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-bg-color: linear-gradient(
+      180deg,
+      rgba(140, 64, 2, 1) 0%,
+      #3c0015 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-header-color: linear-gradient(
+      180deg,
+      rgba(140, 64, 2, 1) 0%,
+      #3c0015 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-footer-color: linear-gradient(
+      180deg,
+      rgba(140, 64, 2, 1) 0%,
+      #3c0015 100%
+    )
+    center center/cover no-repeat fixed;
+  --drop-down-menu-bg: linear-gradient(
+      180deg,
+      rgba(140, 64, 2, 1) 0%,
+      #3c0015 100%
+    )
+    center center/cover no-repeat fixed;
+
+  /* Button styles */
+  --button-color: rgb(255, 153, 0);
+  --button-color-hover: rgba(255, 153, 0, 0.8);
+  --button-text: #eee;
+  --button-text-hover: #fff;
+
+  /* Accent colors */
+  --accent-color: 255, 153, 0;
+  --accent-color-hover: rgba(var(--accent-color), 0.8);
+  --link-color: rgb(255, 153, 0);
+  --link-color-hover: rgba(255, 153, 0, 0.8);
+  --label-text-color: #fff;
+
+  /* Special elements */
+  --arr-queue-color: rgb(255, 153, 0);
+  --plex-poster-unwatched: #880030;
+  --petio-spinner: invert(9%) sepia(44%) saturate(6901%) hue-rotate(327deg)
+    brightness(101%) contrast(110%);
+  --gitea-color-primary-dark-4: 255, 153, 0;
+  --overseerr-gradient: linear-gradient(
+    rgba(var(--accent-color), 0.3) 0%,
+    rgba(0, 0, 0) 100%
+  );
+}
+
+/* Blue Accent */
+.accent-blue {
+  /* Gradient backgrounds */
+  --main-bg-color: radial-gradient(
+      ellipse at center bottom,
+      rgba(0, 98, 255, 0.7) 0%,
+      #020013 80%,
+      rgb(0, 0, 0) 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-bg-color: linear-gradient(180deg, rgb(0, 57, 148) 0%, #10003c 100%)
+    center center/cover no-repeat fixed;
+  --modal-header-color: linear-gradient(
+      180deg,
+      rgb(0, 57, 148) 0%,
+      #10003c 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-footer-color: linear-gradient(
+      180deg,
+      rgb(0, 57, 148) 0%,
+      #10003c 100%
+    )
+    center center/cover no-repeat fixed;
+  --drop-down-menu-bg: linear-gradient(180deg, rgb(0, 57, 148) 0%, #10003c 100%)
+    center center/cover no-repeat fixed;
+
+  /* Button styles */
+  --button-color: #0062ff;
+  --button-color-hover: rgba(0, 98, 255, 0.8);
+  --button-text: #eee;
+  --button-text-hover: #fff;
+
+  /* Accent colors */
+  --accent-color: 0, 98, 255;
+  --accent-color-hover: rgba(var(--accent-color), 0.8);
+  --link-color: rgb(61, 126, 255);
+  --link-color-hover: rgb(0, 98, 255);
+  --label-text-color: #fff;
+
+  /* Special elements */
+  --arr-queue-color: rgba(0, 98, 255, 0.8);
+  --plex-poster-unwatched: rgb(0, 98, 255);
+  --petio-spinner: invert(25%) sepia(99%) saturate(4489%) hue-rotate(214deg)
+    brightness(104%) contrast(109%);
+  --gitea-color-primary-dark-4: 0, 98, 255;
+  --overseerr-gradient: linear-gradient(
+    rgba(var(--accent-color), 0.3) 0%,
+    rgba(0, 0, 0) 100%
+  );
+}
+
+/* Red Accent */
+.accent-red {
+  /* Gradient backgrounds */
+  --main-bg-color: radial-gradient(
+      ellipse at center bottom,
+      rgba(232, 11, 11, 0.7) 0%,
+      #08000d 80%,
+      rgba(0, 0, 0, 1) 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-bg-color: linear-gradient(180deg, rgba(102, 5, 5, 1) 0%, #000 100%)
+    center center/cover no-repeat fixed;
+  --modal-header-color: linear-gradient(
+      180deg,
+      rgba(102, 5, 5, 1) 0%,
+      #000 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-footer-color: linear-gradient(
+      180deg,
+      rgba(102, 5, 5, 1) 0%,
+      #000 100%
+    )
+    center center/cover no-repeat fixed;
+  --drop-down-menu-bg: linear-gradient(180deg, rgba(102, 5, 5, 1) 0%, #000 100%)
+    center center/cover no-repeat fixed;
+
+  /* Button styles */
+  --button-color: #e80c0b;
+  --button-color-hover: rgba(232, 12, 11, 0.8);
+  --button-text: #eee;
+  --button-text-hover: #fff;
+
+  /* Accent colors */
+  --accent-color: 232, 12, 11;
+  --accent-color-hover: rgba(var(--accent-color), 0.8);
+  --link-color: rgb(232, 12, 11);
+  --link-color-hover: rgba(232, 12, 11, 0.8);
+  --label-text-color: #fff;
+
+  /* Special elements */
+  --arr-queue-color: #e80c0b;
+  --plex-poster-unwatched: rgb(232, 12, 11);
+  --petio-spinner: invert(14%) sepia(93%) saturate(3042%) hue-rotate(349deg)
+    brightness(112%) contrast(116%);
+  --gitea-color-primary-dark-4: 232, 12, 11;
+  --overseerr-gradient: linear-gradient(
+    rgba(var(--accent-color), 0.3) 0%,
+    rgba(0, 0, 0) 100%
+  );
+}
+
+/* Purple Accent - Renamed from "default" */
+.accent-purple {
+  /* Gradient backgrounds */
+  --main-bg-color: radial-gradient(
+      ellipse at center bottom,
+      rgba(167, 139, 250, 0.7) 0%,
+      #0f0720 80%,
+      rgba(0, 0, 0, 1) 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-bg-color: linear-gradient(
+      180deg,
+      rgba(59, 35, 136, 1) 0%,
+      #0f0720 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-header-color: linear-gradient(
+      180deg,
+      rgba(59, 35, 136, 1) 0%,
+      #0f0720 100%
+    )
+    center center/cover no-repeat fixed;
+  --modal-footer-color: linear-gradient(
+      180deg,
+      rgba(59, 35, 136, 1) 0%,
+      #0f0720 100%
+    )
+    center center/cover no-repeat fixed;
+  --drop-down-menu-bg: linear-gradient(
+      180deg,
+      rgba(59, 35, 136, 1) 0%,
+      #0f0720 100%
+    )
+    center center/cover no-repeat fixed;
+
+  /* Button styles */
+  --button-color: #4f46e5;
+  --button-color-hover: #6366f1;
+  --button-text: #e5e7eb;
+  --button-text-hover: #fff;
+
+  /* Accent colors */
+  --accent-color: 167, 139, 250;
+  --accent-color-hover: rgba(var(--accent-color), 0.8);
+  --link-color: #6366f1;
+  --link-color-hover: #a78bfa;
+  --label-text-color: #fff;
+
+  /* Special elements */
+  --arr-queue-color: #6366f1;
+  --plex-poster-unwatched: #6366f1;
+  --petio-spinner: invert(24%) sepia(59%) saturate(3411%) hue-rotate(237deg)
+    brightness(91%) contrast(96%);
+  --gitea-color-primary-dark-4: 98, 116, 145;
+  --overseerr-gradient: linear-gradient(
+    rgba(var(--accent-color), 0.3) 0%,
+    rgba(0, 0, 0) 100%
+  );
+}
+
+/* For backward compatibility */
+.accent-default {
+  composes: accent-purple;
+}
+.accent-light {
+  composes: accent-grey;
+}

@@ -1,8 +1,13 @@
+// with theme styling applied
+
 import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
+import { useTheme } from "../../context/ThemeContext";
 import { logError } from "../../utils/logger";
 import * as Icons from "lucide-react";
+import ThemedCard from "../common/ThemedCard";
+import ThemedButton from "../common/ThemedButton";
 
 const ActivityBadge = ({ type }) => {
   // Map activity types to their visual styles
@@ -10,29 +15,29 @@ const ActivityBadge = ({ type }) => {
     download: {
       icon: Icons.Download,
       bg: "bg-brand-primary-500/10",
-      text: "text-brand-primary-400",
-      border: "border-brand-primary-500/20",
+      text: "text-accent",
+      border: "border-accent",
       label: "Downloading....",
     },
     transcode: {
       icon: Icons.Play,
-      bg: "bg-green-500/10",
-      text: "text-green-400",
-      border: "border-green-500/20",
+      bg: "bg-brand-primary-500/10",
+      text: "text-accent",
+      border: "border-accent",
       label: "Transcoding...",
     },
     stream: {
       icon: Icons.Play,
-      bg: "bg-purple-500/10",
-      text: "text-purple-400",
-      border: "border-purple-500/20",
+      bg: "bg-brand-primary-500/10",
+      text: "text-accent",
+      border: "border-accent",
       label: "Streaming...",
     },
     pause: {
       icon: Icons.Pause,
-      bg: "bg-yellow-500/10",
-      text: "text-yellow-400",
-      border: "border-yellow-500/20",
+      bg: "bg-brand-primary-500/10",
+      text: "text-accent",
+      border: "border-accent",
       label: "Paused",
     },
   };
@@ -63,13 +68,13 @@ const ProgressBar = ({ progress }) => {
     <div className="space-y-1">
       <div className="h-2 bg-gray-800/50 rounded-full overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-brand-primary-500 to-brand-primary-400 
+          className="h-full bg-gradient-to-r from-accent-base to-accent-hover 
             rounded-full transition-all duration-300 ease-out"
           style={{ width: `${percent}%` }}
         />
       </div>
       <div className="flex justify-end">
-        <span className="text-xs font-medium text-gray-400">
+        <span className="text-xs font-medium text-theme-muted">
           {percent.toFixed(1)}%
         </span>
       </div>
@@ -84,17 +89,14 @@ const ActivityItem = ({ activity }) => {
   }
 
   return (
-    <div
-      className="group bg-gray-800/30 hover:bg-gray-800/50 border border-gray-700/50 
-      rounded-xl p-4 transition-all duration-200"
-    >
+    <ThemedCard className="hover:bg-gray-800/50" isInteractive>
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1 flex-1 min-w-0">
             <h3 className="text-white font-medium truncate">
               {activity.subtitle || "Unknown"}
             </h3>
-            <p className="text-gray-400 text-sm truncate">
+            <p className="text-theme-muted text-sm truncate">
               {activity.title || "Unknown"}
             </p>
           </div>
@@ -103,13 +105,13 @@ const ActivityItem = ({ activity }) => {
 
         <ProgressBar progress={activity.progress} />
       </div>
-    </div>
+    </ThemedCard>
   );
 };
 
 const LoadingItem = () => (
-  <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50 animate-pulse">
-    <div className="space-y-3">
+  <ThemedCard>
+    <div className="space-y-3 animate-pulse">
       <div className="flex items-start justify-between">
         <div className="space-y-2 flex-1">
           <div className="h-5 bg-gray-700/50 rounded w-2/3" />
@@ -119,7 +121,7 @@ const LoadingItem = () => (
       </div>
       <div className="h-2 bg-gray-700/50 rounded-full" />
     </div>
-  </div>
+  </ThemedCard>
 );
 
 // Pagination component
@@ -129,7 +131,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="p-2 rounded-lg border border-gray-700/50 bg-gray-800/50 text-gray-400 
+        className="p-2 rounded-lg border border-gray-700/50 bg-gray-800/50 text-theme-muted 
           hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Icons.ChevronLeft size={16} />
@@ -143,8 +145,8 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
             className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors
               ${
                 currentPage === page
-                  ? "bg-brand-primary-500 text-white"
-                  : "bg-gray-800/50 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700/50"
+                  ? "bg-accent-base text-white"
+                  : "bg-gray-800/50 text-theme-muted hover:bg-gray-700 hover:text-white border border-gray-700/50"
               }`}
           >
             {page}
@@ -155,7 +157,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="p-2 rounded-lg border border-gray-700/50 bg-gray-800/50 text-gray-400 
+        className="p-2 rounded-lg border border-gray-700/50 bg-gray-800/50 text-theme-muted 
           hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Icons.ChevronRight size={16} />
@@ -166,6 +168,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
 
 const PlexActivity = () => {
   const { config } = useConfig();
+  const { theme } = useTheme();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
   const refreshInterval = useRef(null);
@@ -226,6 +229,14 @@ const PlexActivity = () => {
     setLastRefreshTime(Date.now());
   };
 
+  // Listen for theme changes
+  useEffect(() => {
+    // Trigger reflow to ensure styles are updated
+    document.body.style.display = "none";
+    void document.body.offsetHeight;
+    document.body.style.display = "";
+  }, [theme]);
+
   // Setup auto-refresh interval on component mount
   useEffect(() => {
     // Set initial refresh time
@@ -285,35 +296,33 @@ const PlexActivity = () => {
           </h2>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
-              <Icons.Download size={14} className="text-brand-primary-400" />
-              <span className="text-gray-400 text-sm">
+              <Icons.Download size={14} className="text-accent-base" />
+              <span className="text-theme-muted text-sm">
                 {activities?.length || 0} Active
               </span>
             </div>
             {isRefreshing ? (
-              <span className="text-xs text-gray-500">Refreshing...</span>
+              <span className="text-xs text-theme-muted">Refreshing...</span>
             ) : (
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-theme-muted">
                 Auto-refresh in {secondsUntilRefresh}s
               </span>
             )}
           </div>
         </div>
 
-        <button
+        <ThemedButton
           onClick={handleRefresh}
           disabled={isRefreshing}
-          className={`px-4 py-2 rounded-lg bg-brand-primary-500/10 text-brand-primary-400 
-            border border-brand-primary-500/20 hover:bg-brand-primary-500/20 
-            transition-all duration-200 flex items-center gap-2
-            disabled:opacity-50 disabled:cursor-not-allowed`}
+          variant="accent"
+          icon={
+            isRefreshing
+              ? () => <Icons.RefreshCw className="animate-spin" />
+              : Icons.RefreshCw
+          }
         >
-          <Icons.RefreshCw
-            size={16}
-            className={`${isRefreshing ? "animate-spin" : ""}`}
-          />
           {isRefreshing ? "Refreshing..." : "Refresh"}
-        </button>
+        </ThemedButton>
       </div>
 
       <div className="space-y-4">
@@ -324,14 +333,17 @@ const PlexActivity = () => {
             <LoadingItem />
           </>
         ) : error ? (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center">
+          <ThemedCard className="bg-red-500/10 border-red-500/20 text-center">
             <p className="text-red-400">Failed to load Plex activities</p>
-          </div>
+          </ThemedCard>
         ) : !activities?.length ? (
-          <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-8 text-center">
-            <Icons.Download size={24} className="text-gray-500 mx-auto mb-3" />
-            <p className="text-gray-400">No active downloads</p>
-          </div>
+          <ThemedCard className="text-center py-8">
+            <Icons.Download
+              size={24}
+              className="text-theme-muted mx-auto mb-3"
+            />
+            <p className="text-theme-muted">No active downloads</p>
+          </ThemedCard>
         ) : (
           <>
             {/* Current page items */}
@@ -353,7 +365,7 @@ const PlexActivity = () => {
 
             {/* Page indicator */}
             {totalPages > 1 && (
-              <div className="text-center text-sm text-gray-400">
+              <div className="text-center text-sm text-theme-muted">
                 Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
                 {Math.min(currentPage * itemsPerPage, totalItems)} of{" "}
                 {totalItems} activities

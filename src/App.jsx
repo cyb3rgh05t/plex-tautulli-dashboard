@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  HashRouter as Router, // Changed from BrowserRouter to HashRouter
+  HashRouter as Router,
   Routes,
   Route,
   Navigate,
@@ -10,8 +10,9 @@ import {
 import { QueryClient, QueryClientProvider, useQueryClient } from "react-query";
 import { Toaster } from "react-hot-toast";
 import { ConfigProvider, useConfig } from "./context/ConfigContext";
+import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import SetupWizard from "./components/SetupWizard/SetupWizard";
-import DashboardLayout from "./components/Layout/DashboardLayout";
+import ThemedDashboardLayout from "./components/Layout/ThemedDashboardLayout";
 import LoadingScreen from "./components/common/LoadingScreen";
 import PlexActivity from "./components/PlexActivity/PlexActivity";
 import RecentlyAdded from "./components/RecentlyAdded/RecentlyAdded";
@@ -29,6 +30,33 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Wrapper to apply theme classes safely
+const ThemeWrapper = ({ children }) => {
+  const { theme, accentColor, isLoading } = useTheme();
+
+  // Only apply theme-specific inline styles once theme is loaded
+  const wrapperStyle = !isLoading
+    ? {
+        minHeight: "100vh",
+        backgroundColor: "var(--main-bg-color)",
+        color: "var(--text)",
+      }
+    : {
+        minHeight: "100vh",
+        backgroundColor: "#0f172a", // Safe fallback dark color
+        color: "#f8fafc",
+      };
+
+  return (
+    <div
+      className={`theme-${theme} accent-${accentColor}`}
+      style={wrapperStyle}
+    >
+      {children}
+    </div>
+  );
+};
 
 // Setup Completion Handler - Inside Router context
 const SetupCompletionHandler = ({ onComplete }) => {
@@ -171,7 +199,7 @@ const AppRoutes = () => {
           path="/"
           element={
             <ProtectedRoute>
-              <DashboardLayout />
+              <ThemedDashboardLayout />
             </ProtectedRoute>
           }
         >
@@ -210,46 +238,109 @@ const AppRoutes = () => {
   );
 };
 
-// Main App component - Router is here
+// Main App component - Router is here - Now wrapped with ThemeProvider
 const App = () => {
+  // Add error boundary to catch issues
+  const [error, setError] = useState(null);
+
+  // Add error handler
+  React.useEffect(() => {
+    const handleError = (event) => {
+      console.error("Global error caught:", event.error);
+      setError(event.error?.message || "An unexpected error occurred");
+    };
+
+    window.addEventListener("error", handleError);
+    return () => window.removeEventListener("error", handleError);
+  }, []);
+
+  if (error) {
+    return (
+      <div
+        style={{
+          padding: "2rem",
+          backgroundColor: "#1e293b",
+          color: "white",
+          minHeight: "100vh",
+        }}
+      >
+        <h1 style={{ color: "#ef4444", marginBottom: "1rem" }}>
+          Application Error
+        </h1>
+        <p style={{ marginBottom: "1rem" }}>
+          The application encountered an error:
+        </p>
+        <pre
+          style={{
+            backgroundColor: "#0f172a",
+            padding: "1rem",
+            borderRadius: "0.5rem",
+            overflow: "auto",
+            maxWidth: "100%",
+          }}
+        >
+          {error}
+        </pre>
+        <button
+          onClick={() => window.location.reload()}
+          style={{
+            marginTop: "1rem",
+            backgroundColor: "#3b82f6",
+            color: "white",
+            padding: "0.5rem 1rem",
+            borderRadius: "0.375rem",
+            border: "none",
+            cursor: "pointer",
+          }}
+        >
+          Reload Application
+        </button>
+      </div>
+    );
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <ConfigProvider>
-        <Router>
-          <AppRoutes />
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 3000,
-              style: {
-                background: "#1F2937",
-                color: "#fff",
-              },
-              success: {
-                style: {
-                  border: "1px solid #059669",
-                  padding: "16px",
-                  background: "#064E3B",
-                },
-                iconTheme: {
-                  primary: "#10B981",
-                  secondary: "#fff",
-                },
-              },
-              error: {
-                style: {
-                  border: "1px solid #DC2626",
-                  padding: "16px",
-                  background: "#7F1D1D",
-                },
-                iconTheme: {
-                  primary: "#EF4444",
-                  secondary: "#fff",
-                },
-              },
-            }}
-          />
-        </Router>
+        <ThemeProvider>
+          <ThemeWrapper>
+            <Router>
+              <AppRoutes />
+              <Toaster
+                position="top-right"
+                toastOptions={{
+                  duration: 3000,
+                  style: {
+                    background: "#1F2937",
+                    color: "#fff",
+                  },
+                  success: {
+                    style: {
+                      border: "1px solid #059669",
+                      padding: "16px",
+                      background: "#064E3B",
+                    },
+                    iconTheme: {
+                      primary: "#10B981",
+                      secondary: "#fff",
+                    },
+                  },
+                  error: {
+                    style: {
+                      border: "1px solid #DC2626",
+                      padding: "16px",
+                      background: "#7F1D1D",
+                    },
+                    iconTheme: {
+                      primary: "#EF4444",
+                      secondary: "#fff",
+                    },
+                  },
+                }}
+              />
+            </Router>
+          </ThemeWrapper>
+        </ThemeProvider>
       </ConfigProvider>
     </QueryClientProvider>
   );

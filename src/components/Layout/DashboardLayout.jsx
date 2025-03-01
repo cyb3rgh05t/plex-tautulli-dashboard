@@ -1,6 +1,9 @@
+// with theme styling applied
+
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useConfig } from "../../context/ConfigContext";
+import { useTheme } from "../../context/ThemeContext"; // Import the theme hook
 import { testPlexConnection } from "../../services/plexService";
 import { testTautulliConnection } from "../../services/tautulliService";
 import { appVersion } from "../../../version";
@@ -15,13 +18,16 @@ import {
   Download,
   Clock,
   SlidersHorizontal,
+  Moon,
+  Sun,
+  Palette,
 } from "lucide-react";
 import { FaGithub } from "react-icons/fa";
 import Settings from "../Settings/Settings";
+import ThemeSelector from "../common/ThemeSelector"; // Import the ThemeSelector
 
-// Update the TabButton to ensure proper navigation
+// Update the TabButton to ensure proper navigation and theme styling
 const TabButton = ({ active, onClick, children, icon: Icon }) => {
-  // Simple button without any additional logic that might interfere
   return (
     <button
       onClick={onClick}
@@ -53,6 +59,21 @@ const ConnectionBadge = ({ status, type, icon: Icon }) => (
     <span className="text-xs font-medium">{type}</span>
   </div>
 );
+
+// Mini theme toggle for header
+const ThemeToggle = () => {
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <button
+      onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+      className="text-gray-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-gray-700/50"
+      title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+    >
+      {theme === "light" ? <Moon size={20} /> : <Sun size={20} />}
+    </button>
+  );
+};
 
 const DashboardLayout = () => {
   const navigate = useNavigate();
@@ -150,8 +171,20 @@ const DashboardLayout = () => {
   }, [config, isConfigured]);
 
   return (
-    <div className="min-h-screen bg-gray-900 bg-[radial-gradient(at_0%_0%,rgba(0,112,243,0.1)_0px,transparent_50%),radial-gradient(at_98%_100%,rgba(82,0,243,0.1)_0px,transparent_50%)]">
-      <header className="bg-gray-800/90 backdrop-blur-sm border-b border-gray-700/50 shadow-xl">
+    <div
+      className="min-h-screen"
+      style={{
+        backgroundColor: "var(--background-color)",
+        backgroundImage: "var(--background-gradient)",
+      }}
+    >
+      <header
+        className="backdrop-blur-sm border-b shadow-xl"
+        style={{
+          backgroundColor: "var(--color-dark-100, #2d3748)",
+          borderColor: "var(--color-dark-200, #4a5568)",
+        }}
+      >
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
@@ -181,6 +214,11 @@ const DashboardLayout = () => {
                   type="Tautulli"
                   icon={Database}
                 />
+              </div>
+
+              {/* Add Theme Selector here with improved positioning */}
+              <div style={{ position: "relative", zIndex: 50 }}>
+                <ThemeSelector />
               </div>
 
               <a
@@ -254,7 +292,14 @@ const DashboardLayout = () => {
         </div>
 
         {/* Content */}
-        <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6 shadow-lg">
+        <div
+          className="backdrop-blur-sm rounded-xl p-6 shadow-lg"
+          style={{
+            backgroundColor: "var(--color-dark-100, #2d3748)",
+            borderColor: "var(--color-dark-200, #4a5568)",
+            border: "1px solid var(--color-dark-200, #4a5568)",
+          }}
+        >
           <Outlet />
         </div>
       </main>

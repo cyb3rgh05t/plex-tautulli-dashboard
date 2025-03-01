@@ -1,16 +1,20 @@
+// with theme styling applied
+
 import React, { useState } from "react";
 import DownloadsFormat from "./DownloadsFormat";
 import RecentlyAddedFormat from "./RecentlyAddedFormat";
 import UsersFormat from "./UsersFormat";
 import SectionsFormat from "./SectionsFormat";
 import LibrariesFormat from "./LibrariesFormat";
+import ThemedCard from "../common/ThemedCard";
+import * as Icons from "lucide-react";
 
 const SubTabButton = ({ active, onClick, children }) => (
   <button
     onClick={onClick}
     className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
       active
-        ? "bg-gray-700 text-white"
+        ? "bg-accent-light text-accent-base"
         : "text-gray-400 hover:text-white hover:bg-gray-700/50"
     }`}
   >
@@ -21,14 +25,42 @@ const SubTabButton = ({ active, onClick, children }) => (
 const FormatSettings = () => {
   const [activeSubTab, setActiveSubTab] = useState("downloads");
 
+  // Map tab IDs to their corresponding icon and title for the card header
+  const tabInfo = {
+    downloads: {
+      icon: Icons.Download,
+      title: "Sync Format Settings",
+    },
+    recentlyAdded: {
+      icon: Icons.Clock,
+      title: "Recently Added Format Settings",
+    },
+    users: {
+      icon: Icons.Users,
+      title: "Users Format Settings",
+    },
+    libraries: {
+      icon: Icons.Database,
+      title: "Libraries Format Settings",
+    },
+    sections: {
+      icon: Icons.Layers,
+      title: "Metadata Format Settings",
+    },
+  };
+
+  // Get current tab's icon and title
+  const currentTab = tabInfo[activeSubTab];
+
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 mb-6">
+      {/* Tab navigation */}
+      <div className="flex flex-wrap gap-2 mb-6">
         <SubTabButton
           active={activeSubTab === "downloads"}
           onClick={() => setActiveSubTab("downloads")}
         >
-          Downloads
+          Sync
         </SubTabButton>
         <SubTabButton
           active={activeSubTab === "recentlyAdded"}
@@ -52,15 +84,22 @@ const FormatSettings = () => {
           active={activeSubTab === "sections"}
           onClick={() => setActiveSubTab("sections")}
         >
-          Sections
+          Media Metadata
         </SubTabButton>
       </div>
 
-      {activeSubTab === "downloads" && <DownloadsFormat />}
-      {activeSubTab === "recentlyAdded" && <RecentlyAddedFormat />}
-      {activeSubTab === "users" && <UsersFormat />}
-      {activeSubTab === "libraries" && <LibrariesFormat />}
-      {activeSubTab === "sections" && <SectionsFormat />}
+      {/* Tab content wrapper */}
+      <ThemedCard
+        title={currentTab.title}
+        icon={currentTab.icon}
+        className="p-6"
+      >
+        {activeSubTab === "downloads" && <DownloadsFormat />}
+        {activeSubTab === "recentlyAdded" && <RecentlyAddedFormat />}
+        {activeSubTab === "users" && <UsersFormat />}
+        {activeSubTab === "libraries" && <LibrariesFormat />}
+        {activeSubTab === "sections" && <SectionsFormat />}
+      </ThemedCard>
     </div>
   );
 };

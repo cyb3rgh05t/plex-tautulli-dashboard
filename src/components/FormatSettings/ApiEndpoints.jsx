@@ -1,3 +1,5 @@
+// with theme styling applied
+
 import React, { useState, useEffect, useRef } from "react";
 import {
   FaServer,
@@ -9,8 +11,10 @@ import {
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 import axios from "axios";
+import ThemedCard from "../common/ThemedCard";
+import ThemedButton from "../common/ThemedButton";
+import * as Icons from "lucide-react";
 
-// Base URL configuration
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
 
@@ -20,8 +24,8 @@ const SubTabButton = ({ active, onClick, children }) => (
     onClick={onClick}
     className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
       active
-        ? "bg-gray-700 text-white"
-        : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+        ? "bg-accent-light text-accent-base"
+        : "text-theme-muted hover:text-theme-hover hover:bg-gray-700/50"
     }`}
   >
     {children}
@@ -59,9 +63,9 @@ const RequestExampleDisplay = ({ examples }) => {
       {/* Example Code Display */}
       {examples.map((example, index) => (
         <div key={index} className="space-y-2">
-          <p className="text-gray-400 text-sm">{example.description}</p>
+          <p className="text-theme-muted text-sm">{example.description}</p>
           <pre className="bg-gray-900/50 p-4 rounded-lg border border-gray-700/50 overflow-x-auto">
-            <code className="text-sm text-gray-300 font-mono">
+            <code className="text-sm text-theme font-mono">
               {activeLanguage === "url" && example.curlCommand}
               {activeLanguage === "python" && example.pythonRequest}
               {activeLanguage === "javascript" && example.javascriptFetch}
@@ -170,7 +174,12 @@ const EndpointCard = ({
     );
 
   return (
-    <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6 shadow-lg mb-4 hover:bg-gray-800/70 transition-all duration-200">
+    <ThemedCard
+      className="mb-4 hover:bg-gray-800/70 transition-all duration-200"
+      isInteractive
+      hasBorder
+      useAccentBorder={true}
+    >
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-4">
           <span
@@ -191,28 +200,27 @@ const EndpointCard = ({
           </code>
         </div>
         <div className="flex gap-2">
-          <button
+          <ThemedButton
+            variant="ghost"
+            size="sm"
+            icon={FaCopy}
             onClick={handleCopy}
-            className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700/50 transition-colors"
             title="Copy endpoint URL"
-          >
-            <FaCopy />
-          </button>
+          />
           {(method === "GET" || method === "POST") && (
-            <button
+            <ThemedButton
+              variant="accent"
+              size="sm"
               onClick={handleTest}
               disabled={loading || !canTest}
-              className="px-4 py-2 bg-brand-primary-500 text-white rounded-lg hover:bg-brand-primary-600 
-                transition-all duration-200 shadow-lg shadow-brand-primary-500/20 
-                hover:shadow-brand-primary-500/40 flex items-center gap-2
-                disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? "Testing..." : "Test"}
-            </button>
+            </ThemedButton>
           )}
         </div>
       </div>
-      <p className="text-gray-400 mb-4">{description}</p>
+
+      <p className="text-theme-muted mb-4">{description}</p>
 
       {/* URL Parameters Input Fields */}
       {urlParams.length > 0 && (
@@ -221,7 +229,7 @@ const EndpointCard = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {urlParams.map((param) => (
               <div key={param} className="flex items-center gap-2">
-                <div className="text-gray-400 text-sm min-w-[80px]">
+                <div className="text-theme-muted text-sm min-w-[80px]">
                   :{param}
                 </div>
                 <input
@@ -229,8 +237,8 @@ const EndpointCard = ({
                   value={paramValues[param] || ""}
                   onChange={(e) => handleParamChange(param, e.target.value)}
                   placeholder={`Replace :${param}`}
-                  className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 
-                    text-white placeholder-gray-500 text-sm focus:ring-brand-primary-500 focus:border-brand-primary-500"
+                  className="flex-1 bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-3 py-2 
+                    placeholder-gray-500 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                 />
               </div>
             ))}
@@ -252,7 +260,7 @@ const EndpointCard = ({
       {/* Test Response Section */}
       {loading && (
         <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700/50">
-          <p className="text-gray-400 animate-pulse">Testing endpoint...</p>
+          <p className="text-theme-muted animate-pulse">Testing endpoint...</p>
         </div>
       )}
 
@@ -282,13 +290,13 @@ const EndpointCard = ({
         <div className="space-y-2">
           <p className="text-gray-500 text-sm">Example Response:</p>
           <pre className="bg-gray-900/50 p-4 rounded-lg border border-gray-700/50 overflow-x-auto">
-            <code className="text-sm text-gray-300 font-mono">
+            <code className="text-sm text-theme font-mono">
               {JSON.stringify(example, null, 2)}
             </code>
           </pre>
         </div>
       )}
-    </div>
+    </ThemedCard>
   );
 };
 
@@ -806,6 +814,7 @@ const ApiEndpoints = () => {
     },
   ];
 
+  // POST endpoints definition (abbreviated to save space)
   const POST_ENDPOINTS = [
     {
       endpoint: "/api/formats",
@@ -1082,10 +1091,14 @@ fetch('http://localhost:3006/api/formats', {
   return (
     <div className="space-y-8">
       {/* Server Configuration Section */}
-      <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6 shadow-lg">
+      <ThemedCard
+        title="Server Configuration"
+        icon={FaServer}
+        useAccentBorder={true}
+      >
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <FaServer className="text-brand-primary-500 text-xl" />
+            <FaServer className="text-accent-base text-xl" />
             <h2 className="text-xl font-semibold text-white">
               Server Configuration
             </h2>
@@ -1100,7 +1113,7 @@ fetch('http://localhost:3006/api/formats', {
                   : "bg-red-500"
               }`}
             />
-            <span className="text-sm font-medium text-gray-400">
+            <span className="text-sm font-medium text-theme-muted">
               {serverStatus === "active"
                 ? "Server Active"
                 : serverStatus === "inactive"
@@ -1110,25 +1123,23 @@ fetch('http://localhost:3006/api/formats', {
           </div>
         </div>
         <div className="space-y-2">
-          <label className="block text-gray-300 font-medium">
-            API Server URL
-          </label>
+          <label className="block text-theme font-medium">API Server URL</label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <FaKey className="text-gray-500" />
+              <FaKey className="text-theme-muted" />
             </div>
             <input
               type="url"
               value={baseUrl}
               onChange={(e) => handleBaseUrlChange(e.target.value)}
               className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg pl-10 pr-4 py-3
-                focus:ring-2 focus:ring-brand-primary-500 focus:border-brand-primary-500 
+                focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200"
               placeholder="http://localhost:3006"
             />
           </div>
         </div>
-      </div>
+      </ThemedCard>
 
       {/* Tabs for GET and POST Endpoints */}
       <div className="flex gap-2 mb-4">
@@ -1153,7 +1164,7 @@ fetch('http://localhost:3006/api/formats', {
             {activeTab === "get" ? "GET" : "POST"} Endpoints
           </h2>
           <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-gray-700/50">
-            <span className="text-sm font-medium text-gray-400">
+            <span className="text-sm font-medium text-theme-muted">
               {activeTab === "get"
                 ? `${GET_ENDPOINTS.length} Endpoints`
                 : `${POST_ENDPOINTS.length} Endpoints`}

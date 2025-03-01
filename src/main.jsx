@@ -1,6 +1,10 @@
+// updated with Theme Provider
+
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+
+// Import the CSS with theme system
 import "./styles/globals.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(

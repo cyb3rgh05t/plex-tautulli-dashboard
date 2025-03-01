@@ -1,7 +1,11 @@
+// with theme styling applied
+
 import React, { useState, useEffect, useRef } from "react";
 import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
 import * as Icons from "lucide-react";
+import ThemedCard from "../common/ThemedCard";
+import ThemedButton from "../common/ThemedButton";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
@@ -25,37 +29,37 @@ const UsersTable = ({ users }) => (
       <thead>
         <tr>
           <th className="px-4 py-3 text-left bg-gray-800/50 rounded-tl-lg border-b border-gray-700/50">
-            <div className="flex items-center gap-2 text-gray-400 font-medium">
+            <div className="flex items-center gap-2 text-theme-muted font-medium">
               <Icons.Users size={14} />
               Username
             </div>
           </th>
           <th className="px-4 py-3 text-left bg-gray-800/50 border-b border-gray-700/50">
-            <div className="flex items-center gap-2 text-gray-400 font-medium">
+            <div className="flex items-center gap-2 text-theme-muted font-medium">
               <Icons.PlayCircle size={14} />
               Last Played Media
             </div>
           </th>
           <th className="px-4 py-3 text-right bg-gray-800/50 border-b border-gray-700/50">
-            <div className="flex items-center justify-end gap-2 text-gray-400 font-medium">
+            <div className="flex items-center justify-end gap-2 text-theme-muted font-medium">
               <Icons.Play size={14} />
               Total Plays
             </div>
           </th>
           <th className="px-4 py-3 text-right bg-gray-800/50 border-b border-gray-700/50">
-            <div className="flex items-center justify-end gap-2 text-gray-400 font-medium">
+            <div className="flex items-center justify-end gap-2 text-theme-muted font-medium">
               <Icons.Timer size={14} />
               Last Played Duration
             </div>
           </th>
           <th className="px-4 py-3 text-left bg-gray-800/50 border-b border-gray-700/50">
-            <div className="flex items-center gap-2 text-gray-400 font-medium">
+            <div className="flex items-center gap-2 text-theme-muted font-medium">
               <Icons.Clock size={14} />
               Last Seen
             </div>
           </th>
           <th className="px-4 py-3 text-center bg-gray-800/50 rounded-tr-lg border-b border-gray-700/50">
-            <span className="text-gray-400 font-medium">Status</span>
+            <span className="text-theme-muted font-medium">Status</span>
           </th>
         </tr>
       </thead>
@@ -73,13 +77,13 @@ const UsersTable = ({ users }) => (
               <td className="px-4 py-3 font-medium text-white">
                 {userData.friendly_name || "Unknown User"}
               </td>
-              <td className="px-4 py-3 text-gray-300">
+              <td className="px-4 py-3 text-theme">
                 {userData.full_title || userData.title || "Nothing played yet"}
               </td>
-              <td className="px-4 py-3 text-right text-brand-primary-400 font-medium">
+              <td className="px-4 py-3 text-right text-accent-base font-medium">
                 {userData.plays ? userData.plays.toLocaleString() : "0"}
               </td>
-              <td className="px-4 py-3 text-right text-brand-primary-400 font-medium">
+              <td className="px-4 py-3 text-right text-accent-base font-medium">
                 {userData.formatted_duration || "0m"}
               </td>
               <td className="px-4 py-3">
@@ -89,7 +93,7 @@ const UsersTable = ({ users }) => (
                     Is Watching
                   </span>
                 ) : (
-                  <span className="text-gray-300">
+                  <span className="text-theme">
                     {userData.last_seen_formatted || "Never"}
                   </span>
                 )}
@@ -112,7 +116,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="p-2 rounded-lg border border-gray-700/50 bg-gray-800/50 text-gray-400 
+        className="p-2 rounded-lg border border-gray-700/50 bg-gray-800/50 text-theme-muted 
           hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Icons.ChevronLeft size={16} />
@@ -126,8 +130,8 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
             className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors
               ${
                 currentPage === page
-                  ? "bg-brand-primary-500 text-white"
-                  : "bg-gray-800/50 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700/50"
+                  ? "bg-accent-base text-white"
+                  : "bg-gray-800/50 text-theme-muted hover:bg-gray-700 hover:text-white border border-gray-700/50"
               }`}
           >
             {page}
@@ -138,7 +142,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="p-2 rounded-lg border border-gray-700/50 bg-gray-800/50 text-gray-400 
+        className="p-2 rounded-lg border border-gray-700/50 bg-gray-800/50 text-theme-muted 
           hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Icons.ChevronRight size={16} />
@@ -282,7 +286,7 @@ const Users = () => {
           </div>
           <div className="h-10 w-28 bg-gray-800/50 rounded"></div>
         </div>
-        <div className="bg-gray-800/30 rounded-xl border border-gray-700/50">
+        <ThemedCard>
           <div className="p-4 space-y-4">
             {[...Array(5)].map((_, index) => (
               <div key={index} className="flex justify-between items-center">
@@ -293,7 +297,7 @@ const Users = () => {
               </div>
             ))}
           </div>
-        </div>
+        </ThemedCard>
       </div>
     );
   }
@@ -315,40 +319,38 @@ const Users = () => {
           </h2>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
-              <Icons.Users size={14} className="text-brand-primary-400" />
-              <span className="text-gray-400 text-sm">
+              <Icons.Users size={14} className="text-accent-base" />
+              <span className="text-theme-muted text-sm">
                 {users.length} Users
               </span>
             </div>
             {isRefreshing ? (
-              <span className="text-xs text-gray-500">Refreshing...</span>
+              <span className="text-xs text-theme-muted">Refreshing...</span>
             ) : (
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-theme-muted">
                 Auto-refresh in {secondsUntilRefresh}s
               </span>
             )}
           </div>
         </div>
 
-        <button
+        <ThemedButton
           onClick={handleRefresh}
           disabled={isRefreshing}
-          className={`px-4 py-2 rounded-lg bg-brand-primary-500/10 text-brand-primary-400 
-            border border-brand-primary-500/20 hover:bg-brand-primary-500/20 
-            transition-all duration-200 flex items-center gap-2
-            disabled:opacity-50 disabled:cursor-not-allowed`}
+          variant="accent"
+          icon={
+            isRefreshing
+              ? () => <Icons.RefreshCw className="animate-spin" />
+              : Icons.RefreshCw
+          }
         >
-          <Icons.RefreshCw
-            size={16}
-            className={`${isRefreshing ? "animate-spin" : ""}`}
-          />
           {isRefreshing ? "Refreshing..." : "Refresh"}
-        </button>
+        </ThemedButton>
       </div>
 
-      <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl overflow-hidden">
+      <ThemedCard className="overflow-hidden">
         <UsersTable users={currentUsers} />
-      </div>
+      </ThemedCard>
 
       {/* Pagination controls */}
       {totalPages > 1 && (
@@ -361,7 +363,7 @@ const Users = () => {
 
       {/* Page indicator */}
       {totalPages > 1 && (
-        <div className="text-center text-sm text-gray-400">
+        <div className="text-center text-sm text-theme-muted">
           Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
           {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems}{" "}
           users
