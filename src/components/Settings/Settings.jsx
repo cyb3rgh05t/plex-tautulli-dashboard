@@ -7,6 +7,7 @@ import { testTautulliConnection } from "../../services/tautulliService";
 import * as Icons from "lucide-react";
 import toast from "react-hot-toast";
 import ThemedButton from "../common/ThemedButton";
+import BackupSettings from "../FormatSettings/BackupSettings";
 
 // Sidebar Item Component
 const SidebarItem = ({ icon: Icon, label, active, onClick }) => (
@@ -55,7 +56,7 @@ const ColorOption = ({ color, current, onChange, displayName, rgb }) => {
 const Settings = ({ onClose }) => {
   const navigate = useNavigate();
   const { config, updateConfig, clearConfig } = useConfig();
-  const { accentColor, setAccentColor } = useTheme();
+  const { theme, setTheme, accentColor, setAccentColor } = useTheme();
   const [formData, setFormData] = useState({
     plexUrl: config?.plexUrl || "",
     plexToken: config?.plexToken || "",
@@ -171,10 +172,10 @@ const Settings = ({ onClose }) => {
 
   // Map of available accent colors
   const accentColors = [
-    { id: "purple", name: "Purple", rgb: "167, 139, 250" }, // Renamed from default
-    { id: "grey", name: "Grey", rgb: "220, 220, 220" }, // Renamed from light
+    { id: "purple", name: "Purple", rgb: "167, 139, 250" },
+    { id: "grey", name: "Grey", rgb: "220, 220, 220" },
     { id: "green", name: "Green", rgb: "109, 247, 81" },
-    { id: "maroon", name: "Maroon", rgb: "166, 40, 140" }, // Renamed from purple
+    { id: "maroon", name: "Maroon", rgb: "166, 40, 140" },
     { id: "orange", name: "Orange", rgb: "255, 153, 0" },
     { id: "blue", name: "Blue", rgb: "0, 98, 255" },
     { id: "red", name: "Red", rgb: "232, 12, 11" },
@@ -184,6 +185,7 @@ const Settings = ({ onClose }) => {
   const menuItems = [
     { id: "servers", label: "Server Configuration", icon: Icons.Server },
     { id: "theme", label: "Theme Settings", icon: Icons.Palette },
+    { id: "backup", label: "Backup & Restore", icon: Icons.Save },
     { id: "api", label: "API Documentation", icon: Icons.FileCode },
     { id: "reset", label: "Reset Application", icon: Icons.AlertTriangle },
   ];
@@ -317,6 +319,38 @@ const Settings = ({ onClose }) => {
               color.
             </p>
 
+            {/* Theme Toggle */}
+            <div className="mb-6">
+              <h4 className="text-white font-medium mb-4">Theme Mode</h4>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setTheme("light")}
+                  className={`flex items-center gap-2 px-4 py-3 rounded-lg border border-gray-800 transition-all
+                    ${
+                      theme === "light"
+                        ? "bg-gray-900/80 text-accent-base"
+                        : "bg-gray-900/50 text-gray-400 hover:bg-gray-800/90 hover:text-gray-300"
+                    }`}
+                >
+                  <Icons.Sun size={20} />
+                  <span>Light Mode</span>
+                </button>
+
+                <button
+                  onClick={() => setTheme("dark")}
+                  className={`flex items-center gap-2 px-4 py-3 rounded-lg border border-gray-800 transition-all
+                    ${
+                      theme === "dark"
+                        ? "bg-gray-900/80 text-accent-base"
+                        : "bg-gray-900/50 text-gray-400 hover:bg-gray-800/90 hover:text-gray-300"
+                    }`}
+                >
+                  <Icons.Moon size={20} />
+                  <span>Dark Mode</span>
+                </button>
+              </div>
+            </div>
+
             {/* Accent Color Selection */}
             <div className="space-y-4">
               <h4 className="text-lg font-medium text-white">Accent Color</h4>
@@ -334,7 +368,10 @@ const Settings = ({ onClose }) => {
               </div>
 
               {/* Current theme information */}
-              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50 mt-6">
+              <div
+                className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50
+          mt-6"
+              >
                 <div className="flex items-center gap-2 mb-2">
                   <Icons.Info size={16} className="text-accent-base" />
                   <h4 className="text-white font-medium">Theme Information</h4>
@@ -356,6 +393,9 @@ const Settings = ({ onClose }) => {
             </div>
           </div>
         );
+
+      case "backup":
+        return <BackupSettings />;
 
       case "api":
         return (

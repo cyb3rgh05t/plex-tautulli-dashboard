@@ -1,6 +1,6 @@
 # Plex & Tautulli Dashboard
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.0-blue)
 ![React](https://img.shields.io/badge/React-18.2.0-61DAFB)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
