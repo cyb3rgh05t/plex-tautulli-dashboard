@@ -15,6 +15,7 @@ import {
   Users as UsersGroup,
   Settings as SettingsCog,
   Code,
+  Download,
   Clock,
   SlidersHorizontal,
   Moon,
@@ -246,7 +247,7 @@ const DashboardLayout = () => {
             <TabButton
               active={isActiveRoute("/activities")}
               onClick={() => navigateTo("/activities")}
-              icon={ActivitySquare}
+              icon={Download}
             >
               Sync Activities
             </TabButton>
