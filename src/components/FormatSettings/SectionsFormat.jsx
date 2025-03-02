@@ -436,7 +436,7 @@ const SectionsFormat = () => {
   // Fetch sections
   const fetchSections = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/sections`);
+      const response = await fetch(`/api/sections`);
       const data = await response.json();
 
       // Process sections to ensure they have the expected structure
@@ -471,7 +471,7 @@ const SectionsFormat = () => {
   const fetchFormats = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/formats`);
+      const response = await fetch(`/api/formats`);
       const data = await response.json();
       setFormats(data.sections || []);
     } catch (err) {
@@ -587,7 +587,7 @@ const SectionsFormat = () => {
 
     try {
       // Get current formats
-      const response = await fetch(`${API_BASE_URL}/api/formats`);
+      const response = await fetch(`/api/formats`);
       const data = await response.json();
       const currentFormats = data.sections || [];
 
@@ -625,7 +625,7 @@ const SectionsFormat = () => {
         successMessage = "Format created successfully";
       }
 
-      const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
+      const saveResponse = await fetch(`/api/formats`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -673,7 +673,7 @@ const SectionsFormat = () => {
     saveScrollPosition();
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/formats`);
+      const response = await fetch(`/api/formats`);
       const data = await response.json();
       const currentFormats = data.sections || [];
 
@@ -683,7 +683,7 @@ const SectionsFormat = () => {
       );
 
       // Save updated formats
-      const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
+      const saveResponse = await fetch(`/api/formats`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

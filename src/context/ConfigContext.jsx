@@ -18,7 +18,7 @@ export const ConfigProvider = ({ children }) => {
       setIsLoading(true);
       setConfigError(null);
 
-      const response = await axios.get(`${API_BASE_URL}/api/config`);
+      const response = await axios.get(`/api/config`);
 
       const configData = response.data;
 
@@ -65,10 +65,7 @@ export const ConfigProvider = ({ children }) => {
     try {
       setIsLoading(true);
 
-      const response = await axios.post(
-        `${API_BASE_URL}/api/config`,
-        newConfig
-      );
+      const response = await axios.post(`/api/config`, newConfig);
 
       if (!response.data || response.data.status !== "ok") {
         throw new Error("Failed to update configuration");
@@ -112,7 +109,7 @@ export const ConfigProvider = ({ children }) => {
     try {
       setIsLoading(true);
 
-      const response = await axios.post(`${API_BASE_URL}/api/reset-all`);
+      const response = await axios.post(`/api/reset-all`);
 
       if (!response.data || response.data.status !== "success") {
         throw new Error("Failed to reset configuration");

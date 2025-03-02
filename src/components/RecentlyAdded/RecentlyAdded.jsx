@@ -23,16 +23,13 @@ const MediaCard = ({ media }) => {
   useEffect(() => {
     const fetchResolution = async () => {
       try {
-        const response = await axios.get(
-          `${API_BASE_URL}/api/tautulli/api/v2`,
-          {
-            params: {
-              apikey: media.apiKey,
-              cmd: "get_metadata",
-              rating_key: media.rating_key,
-            },
-          }
-        );
+        const response = await axios.get(`/api/tautulli/api/v2`, {
+          params: {
+            apikey: media.apiKey,
+            cmd: "get_metadata",
+            rating_key: media.rating_key,
+          },
+        });
 
         const mediaInfo = response.data?.response?.data?.media_info?.[0];
         if (mediaInfo) {
@@ -146,7 +143,7 @@ const MediaCard = ({ media }) => {
       thumbPath = media.thumb;
     }
 
-    return `${API_BASE_URL}/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
+    return `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
       thumbPath || ""
     )}&apikey=${apiKey}`;
   };
@@ -429,7 +426,7 @@ const RecentlyAdded = () => {
   // Fetch saved sections
   const fetchSections = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/sections`);
+      const response = await fetch(`/api/sections`);
       const data = await response.json();
 
       // Check if sections are available and in the expected format
@@ -460,7 +457,7 @@ const RecentlyAdded = () => {
   const fetchSectionRecentlyAdded = async (sectionId) => {
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/tautulli/api/v2?apikey=${config.tautulliApiKey}&cmd=get_recently_added&section_id=${sectionId}&count=10`
+        `/api/tautulli/api/v2?apikey=${config.tautulliApiKey}&cmd=get_recently_added&section_id=${sectionId}&count=10`
       );
       const data = await response.json();
 

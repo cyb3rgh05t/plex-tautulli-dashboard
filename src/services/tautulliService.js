@@ -68,7 +68,7 @@ export const getImageUrl = (imagePath, apiKey) => {
 
 export const configureProxy = async (plexUrl, tautulliUrl) => {
   try {
-    await axios.post(`${API_BASE_URL}/api/config`, {
+    await axios.post(`/api/config`, {
       // Changed to relative path
       plexUrl,
       tautulliUrl,

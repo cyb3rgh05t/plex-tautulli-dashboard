@@ -385,7 +385,7 @@ const RecentlyAddedFormat = () => {
   // Fetch sections
   const fetchSections = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/sections`);
+      const response = await axios.get(`/api/sections`);
       const fetchedSections = response.data.sections || [];
 
       // Map sections to ensure they have the required properties
@@ -414,7 +414,7 @@ const RecentlyAddedFormat = () => {
   const fetchRecentMedia = async (sections) => {
     setIsLoading(true);
     try {
-      const configResponse = await fetch(`${API_BASE_URL}/api/config`);
+      const configResponse = await fetch(`/api/config`);
       const config = await configResponse.json();
 
       const typeMap = {
@@ -447,17 +447,14 @@ const RecentlyAddedFormat = () => {
 
       const mediaPromises = filteredSections.map(async (section) => {
         try {
-          const response = await axios.get(
-            `${API_BASE_URL}/api/tautulli/api/v2`,
-            {
-              params: {
-                apikey: config.tautulliApiKey,
-                cmd: "get_recently_added",
-                section_id: section.section_id,
-                count: 10,
-              },
-            }
-          );
+          const response = await axios.get(`/api/tautulli/api/v2`, {
+            params: {
+              apikey: config.tautulliApiKey,
+              cmd: "get_recently_added",
+              section_id: section.section_id,
+              count: 10,
+            },
+          });
 
           const mediaItems =
             response.data?.response?.data?.recently_added || [];
@@ -499,16 +496,13 @@ const RecentlyAddedFormat = () => {
 
       const metadataPromises = media.map(async (item) => {
         try {
-          const response = await axios.get(
-            `${API_BASE_URL}/api/tautulli/api/v2`,
-            {
-              params: {
-                apikey: config.tautulliApiKey,
-                cmd: "get_metadata",
-                rating_key: item.rating_key,
-              },
-            }
-          );
+          const response = await axios.get(`/api/tautulli/api/v2`, {
+            params: {
+              apikey: config.tautulliApiKey,
+              cmd: "get_metadata",
+              rating_key: item.rating_key,
+            },
+          });
 
           return {
             rating_key: item.rating_key,
@@ -667,7 +661,7 @@ const RecentlyAddedFormat = () => {
         setValidationErrors(null);
 
         // Get current formats
-        const response = await fetch(`${API_BASE_URL}/api/formats`);
+        const response = await fetch(`/api/formats`);
         const data = await response.json();
         const currentFormats = data.recentlyAdded || [];
 
@@ -702,7 +696,7 @@ const RecentlyAddedFormat = () => {
         }
 
         // Save formats
-        const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
+        const saveResponse = await fetch(`/api/formats`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -781,7 +775,7 @@ const RecentlyAddedFormat = () => {
   const handleDeleteFormat = async (formatToDelete) => {
     try {
       // Get current formats
-      const response = await fetch(`${API_BASE_URL}/api/formats`);
+      const response = await fetch(`/api/formats`);
       const data = await response.json();
       const currentFormats = data.recentlyAdded || [];
 
@@ -796,7 +790,7 @@ const RecentlyAddedFormat = () => {
       );
 
       // Save updated formats
-      const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
+      const saveResponse = await fetch(`/api/formats`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -835,7 +829,7 @@ const RecentlyAddedFormat = () => {
   useEffect(() => {
     const fetchFormats = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/formats`);
+        const response = await fetch(`/api/formats`);
         const data = await response.json();
 
         // Filter formats to only show current media type

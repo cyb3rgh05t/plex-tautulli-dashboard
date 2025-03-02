@@ -28,7 +28,7 @@ export const safePrefetch = async (queryClient, queryKey, queryFn) => {
  */
 export const prefetchActivities = (queryClient) => {
   return safePrefetch(queryClient, "plexActivities", async () => {
-    const response = await fetch(`${API_BASE_URL}/api/downloads`);
+    const response = await fetch(`/api/downloads`);
     if (!response.ok) {
       throw new Error("Failed to fetch activities");
     }
@@ -42,7 +42,7 @@ export const prefetchActivities = (queryClient) => {
  */
 export const prefetchRecentlyAdded = (queryClient) => {
   return safePrefetch(queryClient, "recentlyAdded", async () => {
-    const response = await fetch(`${API_BASE_URL}/api/recent/movies`);
+    const response = await fetch(`/api/recent/movies`);
     if (!response.ok) {
       throw new Error("Failed to fetch recently added");
     }
@@ -55,7 +55,7 @@ export const prefetchRecentlyAdded = (queryClient) => {
  */
 export const prefetchLibraries = (queryClient) => {
   return safePrefetch(queryClient, "libraries", async () => {
-    const response = await fetch(`${API_BASE_URL}/api/libraries`);
+    const response = await fetch(`/api/libraries`);
     if (!response.ok) {
       throw new Error("Failed to fetch libraries");
     }
@@ -68,7 +68,7 @@ export const prefetchLibraries = (queryClient) => {
  */
 export const prefetchUsers = (queryClient) => {
   return safePrefetch(queryClient, "users", async () => {
-    const response = await fetch(`${API_BASE_URL}/api/users`);
+    const response = await fetch(`/api/users`);
     if (!response.ok) {
       throw new Error("Failed to fetch users");
     }

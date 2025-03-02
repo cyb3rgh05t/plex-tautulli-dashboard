@@ -384,7 +384,7 @@ const UsersFormat = () => {
   const fetchFormats = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/formats`);
+      const response = await fetch(`/api/formats`);
       const data = await response.json();
 
       // Filter formats by specific media type
@@ -413,7 +413,7 @@ const UsersFormat = () => {
 
   const fetchPreviewData = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/users`);
+      const response = await fetch(`/api/users`);
       const data = await response.json();
 
       if (data.users && data.users.length > 0) {
@@ -551,7 +551,7 @@ const UsersFormat = () => {
 
     try {
       // Get current formats
-      const response = await fetch(`${API_BASE_URL}/api/formats`);
+      const response = await fetch(`/api/formats`);
       const data = await response.json();
       const currentFormats = data.users || [];
 
@@ -584,7 +584,8 @@ const UsersFormat = () => {
           )
         ) {
           toast.error(
-            "A format with this name already exists for this media type");
+            "A format with this name already exists for this media type"
+          );
           return;
         }
 
@@ -598,7 +599,7 @@ const UsersFormat = () => {
       }
 
       // Save formats
-      const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
+      const saveResponse = await fetch(`/api/formats`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -628,9 +629,8 @@ const UsersFormat = () => {
       setEditFormatId(null);
 
       toast.success(
-        editMode
-          ? "Format updated successfully"
-          : "Format created successfully");
+        editMode ? "Format updated successfully" : "Format created successfully"
+      );
 
       // Restore scroll position
       restoreScrollPosition();
@@ -642,7 +642,8 @@ const UsersFormat = () => {
         err
       );
       toast.error(
-        editMode ? "Failed to update format" : "Failed to save format");
+        editMode ? "Failed to update format" : "Failed to save format"
+      );
     }
   };
 
@@ -652,7 +653,7 @@ const UsersFormat = () => {
     saveScrollPosition();
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/formats`);
+      const response = await fetch(`/api/formats`);
       const data = await response.json();
       const currentFormats = data.users || [];
 
@@ -678,7 +679,7 @@ const UsersFormat = () => {
       );
 
       // Save updated formats
-      const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
+      const saveResponse = await fetch(`/api/formats`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

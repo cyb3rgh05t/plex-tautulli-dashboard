@@ -73,9 +73,7 @@ const SetupCompletionHandler = ({ onComplete }) => {
         try {
           await Promise.all([
             queryClient.prefetchQuery(["plexActivities"], async () => {
-              const response = await fetch(
-                `${import.meta.env.VITE_API_BASE_URL || ""}/api/downloads`
-              );
+              const response = await fetch(`/api/downloads`);
               if (!response.ok)
                 throw new Error("Failed to fetch Plex activities");
               const data = await response.json();
@@ -83,18 +81,14 @@ const SetupCompletionHandler = ({ onComplete }) => {
             }),
 
             queryClient.prefetchQuery(["recentlyAdded"], async () => {
-              const response = await fetch(
-                `${import.meta.env.VITE_API_BASE_URL || ""}/api/recent/movies`
-              );
+              const response = await fetch(`/api/downloads`);
               if (!response.ok)
                 throw new Error("Failed to fetch recently added");
               return await response.json();
             }),
 
             queryClient.prefetchQuery(["libraries"], async () => {
-              const response = await fetch(
-                `${import.meta.env.VITE_API_BASE_URL || ""}/api/libraries`
-              );
+              const response = await fetch(`/api/downloads`);
               if (!response.ok) throw new Error("Failed to fetch libraries");
               return await response.json();
             }),
@@ -135,9 +129,7 @@ const ProtectedRoute = ({ children }) => {
         try {
           await Promise.all([
             queryClient.prefetchQuery(["plexActivities"], async () => {
-              const response = await fetch(
-                `${import.meta.env.VITE_API_BASE_URL || ""}/api/downloads`
-              );
+              const response = await fetch(`/api/downloads`);
               if (!response.ok)
                 throw new Error("Failed to fetch Plex activities");
               const data = await response.json();
@@ -145,18 +137,14 @@ const ProtectedRoute = ({ children }) => {
             }),
 
             queryClient.prefetchQuery(["recentlyAdded"], async () => {
-              const response = await fetch(
-                `${import.meta.env.VITE_API_BASE_URL || ""}/api/recent/movies`
-              );
+              const response = await fetch(`/api/downloads`);
               if (!response.ok)
                 throw new Error("Failed to fetch recently added");
               return await response.json();
             }),
 
             queryClient.prefetchQuery(["libraries"], async () => {
-              const response = await fetch(
-                `${import.meta.env.VITE_API_BASE_URL || ""}/api/libraries`
-              );
+              const response = await fetch(`/api/downloads`);
               if (!response.ok) throw new Error("Failed to fetch libraries");
               return await response.json();
             }),

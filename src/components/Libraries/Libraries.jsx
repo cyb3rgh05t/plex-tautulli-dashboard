@@ -116,7 +116,7 @@ const Libraries = () => {
   useEffect(() => {
     const fetchSavedSections = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/sections`);
+        const response = await fetch(`/api/sections`);
         const data = await response.json();
 
         if (data.sections && data.sections.length) {
@@ -164,7 +164,7 @@ const Libraries = () => {
 
   const fetchLibraries = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/libraries`);
+      const response = await fetch(`/api/libraries`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -209,7 +209,7 @@ const Libraries = () => {
       // Try a direct fetch as fallback if refetch fails
       try {
         console.log("Attempting direct fetch as fallback");
-        const response = await fetch(`${API_BASE_URL}/api/libraries`);
+        const response = await fetch(`/api/libraries`);
         const data = await response.json();
         if (data && data.libraries) {
           console.log(
@@ -325,7 +325,7 @@ const Libraries = () => {
       }));
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/sections`, {
+      const response = await fetch(`/api/sections`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

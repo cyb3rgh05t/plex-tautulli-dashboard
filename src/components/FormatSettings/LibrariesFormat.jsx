@@ -318,7 +318,7 @@ const LibrariesFormat = () => {
   // Fetch sections
   const fetchSections = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/sections`);
+      const response = await axios.get(`/api/sections`);
       const processedSections = (response.data.sections || []).map(
         (section) => {
           // Extract from raw_data if present, otherwise use direct properties
@@ -352,7 +352,7 @@ const LibrariesFormat = () => {
   const fetchFormats = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/formats`);
+      const response = await fetch(`/api/formats`);
       const data = await response.json();
       // Change to use libraries array instead of sections
       setFormats(data.libraries || []);
@@ -410,7 +410,7 @@ const LibrariesFormat = () => {
 
     try {
       // Get current formats
-      const response = await fetch(`${API_BASE_URL}/api/formats`);
+      const response = await fetch(`/api/formats`);
       const data = await response.json();
       // Change to use libraries array
       const currentFormats = data.libraries || [];
@@ -454,7 +454,7 @@ const LibrariesFormat = () => {
         successMessage = "Format created successfully";
       }
 
-      const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
+      const saveResponse = await fetch(`/api/formats`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -547,7 +547,7 @@ const LibrariesFormat = () => {
     saveScrollPosition();
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/formats`);
+      const response = await fetch(`/api/formats`);
       const data = await response.json();
       // Change to use libraries array
       const currentFormats = data.libraries || [];
@@ -558,7 +558,7 @@ const LibrariesFormat = () => {
       );
 
       // Save updated formats
-      const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
+      const saveResponse = await fetch(`/api/formats`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

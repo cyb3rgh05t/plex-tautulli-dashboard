@@ -146,7 +146,7 @@ const Users = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/users`);
+      const response = await fetch(`/api/users`);
 
       if (!response.ok) {
         throw new Error(`Failed to fetch users (Status: ${response.status})`);
