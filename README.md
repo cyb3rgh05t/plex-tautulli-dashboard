@@ -2,7 +2,7 @@
 
 # 🎬 Plex & Tautulli Dashboard 📊
 
-<img src="https://img.shields.io/badge/dynamic/json?style=for-the-badge&color=blue&label=version&query=$.version&url=https://raw.githubusercontent.com/cyb3rgh05t/plex-tautulli-dashboard/main/package.json" alt="Version" />
+<img src="https://img.shields.io/badge/version-2.2.0-blue" alt="Version" />
 <img src="https://img.shields.io/badge/React-18.2.0-61DAFB?style=for-the-badge&logo=react" alt="React" />
 <img src="https://img.shields.io/badge/Tailwind-CSS-38B2AC?style=for-the-badge&logo=tailwind-css" alt="Tailwind" />
 <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License" />
@@ -135,10 +135,11 @@ services:
       - NODE_ENV=production
       - ALLOWED_ORIGINS=http://your-server-ip:3005
       - PORT=3006
-      - VITE_BACKEND_URL=http://your-server-ip:3006
       - VITE_API_BASE_URL=http://your-server-ip:3006
+      - VITE_ALLOWED_HOSTS=all # Allow any host to access frontend
+      - VITE_ALLOW_ALL_HOSTS=true # Alternative to VITE_ALLOWED_HOSTS
     volumes:
-      - ./configs:/app/src/utils/configs
+      - ./configs:/app/configs
     restart: unless-stopped
 ```
 
@@ -151,10 +152,11 @@ Create a `.env` file in the root directory:
 ```env
 TZ=Europe/Berlin
 NODE_ENV=development
-ALLOWED_ORIGINS=http://localhost:3005
+ALLOWED_ORIGINS=http://your-server-ip:3005
 PORT=3006
-VITE_BACKEND_URL=http://localhost:3006
-VITE_API_BASE_URL=http://localhost:3006
+VITE_ALLOWED_HOSTS=all # Allow any host to access frontend
+VITE_ALLOW_ALL_HOSTS=true # Alternative to VITE_ALLOWED_HOSTS
+VITE_API_BASE_URL=http://your-server-ip:3006
 PROXY_TIMEOUT=30000
 PROXY_READ_TIMEOUT=30000
 PROXY_WRITE_TIMEOUT=30000

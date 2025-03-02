@@ -8,6 +8,7 @@ const { getFormats, saveFormats } = require("./src/utils/formatStore.cjs");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
+import { appVersion } from "../../../version";
 
 // Constants and Configuration
 const SAVED_SECTIONS_PATH = path.join(
@@ -2034,7 +2035,7 @@ const serverBanner = `
 ╔════════════════════════════════════════════════════╗
 ║                                                    ║
 ║            Plex & Tautulli Dashboard               ║
-║                                                    ║
+║                 Version ${appVersion}              ║
 ║                                                    ║
 ║                 by cyb3rgh05t                      ║
 ╚════════════════════════════════════════════════════╝`;
@@ -2070,13 +2071,14 @@ const PORT = process.env.PORT || 3006;
 app.listen(PORT, "0.0.0.0", () => {
   // Changed from localhost to 0.0.0.0
   console.clear();
-  //console.log(serverBanner);
+  console.log(serverBanner);
+  console.log(`Version: ${appVersion}`);
   console.log("\n🚀 Server Information:");
   console.log("├── Status: Running");
-  console.log(`├── Listening on: ${process.env.VITE_BACKEND_URL}`);
+  console.log(`├── Listening on: ${process.env.VITE_API_BASE_URL}`);
   console.log(`├── Allowed CORS: ${ALLOWED_ORIGINS}`);
   console.log(`├── Environment: ${process.env.NODE_ENV || "development"}`);
   console.log("└── Time:", new Date().toLocaleString());
-  //console.log(formatConfig(getConfig()));
+  console.log(formatConfig(getConfig()));
   //console.log(endpointsBanner);
 });

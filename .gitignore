@@ -36,3 +36,4 @@ Thumbs.db
 # Backup files
 *.backup
 sections.json
+package-lock.json
