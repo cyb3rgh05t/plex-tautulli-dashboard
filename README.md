@@ -78,24 +78,6 @@ A modern, elegant dashboard for monitoring your Plex Media Server and Tautulli s
   </tr>
 </table>
 
-## 🔄 Version Management
-
-This project uses a centralized version management approach with three components:
-
-1. **version.js**: The single source of truth for the application version
-2. **package.json**: Automatically updated using the version from version.js
-3. **README badge**: Dynamically displays the version from package.json
-
-## 🚀 Quick Start
-
-```mermaid
-graph TD
-    A[Install] --> B[Configure]
-    B --> C[Run Setup Wizard]
-    C --> D[Customize Formats]
-    D --> E[Enjoy Dashboard]
-```
-
 ### Prerequisites
 
 - Node.js (v14+)
