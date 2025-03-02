@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>API Test</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+      .result {
+        padding: 10px;
+        border: 1px solid #ccc;
+        margin-top: 10px;
+        white-space: pre-wrap;
+      }
+      button {
+        padding: 10px;
+        margin: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>API Test Page</h1>
+
+    <div>
+      <button onclick="testConfigEndpoint()">Test /api/config</button>
+      <button onclick="testOptionsRequest()">Test OPTIONS request</button>
+      <button onclick="testHealthEndpoint()">Test /health</button>
+    </div>
+
+    <div id="result" class="result">Results will appear here...</div>
+
+    <script>
+      async function testConfigEndpoint() {
+        const resultDiv = document.getElementById("result");
+        resultDiv.innerHTML = "Testing /api/config...";
+
+        try {
+          const response = await fetch("/api/config");
+          const data = await response.json();
+
+          resultDiv.innerHTML =
+            "SUCCESS! /api/config response:\n" + JSON.stringify(data, null, 2);
+        } catch (error) {
+          resultDiv.innerHTML = "ERROR with /api/config:\n" + error.message;
+          console.error("Full error:", error);
+        }
+      }
+
+      async function testOptionsRequest() {
+        const resultDiv = document.getElementById("result");
+        resultDiv.innerHTML = "Testing OPTIONS request...";
+
+        try {
+          const response = await fetch("/api/config", {
+            method: "OPTIONS",
+            headers: {
+              "Access-Control-Request-Method": "GET",
+              "Access-Control-Request-Headers": "content-type",
+            },
+          });
+
+          resultDiv.innerHTML =
+            "OPTIONS request status: " + response.status + "\n" + "Headers:\n";
+
+          for (let [key, value] of response.headers.entries()) {
+            resultDiv.innerHTML += `${key}: ${value}\n`;
+          }
+        } catch (error) {
+          resultDiv.innerHTML = "ERROR with OPTIONS request:\n" + error.message;
+          console.error("Full error:", error);
+        }
+      }
+
+      async function testHealthEndpoint() {
+        const resultDiv = document.getElementById("result");
+        resultDiv.innerHTML = "Testing /health...";
+
+        try {
+          const response = await fetch("/health");
+          const data = await response.json();
+
+          resultDiv.innerHTML =
+            "SUCCESS! /health response:\n" + JSON.stringify(data, null, 2);
+        } catch (error) {
+          resultDiv.innerHTML = "ERROR with /health:\n" + error.message;
+          console.error("Full error:", error);
+        }
+      }
+    </script>
+  </body>
+</html>
