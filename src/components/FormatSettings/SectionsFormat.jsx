@@ -1,5 +1,3 @@
-// with theme styling applied
-
 import React, { useState, useEffect, useRef } from "react";
 import { logError } from "../../utils/logger";
 import toast from "react-hot-toast";
@@ -11,41 +9,39 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
 
 // Helper functions
-const formatDuration = (duration) => {
-  if (!duration) return "Unknown";
-
-  // Convert to milliseconds if necessary
-  const ms =
-    duration.toString().length <= 6 ? duration * 1000 : Number(duration);
-
-  const hours = Math.floor(ms / (1000 * 60 * 60));
-  const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-
-  if (hours === 0) {
-    return `${minutes}m`;
-  }
-  return `${hours}h ${minutes}m`;
-};
-
 const formatDate = (timestamp, format = "default") => {
+  // Return early if no timestamp
   if (!timestamp) return "Never";
 
-  // Handle ISO date strings
-  if (typeof timestamp === "string" && timestamp.includes("-")) {
-    timestamp = new Date(timestamp).getTime() / 1000;
-  }
+  let date;
 
-  // Convert to milliseconds if needed
-  const timestampMs =
-    String(timestamp).length === 10 ? timestamp * 1000 : Number(timestamp);
-  const date = new Date(timestampMs);
-  const now = new Date();
-
-  // Ensure we have a valid date
-  if (isNaN(date.getTime())) {
+  try {
+    // Handle ISO date strings (YYYY-MM-DD)
+    if (typeof timestamp === "string" && timestamp.includes("-")) {
+      date = new Date(timestamp);
+    }
+    // Handle numeric timestamps
+    else if (typeof timestamp === "number" || !isNaN(Number(timestamp))) {
+      const ts = typeof timestamp === "number" ? timestamp : Number(timestamp);
+      // If timestamp is smaller than year 2100 in seconds (4,294,967,296), assume it's in seconds
+      date = ts < 4294967296 ? new Date(ts * 1000) : new Date(ts);
+    }
+    // Fallback
+    else {
+      date = new Date(timestamp);
+    }
+  } catch (e) {
+    console.error(`Error parsing date: ${timestamp}`, e);
     return "Invalid Date";
   }
 
+  // Ensure we have a valid date
+  if (isNaN(date.getTime())) {
+    console.warn(`Invalid date from timestamp: ${timestamp}`);
+    return "Invalid Date";
+  }
+
+  const now = new Date();
   const diffMs = now - date;
   const diffSeconds = Math.floor(diffMs / 1000);
   const diffMinutes = Math.floor(diffSeconds / 60);
@@ -67,20 +63,25 @@ const formatDate = (timestamp, format = "default") => {
       if (diffYears > 0) {
         return diffYears === 1 ? "1 year ago" : `${diffYears} years ago`;
       }
+
       if (diffMonths > 0) {
         return diffMonths === 1 ? "1 month ago" : `${diffMonths} months ago`;
       }
+
       if (diffDays > 0) {
         return diffDays === 1 ? "1 day ago" : `${diffDays} days ago`;
       }
+
       if (diffHours > 0) {
         return diffHours === 1 ? "1 hour ago" : `${diffHours} hours ago`;
       }
+
       if (diffMinutes > 0) {
         return diffMinutes === 1
           ? "1 minute ago"
           : `${diffMinutes} minutes ago`;
       }
+
       return diffSeconds === 1 ? "1 second ago" : `${diffSeconds} seconds ago`;
 
     case "full":
@@ -106,6 +107,52 @@ const formatDate = (timestamp, format = "default") => {
   }
 };
 
+// Enhanced formatDuration function for more robust duration handling
+const formatDuration = (durationMs) => {
+  // Ensure we have a valid input
+  if (!durationMs) return "0m";
+
+  let duration;
+
+  // Handle string inputs that might already be formatted (e.g., "45m")
+  if (typeof durationMs === "string") {
+    // If it's already in the format we want (e.g., "45m" or "1h 30m"), return it
+    if (/^\d+h( \d+m)?$|^\d+m$/.test(durationMs.trim())) {
+      return durationMs.trim();
+    }
+
+    // If it's a number in string format, parse it
+    duration = Number(durationMs);
+  } else {
+    duration = Number(durationMs);
+  }
+
+  // If duration is invalid or 0, return "0m"
+  if (isNaN(duration) || duration <= 0) return "0m";
+
+  // If duration is in seconds (common for Plex/Tautulli), convert to milliseconds
+  // Heuristic: if duration is less than 10000 and greater than 0, it's likely in seconds
+  if (duration > 0 && duration < 10000) {
+    duration *= 1000;
+  }
+
+  // Convert milliseconds to minutes
+  const totalMinutes = Math.floor(duration / 60000);
+
+  // Calculate hours and remaining minutes
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  // Format the output
+  if (hours > 0 && minutes > 0) {
+    return `${hours}h ${minutes}m`;
+  } else if (hours > 0) {
+    return `${hours}h`;
+  } else {
+    return `${minutes}m`;
+  }
+};
+
 const formatArray = (arr) => {
   if (!arr || !Array.isArray(arr)) return "";
   return arr.join(", ");
@@ -124,38 +171,50 @@ const processTemplate = (template, data) => {
     const format = match[1] || "default";
 
     let value;
-    if (
-      [
-        "added_at",
-        "updated_at",
-        "last_viewed_at",
-        "originally_available_at",
-      ].includes(key)
-    ) {
-      value = formatDate(data[key], format);
-    } else if (key === "duration") {
-      value = formatDuration(data[key]);
-    } else if (
-      [
-        "directors",
-        "writers",
-        "actors",
-        "genres",
-        "labels",
-        "collections",
-      ].includes(key)
-    ) {
-      value = formatArray(data[key]);
-    } else if (
-      key === "count" ||
-      key === "parent_count" ||
-      key === "child_count"
-    ) {
-      value = (data[key] || 0).toLocaleString();
-    } else {
-      value = data[key] || "";
+
+    try {
+      // Special handling for timestamp fields
+      if (
+        [
+          "added_at",
+          "updated_at",
+          "last_viewed_at",
+          "originally_available_at",
+        ].includes(key)
+      ) {
+        value = formatDate(data[key], format);
+      }
+      // Special handling for duration
+      else if (key === "duration") {
+        value = formatDuration(data[key]);
+      }
+      // Special handling for arrays
+      else if (
+        [
+          "directors",
+          "writers",
+          "actors",
+          "genres",
+          "labels",
+          "collections",
+        ].includes(key)
+      ) {
+        value = formatArray(data[key]);
+      }
+      // Special handling for counts
+      else if (["count", "parent_count", "child_count"].includes(key)) {
+        value = (data[key] || 0).toLocaleString();
+      }
+      // Default handling for all other fields
+      else {
+        value = data[key] !== undefined ? data[key] : "";
+      }
+    } catch (error) {
+      console.error(`Error processing template variable ${key}:`, error);
+      value = "";
     }
 
+    // Replace the variable with the formatted value
     result = result.replace(variable, value);
   });
 
@@ -265,21 +324,13 @@ const VariableButton = ({ variable, onClick }) => (
   </button>
 );
 
-const FormatCard = ({ format, onDelete, previewValue }) => (
+const FormatCard = ({ format, onDelete, onEdit, previewValue }) => (
   <ThemedCard
+    id={`format-${format.name.replace(/\s+/g, "-")}`}
     className="hover:bg-gray-800/70 transition-all duration-200"
     isInteractive
     hasBorder
     useAccentBorder={true}
-    action={
-      <ThemedButton
-        variant="ghost"
-        size="sm"
-        icon={Icons.Trash2}
-        onClick={() => onDelete(format.name)}
-        className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
-      />
-    }
   >
     <div>
       <div className="flex justify-between items-center mb-3">
@@ -291,6 +342,24 @@ const FormatCard = ({ format, onDelete, previewValue }) => (
               ? "All Sections"
               : `Section ${format.sectionId}`}
           </p>
+        </div>
+        <div className="flex gap-2">
+          <ThemedButton
+            variant="ghost"
+            size="sm"
+            icon={Icons.Edit2}
+            onClick={() => onEdit(format)}
+            className="text-accent-base hover:text-accent-hover hover:bg-accent-light/20"
+            title="Edit format"
+          />
+          <ThemedButton
+            variant="ghost"
+            size="sm"
+            icon={Icons.Trash2}
+            onClick={() => onDelete(format.name)}
+            className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
+            title="Delete format"
+          />
         </div>
       </div>
       <div className="space-y-3">
@@ -359,6 +428,10 @@ const SectionsFormat = () => {
   });
   const [error, setError] = useState(null);
   const templateInputRef = useRef(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingFormat, setEditingFormat] = useState(null);
+  const scrollPositionRef = useRef(0);
+  const formRef = useRef(null);
 
   // Fetch sections
   const fetchSections = async () => {
@@ -410,6 +483,21 @@ const SectionsFormat = () => {
     }
   };
 
+  // Save scroll position helper
+  const saveScrollPosition = () => {
+    scrollPositionRef.current = window.scrollY;
+  };
+
+  // Restore scroll position helper
+  const restoreScrollPosition = () => {
+    setTimeout(() => {
+      window.scrollTo({
+        top: scrollPositionRef.current,
+        behavior: "auto", // Use auto instead of smooth to prevent visible scrolling
+      });
+    }, 100);
+  };
+
   // Load formats and sections when component mounts
   useEffect(() => {
     fetchFormats();
@@ -448,10 +536,54 @@ const SectionsFormat = () => {
     }
   };
 
-  // Handle form submission for new format
+  // Handle edit button click
+  const handleEdit = (format) => {
+    // Save current scroll position
+    saveScrollPosition();
+
+    // Set form values from the format
+    setNewFormat({
+      name: format.name,
+      template: format.template,
+      sectionId: format.sectionId || "all",
+    });
+    setIsEditing(true);
+    setEditingFormat(format);
+
+    // Scroll to the form and focus the template input
+    setTimeout(() => {
+      if (formRef.current) {
+        formRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+      if (templateInputRef.current) {
+        templateInputRef.current.focus();
+      }
+    }, 100);
+  };
+
+  // Handle canceling edit mode
+  const handleCancelEdit = () => {
+    // Save current scroll position
+    saveScrollPosition();
+
+    setIsEditing(false);
+    setEditingFormat(null);
+    setNewFormat({ name: "", template: "", sectionId: "all" });
+
+    // Restore scroll position
+    restoreScrollPosition();
+  };
+
+  // Handle form submission for new format or update existing format
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!newFormat.name || !newFormat.template) return;
+
+    // Save current scroll position
+    saveScrollPosition();
 
     try {
       // Get current formats
@@ -459,19 +591,40 @@ const SectionsFormat = () => {
       const data = await response.json();
       const currentFormats = data.sections || [];
 
-      // Check for duplicate names for the same section
-      if (
-        currentFormats.some(
-          (f) =>
-            f.name === newFormat.name && f.sectionId === newFormat.sectionId
-        )
-      ) {
-        toast.error("A format with this name already exists for this section");
-        return;
+      let updatedFormats;
+      let successMessage;
+
+      if (isEditing) {
+        // Update existing format
+        updatedFormats = currentFormats.map((format) => {
+          if (
+            format.name === editingFormat.name &&
+            format.sectionId === editingFormat.sectionId
+          ) {
+            return newFormat;
+          }
+          return format;
+        });
+        successMessage = "Format updated successfully";
+      } else {
+        // Check for duplicate names for the same section
+        if (
+          currentFormats.some(
+            (f) =>
+              f.name === newFormat.name && f.sectionId === newFormat.sectionId
+          )
+        ) {
+          toast.error(
+            "A format with this name already exists for this section"
+          );
+          return;
+        }
+
+        // Add new format and save
+        updatedFormats = [...currentFormats, newFormat];
+        successMessage = "Format created successfully";
       }
 
-      // Add new format and save
-      const updatedFormats = [...currentFormats, newFormat];
       const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
         method: "POST",
         headers: {
@@ -484,29 +637,49 @@ const SectionsFormat = () => {
       });
 
       if (!saveResponse.ok) {
-        throw new Error("Failed to save format");
+        throw new Error(
+          isEditing ? "Failed to update format" : "Failed to save format"
+        );
       }
 
-      // Refresh formats and reset form
-      fetchFormats();
+      // Update local state
+      setFormats(updatedFormats);
+
+      // Reset form
       setNewFormat({ name: "", template: "", sectionId: "all" });
-      toast.success("Format created successfully");
+      setIsEditing(false);
+      setEditingFormat(null);
+
+      toast.success(successMessage);
+
+      // Restore scroll position
+      restoreScrollPosition();
     } catch (err) {
-      logError("Failed to save section format", err);
-      toast.error("Failed to save format");
+      logError(
+        isEditing
+          ? "Failed to update section format"
+          : "Failed to save section format",
+        err
+      );
+      toast.error(
+        isEditing ? "Failed to update format" : "Failed to save format"
+      );
     }
   };
 
-  // Handle format deletion
-  const handleDelete = async (formatName) => {
+  // Modified handleDelete function for SectionsFormat.jsx
+  const handleDelete = async (formatName, sectionId = "all") => {
+    // Save current scroll position
+    saveScrollPosition();
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/formats`);
       const data = await response.json();
       const currentFormats = data.sections || [];
 
-      // Remove format
+      // Remove format - use both name and sectionId to ensure we only delete formats from this component
       const updatedFormats = currentFormats.filter(
-        (f) => f.name !== formatName
+        (f) => !(f.name === formatName && f.sectionId === sectionId)
       );
 
       // Save updated formats
@@ -525,9 +698,25 @@ const SectionsFormat = () => {
         throw new Error("Failed to delete format");
       }
 
-      // Refresh formats
-      fetchFormats();
+      // Update local state
+      setFormats(updatedFormats);
+
+      // If we're editing the deleted format, exit edit mode
+      if (
+        isEditing &&
+        editingFormat &&
+        editingFormat.name === formatName &&
+        editingFormat.sectionId === sectionId
+      ) {
+        setIsEditing(false);
+        setEditingFormat(null);
+        setNewFormat({ name: "", template: "", sectionId: "all" });
+      }
+
       toast.success("Format deleted successfully");
+
+      // Restore scroll position
+      restoreScrollPosition();
     } catch (err) {
       logError("Failed to delete section format", err);
       toast.error("Failed to delete format");
@@ -601,14 +790,26 @@ const SectionsFormat = () => {
         </div>
       </ThemedCard>
 
-      {/* Create New Format Section */}
+      {/* Create/Edit New Format Section */}
       <ThemedCard
-        title="Create New Format"
-        icon={Icons.FilePlus}
-        className="p-6"
+        title={isEditing ? "Edit Format" : "Create New Format"}
+        icon={isEditing ? Icons.Edit2 : Icons.PlusCircle}
+        className={isEditing ? "border-accent-base border-2" : "p-6"}
         useAccentBorder={true}
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {isEditing && (
+          <div className="bg-accent-light/20 border border-accent-base/30 rounded-lg mb-4 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Icons.Info size={18} className="text-accent-base" />
+              <p className="text-sm text-white">
+                You are editing format{" "}
+                <span className="font-medium">"{editingFormat.name}"</span>
+              </p>
+            </div>
+          </div>
+        )}
+
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-theme font-medium mb-2">
               Format Name
@@ -687,14 +888,27 @@ const SectionsFormat = () => {
             </div>
           )}
 
-          <ThemedButton
-            type="submit"
-            variant="accent"
-            disabled={!newFormat.name || !newFormat.template}
-            icon={Icons.Plus}
-          >
-            Add Format
-          </ThemedButton>
+          <div className="flex items-center gap-3">
+            <ThemedButton
+              type="submit"
+              variant="accent"
+              disabled={!newFormat.name || !newFormat.template}
+              icon={isEditing ? Icons.Save : Icons.Plus}
+            >
+              {isEditing ? "Update Format" : "Add Format"}
+            </ThemedButton>
+
+            {isEditing && (
+              <ThemedButton
+                type="button"
+                variant="ghost"
+                onClick={handleCancelEdit}
+                icon={Icons.X}
+              >
+                Cancel
+              </ThemedButton>
+            )}
+          </div>
         </form>
       </ThemedCard>
 
@@ -718,6 +932,7 @@ const SectionsFormat = () => {
                 key={index}
                 format={format}
                 onDelete={handleDelete}
+                onEdit={handleEdit}
                 previewValue={processTemplate(
                   format.template,
                   format.sectionId === "all"
@@ -727,11 +942,11 @@ const SectionsFormat = () => {
                         section_id: format.sectionId,
                         section_name:
                           sections.find(
-                            (s) => s.section_id.toString() === format.sectionId
+                            (s) => s.section_id?.toString() === format.sectionId
                           )?.name || "Unknown Section",
                         section_type:
                           sections.find(
-                            (s) => s.section_id.toString() === format.sectionId
+                            (s) => s.section_id?.toString() === format.sectionId
                           )?.type || "unknown",
                       }
                 )}

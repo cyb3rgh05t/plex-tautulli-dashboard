@@ -1,5 +1,3 @@
-// with theme styling applied
-
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
@@ -12,12 +10,87 @@ import ThemedCard from "../common/ThemedCard";
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
 
-// Format state helper
-const formatState = (state) => {
-  if (state === "playing") return "watching";
-  if (!state) return "watched";
-  return state;
-};
+// Variable Button Component
+const VariableButton = ({ variable, onClick }) => (
+  <button
+    onClick={() => onClick(variable.name)}
+    className="bg-gray-800/50 p-4 rounded-lg text-left hover:bg-gray-800/70 
+      border border-gray-700/50 transition-all duration-200 group"
+  >
+    <div className="flex items-start justify-between">
+      <div>
+        <code className="text-accent-base font-mono">
+          {variable.isDate
+            ? `{${variable.name}:relative}`
+            : `{${variable.name}}`}
+        </code>
+        <p className="text-theme-muted text-sm mt-2">{variable.description}</p>
+      </div>
+      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+        <Icons.Plus className="text-accent-base" size={16} />
+      </div>
+    </div>
+  </button>
+);
+
+// Format Card Component
+const FormatCard = ({ format, onDelete, onEdit, previewValue }) => (
+  <ThemedCard
+    id={`format-${format.name.replace(/\s+/g, "-")}`}
+    isInteractive
+    hasBorder
+    useAccentBorder={true}
+    className="p-4 hover:shadow-accent-sm transition-all duration-200"
+  >
+    <div className="flex justify-between items-center mb-3">
+      <div>
+        <h4 className="text-white font-medium">{format.name}</h4>
+        <p className="text-sm text-theme-muted">
+          Applied to:{" "}
+          {format.sectionId === "all"
+            ? "All Libraries"
+            : `Section ${format.sectionId}`}
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <ThemedButton
+          variant="ghost"
+          size="sm"
+          icon={Icons.Edit2}
+          onClick={() => onEdit(format)}
+          className="text-accent-base hover:bg-accent-light/20"
+          title="Edit format"
+        />
+        <ThemedButton
+          variant="ghost"
+          size="sm"
+          icon={Icons.Trash2}
+          onClick={() => onDelete(format)}
+          className="text-red-400 hover:bg-red-500/10"
+          title="Delete format"
+        />
+      </div>
+    </div>
+    <div className="space-y-3">
+      <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+        <div className="flex items-center gap-2 text-theme-muted text-sm mb-2">
+          <Icons.Code size={14} className="text-accent-base" />
+          <span>Template</span>
+        </div>
+        <code className="text-sm text-theme font-mono">{format.template}</code>
+      </div>
+      <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+        <div className="flex items-center gap-2 text-theme-muted text-sm mb-2">
+          <Icons.EyeIcon size={14} className="text-accent-base" />
+          <span>Preview</span>
+        </div>
+        <code className="text-sm text-accent-base font-mono">
+          {previewValue}
+        </code>
+      </div>
+    </div>
+  </ThemedCard>
+);
 
 // Date Formatting Utility
 const formatDate = (timestamp, format = "default") => {
@@ -90,17 +163,17 @@ const formatDate = (timestamp, format = "default") => {
       });
 
     default:
-      return date.toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "2-digit",
+      return date.toLocaleDateString("en-US", {
         year: "numeric",
+        month: "long",
+        day: "numeric",
       });
   }
 };
 
-// Template Processing Utility
+// Template processing helper
 const processTemplate = (template, data) => {
-  if (!template) return "";
+  if (!template || !data) return "";
 
   let result = template;
   const variables = template.match(/\{([^}]+)\}/g) || [];
@@ -111,94 +184,28 @@ const processTemplate = (template, data) => {
     const format = match[1] || "default";
 
     let value;
-
-    // Special handling for timestamp fields
-    if (key === "last_accessed" || key === "last_played") {
+    if (
+      [
+        "added_at",
+        "updated_at",
+        "last_viewed_at",
+        "originally_available_at",
+      ].includes(key)
+    ) {
       value = formatDate(data[key], format);
-    } else {
-      // Default handling for other variables
+    } else if (key === "duration") {
       value = data[key];
+    } else if (key === "count" || key === "total_plays") {
+      value = (data[key] || 0).toLocaleString();
+    } else {
+      value = data[key] || "";
     }
 
-    if (value !== undefined) {
-      result = result.replace(variable, value);
-    }
+    result = result.replace(variable, value);
   });
 
   return result;
 };
-
-// Variable Button Component
-const VariableButton = ({ variable, onClick }) => (
-  <button
-    onClick={() => onClick(variable.name)}
-    className="bg-gray-800/50 p-4 rounded-lg text-left hover:bg-gray-800/70 
-      border border-gray-700/50 transition-all duration-200 group"
-  >
-    <div className="flex items-start justify-between">
-      <div>
-        <code className="text-accent-base font-mono">
-          {variable.isDate
-            ? `{${variable.name}:relative}`
-            : `{${variable.name}}`}
-        </code>
-        <p className="text-theme-muted text-sm mt-2">{variable.description}</p>
-      </div>
-      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-        <Icons.Plus className="text-accent-base" size={16} />
-      </div>
-    </div>
-  </button>
-);
-
-// Format Card Component
-const FormatCard = ({ format, onDelete, previewValue }) => (
-  <ThemedCard
-    isInteractive
-    hasBorder
-    useAccentBorder={true}
-    className="p-4 hover:shadow-accent-sm transition-all duration-200"
-  >
-    <div className="flex justify-between items-center mb-3">
-      <div>
-        <h4 className="text-white font-medium">{format.name}</h4>
-        <p className="text-sm text-theme-muted">
-          Applied to:{" "}
-          {format.sectionId === "all"
-            ? "All Libraries"
-            : `Section ${format.sectionId}`}
-        </p>
-      </div>
-      <ThemedButton
-        onClick={() => onDelete(format.name)}
-        variant="ghost"
-        size="sm"
-        icon={Icons.Trash2}
-        className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
-      >
-        Delete
-      </ThemedButton>
-    </div>
-    <div className="space-y-3">
-      <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
-        <div className="flex items-center gap-2 text-theme-muted text-sm mb-2">
-          <Icons.Code size={14} className="text-accent-base" />
-          <span>Template</span>
-        </div>
-        <code className="text-sm text-theme font-mono">{format.template}</code>
-      </div>
-      <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
-        <div className="flex items-center gap-2 text-theme-muted text-sm mb-2">
-          <Icons.EyeIcon size={14} className="text-accent-base" />
-          <span>Preview</span>
-        </div>
-        <code className="text-sm text-accent-base font-mono">
-          {previewValue}
-        </code>
-      </div>
-    </div>
-  </ThemedCard>
-);
 
 // Example data for previewing formats
 const EXAMPLE_DATA = {
@@ -243,7 +250,6 @@ const SECTION_VARIABLES = [
   { name: "section_id", description: "Unique identifier for the section" },
   { name: "section_name", description: "Name of the library section" },
   { name: "section_type", description: "Type of media (movie, show, artist)" },
-  { name: "library_name", description: "Library display name" },
 
   // Count Information
   { name: "count", description: "Total number of primary items" },
@@ -289,33 +295,51 @@ const LibrariesFormat = () => {
   const [previewData, setPreviewData] = useState(EXAMPLE_DATA);
   const [error, setError] = useState(null);
   const templateInputRef = useRef(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingFormat, setEditingFormat] = useState(null);
+  const scrollPositionRef = useRef(0);
+  const formRef = useRef(null);
+
+  // Save scroll position helper
+  const saveScrollPosition = () => {
+    scrollPositionRef.current = window.scrollY;
+  };
+
+  // Restore scroll position helper
+  const restoreScrollPosition = () => {
+    setTimeout(() => {
+      window.scrollTo({
+        top: scrollPositionRef.current,
+        behavior: "auto", // Use auto instead of smooth to prevent visible scrolling
+      });
+    }, 100);
+  };
 
   // Fetch sections
   const fetchSections = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/sections`);
-      const data = await response.json();
-
-      // Process sections to ensure they have the expected structure
-      const processedSections = (data.sections || []).map((section) => {
-        // Extract from raw_data if present, otherwise use direct properties
-        const rawData = section.raw_data || {};
-        return {
-          section_id: rawData.section_id || section.section_id,
-          name:
-            rawData.name ||
-            section.name ||
-            rawData.section_name ||
-            section.section_name ||
-            "Unknown Section",
-          type:
-            rawData.type ||
-            section.type ||
-            rawData.section_type ||
-            section.section_type ||
-            "unknown",
-        };
-      });
+      const processedSections = (response.data.sections || []).map(
+        (section) => {
+          // Extract from raw_data if present, otherwise use direct properties
+          const rawData = section.raw_data || {};
+          return {
+            section_id: rawData.section_id || section.section_id,
+            name:
+              rawData.name ||
+              section.name ||
+              rawData.section_name ||
+              section.section_name ||
+              "Unknown Section",
+            type:
+              rawData.type ||
+              section.type ||
+              rawData.section_type ||
+              section.section_type ||
+              "unknown",
+          };
+        }
+      );
 
       setSections(processedSections);
       console.log("Processed sections:", processedSections);
@@ -330,9 +354,10 @@ const LibrariesFormat = () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/formats`);
       const data = await response.json();
-      setFormats(data.sections || []);
+      // Change to use libraries array instead of sections
+      setFormats(data.libraries || []);
     } catch (err) {
-      logError("Failed to fetch section formats", err);
+      logError("Failed to fetch library formats", err);
       setError("Failed to load formats");
       toast.error("Failed to load formats");
     } finally {
@@ -375,65 +400,161 @@ const LibrariesFormat = () => {
     }
   };
 
-  // Handle form submission for new format
+  // Handle form submission for new format or update existing format
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!newFormat.name || !newFormat.template) return;
+
+    // Save current scroll position
+    saveScrollPosition();
 
     try {
       // Get current formats
       const response = await fetch(`${API_BASE_URL}/api/formats`);
       const data = await response.json();
-      const currentFormats = data.sections || [];
+      // Change to use libraries array
+      const currentFormats = data.libraries || [];
 
-      // Check for duplicate names for the same section
-      if (
-        currentFormats.some(
-          (f) =>
-            f.name === newFormat.name && f.sectionId === newFormat.sectionId
-        )
-      ) {
-        toast.error("A format with this name already exists for this section");
-        return;
+      let updatedFormats;
+      let successMessage;
+
+      if (isEditing) {
+        // Update existing format
+        updatedFormats = currentFormats.map((format) => {
+          if (
+            format.name === editingFormat.name &&
+            format.sectionId === editingFormat.sectionId
+          ) {
+            return {
+              ...format,
+              name: newFormat.name,
+              template: newFormat.template,
+              sectionId: newFormat.sectionId,
+            };
+          }
+          return format;
+        });
+        successMessage = "Format updated successfully";
+      } else {
+        // Check for duplicate names for the same section
+        if (
+          currentFormats.some(
+            (f) =>
+              f.name === newFormat.name && f.sectionId === newFormat.sectionId
+          )
+        ) {
+          toast.error(
+            "A format with this name already exists for this section"
+          );
+          return;
+        }
+
+        // Add new format and save
+        updatedFormats = [...currentFormats, newFormat];
+        successMessage = "Format created successfully";
       }
 
-      // Add new format and save
-      const updatedFormats = [...currentFormats, newFormat];
       const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          type: "sections",
+          type: "libraries", // Change to libraries
           formats: updatedFormats,
         }),
       });
 
       if (!saveResponse.ok) {
-        throw new Error("Failed to save format");
+        throw new Error(
+          isEditing ? "Failed to update format" : "Failed to save format"
+        );
       }
 
-      // Refresh formats and reset form
-      fetchFormats();
+      // Update local state
+      setFormats(updatedFormats);
+
+      // Reset form
       setNewFormat({ name: "", template: "", sectionId: "all" });
-      toast.success("Format created successfully");
+      setIsEditing(false);
+      setEditingFormat(null);
+
+      toast.success(successMessage);
+
+      // Restore scroll position
+      restoreScrollPosition();
     } catch (err) {
-      logError("Failed to save section format", err);
-      toast.error("Failed to save format");
+      logError(
+        isEditing
+          ? "Failed to update library format"
+          : "Failed to save library format",
+        err
+      );
+      toast.error(
+        isEditing ? "Failed to update format" : "Failed to save format"
+      );
     }
   };
 
+  // Handle edit button click
+  const handleEdit = (format) => {
+    // Set form values from the format
+    setNewFormat({
+      name: format.name,
+      template: format.template,
+      sectionId: format.sectionId || "all",
+    });
+    setIsEditing(true);
+    setEditingFormat(format);
+
+    // Get position of the format card being edited to maintain context
+    const formatElement = document.getElementById(
+      `format-${format.name.replace(/\s+/g, "-")}`
+    );
+    const scrollPosition = formatElement
+      ? formatElement.offsetTop - 100
+      : window.scrollY;
+
+    // Scroll to the element position, not to the top
+    window.scrollTo({
+      top: scrollPosition,
+      behavior: "smooth",
+    });
+
+    // Focus the template input with a slight delay to ensure scroll is complete
+    setTimeout(() => {
+      if (templateInputRef.current) {
+        templateInputRef.current.focus();
+      }
+    }, 300);
+  };
+
+  // Handle canceling edit mode
+  const handleCancelEdit = () => {
+    saveScrollPosition();
+
+    setIsEditing(false);
+    setEditingFormat(null);
+    setNewFormat({ name: "", template: "", sectionId: "all" });
+
+    // Restore scroll position
+    restoreScrollPosition();
+  };
+
   // Handle format deletion
-  const handleDelete = async (formatName) => {
+  const handleDelete = async (format) => {
+    // Save current scroll position
+    saveScrollPosition();
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/formats`);
       const data = await response.json();
-      const currentFormats = data.sections || [];
+      // Change to use libraries array
+      const currentFormats = data.libraries || [];
 
-      // Remove format
+      // Remove format using both name and sectionId
       const updatedFormats = currentFormats.filter(
-        (f) => f.name !== formatName
+        (f) => !(f.name === format.name && f.sectionId === format.sectionId)
       );
 
       // Save updated formats
@@ -443,7 +564,7 @@ const LibrariesFormat = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          type: "sections",
+          type: "libraries", // Change to libraries
           formats: updatedFormats,
         }),
       });
@@ -452,11 +573,25 @@ const LibrariesFormat = () => {
         throw new Error("Failed to delete format");
       }
 
-      // Refresh formats
-      fetchFormats();
+      // Update local state directly
+      setFormats(updatedFormats);
+
       toast.success("Format deleted successfully");
+
+      // If we were editing the deleted format, exit edit mode
+      if (
+        isEditing &&
+        editingFormat &&
+        editingFormat.name === format.name &&
+        editingFormat.sectionId === format.sectionId
+      ) {
+        handleCancelEdit();
+      }
+
+      // Restore scroll position
+      restoreScrollPosition();
     } catch (err) {
-      logError("Failed to delete section format", err);
+      logError("Failed to delete library format", err);
       toast.error("Failed to delete format");
     }
   };
@@ -480,6 +615,7 @@ const LibrariesFormat = () => {
     }
   }, [newFormat.sectionId, sections, activeMediaType]);
 
+  // Render loading state
   if (isLoading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -490,6 +626,7 @@ const LibrariesFormat = () => {
       </div>
     );
   }
+
   return (
     <div className="space-y-8">
       {/* Error message */}
@@ -501,6 +638,7 @@ const LibrariesFormat = () => {
           </div>
         </div>
       )}
+
       {/* Media Type Tabs */}
       <div className="flex gap-2 mb-4">
         {["movies", "shows", "music"].map((type) => (
@@ -542,14 +680,14 @@ const LibrariesFormat = () => {
         </div>
       </ThemedCard>
 
-      {/* Create New Format Section */}
+      {/* Create/Edit Format Section */}
       <ThemedCard
-        title="Create New Format"
-        icon={Icons.Plus}
+        title={isEditing ? "Edit Format" : "Create New Format"}
+        icon={isEditing ? Icons.Edit2 : Icons.PlusCircle}
         className="p-6"
         useAccentBorder={true}
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-theme font-medium mb-2">
               Format Name
@@ -628,14 +766,27 @@ const LibrariesFormat = () => {
             </div>
           )}
 
-          <ThemedButton
-            type="submit"
-            variant="accent"
-            disabled={!newFormat.name || !newFormat.template}
-            icon={Icons.Plus}
-          >
-            Add Format
-          </ThemedButton>
+          <div className="flex gap-3">
+            <ThemedButton
+              type="submit"
+              variant="accent"
+              disabled={!newFormat.name || !newFormat.template}
+              icon={isEditing ? Icons.Save : Icons.Plus}
+            >
+              {isEditing ? "Update Format" : "Add Format"}
+            </ThemedButton>
+
+            {isEditing && (
+              <ThemedButton
+                type="button"
+                variant="ghost"
+                onClick={handleCancelEdit}
+                icon={Icons.X}
+              >
+                Cancel
+              </ThemedButton>
+            )}
+          </div>
         </form>
       </ThemedCard>
 
@@ -643,7 +794,8 @@ const LibrariesFormat = () => {
       {formats.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Icons.List className="text-accent-base" size={18} />
               Existing Formats
             </h3>
             <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-gray-700/50">
@@ -658,6 +810,7 @@ const LibrariesFormat = () => {
                 key={index}
                 format={format}
                 onDelete={handleDelete}
+                onEdit={handleEdit}
                 previewValue={processTemplate(
                   format.template,
                   format.sectionId === "all"
@@ -667,11 +820,11 @@ const LibrariesFormat = () => {
                         section_id: format.sectionId,
                         section_name:
                           sections.find(
-                            (s) => s.section_id.toString() === format.sectionId
+                            (s) => s.section_id?.toString() === format.sectionId
                           )?.name || "Unknown Section",
                         section_type:
                           sections.find(
-                            (s) => s.section_id.toString() === format.sectionId
+                            (s) => s.section_id?.toString() === format.sectionId
                           )?.type || "unknown",
                       }
                 )}

@@ -311,14 +311,22 @@ const App = () => {
                 toastOptions={{
                   duration: 3000,
                   style: {
-                    background: "#1F2937",
+                    background: `rgba(var(--accent-color), 0.55)`,
                     color: "#fff",
+                    border: `1px solid rgba(var(--accent-color), 0.5)`,
+                    backdropFilter: "blur(10px)",
+                    boxShadow: `0 0 10px rgba(var(--accent-color), 0.5), 0 0 20px rgba(var(--accent-color), 0.3)`,
+                    textShadow:
+                      "1px 1px 2px rgba(0,0,0,0.5), 0 0 5px rgba(0,0,0,0.3)",
                   },
                   success: {
                     style: {
-                      border: "1px solid #059669",
-                      padding: "16px",
-                      background: "#064E3B",
+                      background: `rgba(var(--accent-color), 0.55)`,
+                      border: `1px solid rgba(var(--accent-color), 0.7)`,
+                      backdropFilter: "blur(10px)",
+                      boxShadow: `0 0 10px rgba(var(--accent-color), 0.5), 0 0 20px rgba(var(--accent-color), 0.3)`,
+                      textShadow:
+                        "1px 1px 2px rgba(0,0,0,0.5), 0 0 5px rgba(0,0,0,0.3)",
                     },
                     iconTheme: {
                       primary: "#10B981",
@@ -327,9 +335,13 @@ const App = () => {
                   },
                   error: {
                     style: {
-                      border: "1px solid #DC2626",
-                      padding: "16px",
-                      background: "#7F1D1D",
+                      background: "rgba(232, 12, 11, 0.85)",
+                      border: "1px solid rgba(232, 12, 11, 0.7)",
+                      backdropFilter: "blur(10px)",
+                      boxShadow:
+                        "0 0 10px rgba(232, 12, 11, 0.5), 0 0 20px rgba(232, 12, 11, 0.3)",
+                      textShadow:
+                        "1px 1px 2px rgba(0,0,0,0.5), 0 0 5px rgba(0,0,0,0.3)",
                     },
                     iconTheme: {
                       primary: "#EF4444",

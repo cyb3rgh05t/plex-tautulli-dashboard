@@ -1,5 +1,3 @@
-// with theme styling applied
-
 import React, { useState, useEffect, useRef } from "react";
 import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
@@ -9,19 +7,6 @@ import ThemedButton from "../common/ThemedButton";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
-
-const StatusDot = ({ state }) => {
-  const isActive = state === "watching";
-  return (
-    <div className="flex items-center justify-center">
-      <div
-        className={`w-3 h-3 rounded-full ${
-          isActive ? "bg-green-500" : "bg-gray-500"
-        }`}
-      />
-    </div>
-  );
-};
 
 const UsersTable = ({ users }) => (
   <div className="overflow-x-auto">
@@ -36,6 +21,12 @@ const UsersTable = ({ users }) => (
           </th>
           <th className="px-4 py-3 text-left bg-gray-800/50 border-b border-gray-700/50">
             <div className="flex items-center gap-2 text-theme-muted font-medium">
+              <Icons.Clock size={14} />
+              Last Seen
+            </div>
+          </th>
+          <th className="px-4 py-3 text-left bg-gray-800/50 border-b border-gray-700/50">
+            <div className="flex items-center gap-2 text-theme-muted font-medium">
               <Icons.PlayCircle size={14} />
               Last Played Media
             </div>
@@ -46,20 +37,11 @@ const UsersTable = ({ users }) => (
               Total Plays
             </div>
           </th>
-          <th className="px-4 py-3 text-right bg-gray-800/50 border-b border-gray-700/50">
+          <th className="px-4 py-3 text-right bg-gray-800/50 rounded-tr-lg border-b border-gray-700/50">
             <div className="flex items-center justify-end gap-2 text-theme-muted font-medium">
               <Icons.Timer size={14} />
               Last Played Duration
             </div>
-          </th>
-          <th className="px-4 py-3 text-left bg-gray-800/50 border-b border-gray-700/50">
-            <div className="flex items-center gap-2 text-theme-muted font-medium">
-              <Icons.Clock size={14} />
-              Last Seen
-            </div>
-          </th>
-          <th className="px-4 py-3 text-center bg-gray-800/50 rounded-tr-lg border-b border-gray-700/50">
-            <span className="text-theme-muted font-medium">Status</span>
           </th>
         </tr>
       </thead>
@@ -77,15 +59,6 @@ const UsersTable = ({ users }) => (
               <td className="px-4 py-3 font-medium text-white">
                 {userData.friendly_name || "Unknown User"}
               </td>
-              <td className="px-4 py-3 text-theme">
-                {userData.full_title || userData.title || "Nothing played yet"}
-              </td>
-              <td className="px-4 py-3 text-right text-accent-base font-medium">
-                {userData.plays ? userData.plays.toLocaleString() : "0"}
-              </td>
-              <td className="px-4 py-3 text-right text-accent-base font-medium">
-                {userData.formatted_duration || "0m"}
-              </td>
               <td className="px-4 py-3">
                 {userData.state === "watching" ? (
                   <span className="font-medium text-green-400 flex items-center gap-1.5">
@@ -98,8 +71,14 @@ const UsersTable = ({ users }) => (
                   </span>
                 )}
               </td>
-              <td className="px-4 py-3 text-center">
-                <StatusDot state={userData.state || "watched"} />
+              <td className="px-4 py-3 text-theme">
+                {userData.full_title || userData.title || "Nothing played yet"}
+              </td>
+              <td className="px-4 py-3 text-right text-accent-base font-medium">
+                {userData.plays ? userData.plays.toLocaleString() : "0"}
+              </td>
+              <td className="px-4 py-3 text-right text-accent-base font-medium">
+                {userData.formatted_duration || "0m"}
               </td>
             </tr>
           );

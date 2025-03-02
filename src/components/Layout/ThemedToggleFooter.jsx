@@ -8,7 +8,7 @@ import { Palette, Check } from "lucide-react";
  * @param {'simple'|'full'} props.variant - Display variant (simple for icon-only, full for expanded)
  * @param {boolean} props.showAccent - Whether to show accent color options
  */
-const ThemeToggle = ({ variant = "simple", showAccent = true }) => {
+const ThemeToggleFooter = ({ variant = "simple", showAccent = true }) => {
   const { accentColor, setAccentColor } = useTheme();
   const [showAccentMenu, setShowAccentMenu] = useState(false);
   const menuRef = useRef(null);
@@ -46,7 +46,7 @@ const ThemeToggle = ({ variant = "simple", showAccent = true }) => {
     return (
       <div
         ref={menuRef}
-        className="absolute top-full right-0 mt-2 p-4 rounded-xl shadow-lg z-50 focus:outline-none
+        className="absolute bottom-full right-0 mt-2 p-4 rounded-xl shadow-lg z-50 focus:outline-none
           border border-gray-700/50 overflow-hidden"
         style={{
           // Base semi-transparent background
@@ -173,4 +173,4 @@ const ThemeToggle = ({ variant = "simple", showAccent = true }) => {
   );
 };
 
-export default ThemeToggle;
+export default ThemeToggleFooter;

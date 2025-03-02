@@ -371,15 +371,18 @@ const NoLibrariesCard = ({ type }) => {
   const description = typeDescriptions[type] || "media libraries";
 
   return (
-    <div className="flex items-center justify-center min-h-[300px] bg-green-900/20 border border-green-500/30 rounded-xl p-8">
+    <ThemedCard
+      className="flex items-center justify-center min-h-[300px]"
+      useAccentBorder={true}
+    >
       <div className="text-center">
         <div className="flex justify-center mb-4">
-          <Icon size={48} className="text-green-500 opacity-70" />
+          <Icon size={48} className="text-accent-base opacity-70" />
         </div>
-        <h3 className="text-green-400 text-xl font-semibold mb-2">
+        <h3 className="text-white text-xl font-semibold mb-2">
           No {description} have been saved yet
         </h3>
-        <p className="text-green-300 text-sm max-w-md mx-auto mb-6">
+        <p className="text-theme-muted text-sm max-w-md mx-auto mb-6">
           Visit the Libraries tab to add and configure your {description}.
           Select the libraries you want to display in the Recently Added
           section.
@@ -405,7 +408,7 @@ const NoLibrariesCard = ({ type }) => {
           Go to Libraries
         </ThemedButton>
       </div>
-    </div>
+    </ThemedCard>
   );
 };
 

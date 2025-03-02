@@ -1,5 +1,3 @@
-// with theme styling applied
-
 import React, { useState, useEffect, useRef } from "react";
 import {
   FaServer,
@@ -162,8 +160,55 @@ const EndpointCard = ({
   };
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(`${baseUrl}${modifiedEndpoint}`);
-    toast.success("Endpoint URL copied to clipboard");
+    const urlToCopy = `${baseUrl}${modifiedEndpoint}`;
+
+    // Fallback copy method using textarea technique
+    const fallbackCopyMethod = (text) => {
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+
+        // Make the textarea out of viewport
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+
+        // Select the text
+        textArea.focus();
+        textArea.select();
+
+        // Execute copy command
+        const successful = document.execCommand("copy");
+
+        if (successful) {
+          toast.success("Endpoint URL copied to clipboard");
+        } else {
+          toast.error("Unable to copy URL");
+        }
+
+        // Remove the temporary textarea
+        document.body.removeChild(textArea);
+      } catch (err) {
+        console.error("Fallback copy method failed:", err);
+        toast.error("Failed to copy URL");
+      }
+    };
+
+    // Try modern clipboard API first
+    if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard
+        .writeText(urlToCopy)
+        .then(() => {
+          toast.success("Endpoint URL copied to clipboard");
+        })
+        .catch((err) => {
+          console.error("Clipboard write failed:", err);
+          fallbackCopyMethod(urlToCopy);
+        });
+    } else {
+      // Fallback to older method if modern API is not available
+      fallbackCopyMethod(urlToCopy);
+    }
   };
 
   // Check if we have a valid endpoint for testing
@@ -310,7 +355,7 @@ const ApiEndpoints = () => {
     if (saved) setBaseUrl(saved);
 
     // Check server status
-    fetch(`${baseUrl}/health`)
+    fetch(`${baseUrl}/api/health`)
       .then((response) => {
         if (response.ok) {
           setServerStatus("active");
@@ -329,37 +374,65 @@ const ApiEndpoints = () => {
   // Constants for endpoint definitions
   const GET_ENDPOINTS = [
     {
-      endpoint: "/api/downloads",
-      description: "Get all current downloads with custom formatting applied.",
+      endpoint: "/api/config",
+      description: "Get current server configuration.",
       requestExamples: [
         {
-          description: "Retrieve all downloads",
-          curlCommand: "http://localhost:3006/api/downloads",
+          description: "Retrieve server configuration",
+          curlCommand: `${baseUrl}/api/config`,
           pythonRequest: `
   import requests
   
-  response = requests.get('http://localhost:3006/api/downloads')
-  downloads = response.json()
+  # Get server configuration
+  response = requests.get('${baseUrl}/api/config')
+  config = response.json()
           `.trim(),
           javascriptFetch: `
-  fetch('http://localhost:3006/api/downloads')
+  // Get server configuration
+  fetch('${baseUrl}/api/config')
     .then(response => response.json())
-    .then(downloads => console.log(downloads));
+    .then(config => console.log(config));
           `.trim(),
         },
       ],
       example: {
-        total: 2,
-        activities: [
-          {
-            uuid: "123",
-            title: "Movie Title",
-            progress: 45,
-            formatted: {
-              "Custom Format 1": "Movie Title - 45%",
-            },
-          },
-        ],
+        plexUrl: "http://localhost:32400",
+        tautulliUrl: "http://localhost:8181",
+        hasPlexToken: true,
+        hasTautulliKey: true,
+      },
+    },
+    {
+      endpoint: "/api/health",
+      description: "Server health check endpoint.",
+      requestExamples: [
+        {
+          description: "Check server health",
+          curlCommand: `${baseUrl}/api/health`,
+          pythonRequest: `
+  import requests
+  
+  # Check server health
+  response = requests.get('${baseUrl}/api/health')
+  health_status = response.json()
+          `.trim(),
+          javascriptFetch: `
+  // Check server health
+  fetch('${baseUrl}/api/health')
+    .then(response => response.json())
+    .then(healthStatus => console.log(healthStatus));
+          `.trim(),
+        },
+      ],
+      example: {
+        status: "ok",
+        timestamp: "2024-02-23T12:34:56Z",
+        config: {
+          plexUrl: "http://localhost:32400",
+          tautulliUrl: "http://localhost:8181",
+          hasPlexToken: true,
+          hasTautulliKey: true,
+        },
       },
     },
     {
@@ -368,15 +441,15 @@ const ApiEndpoints = () => {
       requestExamples: [
         {
           description: "Retrieve all format templates",
-          curlCommand: "http://localhost:3006/api/formats",
+          curlCommand: `${baseUrl}/api/formats`,
           pythonRequest: `
   import requests
   
-  response = requests.get('http://localhost:3006/api/formats')
+  response = requests.get('${baseUrl}/api/formats')
   formats = response.json()
           `.trim(),
           javascriptFetch: `
-  fetch('http://localhost:3006/api/formats')
+  fetch('${baseUrl}/api/formats')
     .then(response => response.json())
     .then(formats => console.log(formats));
           `.trim(),
@@ -398,20 +471,91 @@ const ApiEndpoints = () => {
       },
     },
     {
+      endpoint: "/api/downloads",
+      description: "Get all current downloads with custom formatting applied.",
+      requestExamples: [
+        {
+          description: "Retrieve all downloads",
+          curlCommand: `${baseUrl}/api/downloads`,
+          pythonRequest: `
+  import requests
+  
+  response = requests.get('${baseUrl}/api/downloads')
+  downloads = response.json()
+          `.trim(),
+          javascriptFetch: `
+  fetch('${baseUrl}/api/downloads')
+    .then(response => response.json())
+    .then(downloads => console.log(downloads));
+          `.trim(),
+        },
+      ],
+      example: {
+        total: 2,
+        activities: [
+          {
+            uuid: "123",
+            title: "Movie Title",
+            progress: 45,
+            formatted: {
+              "Custom Format 1": "Movie Title - 45%",
+            },
+          },
+        ],
+      },
+    },
+    {
+      endpoint: "/api/libraries",
+      description: "Get all Plex media libraries.",
+      requestExamples: [
+        {
+          description: "Retrieve all libraries",
+          curlCommand: `${baseUrl}/api/libraries`,
+          pythonRequest: `
+  import requests
+  
+  # Get all libraries
+  response = requests.get('${baseUrl}/api/libraries')
+  libraries = response.json()
+          `.trim(),
+          javascriptFetch: `
+  // Get all libraries
+  fetch('${baseUrl}/api/libraries')
+    .then(response => response.json())
+    .then(libraries => console.log(libraries));
+          `.trim(),
+        },
+      ],
+      example: [
+        {
+          section_id: 1,
+          section_type: "movie",
+          section_name: "Movies",
+          count: 500,
+        },
+        {
+          section_id: 2,
+          section_type: "show",
+          section_name: "TV Shows",
+          count: 250,
+        },
+      ],
+    },
+    {
       endpoint: "/api/sections",
       description: "Get all saved library sections.",
       requestExamples: [
         {
           description: "Retrieve saved sections",
-          curlCommand: "http://localhost:3006/api/sections",
+          curlCommand: `${baseUrl}/api/sections`,
           pythonRequest: `
   import requests
   
-  response = requests.get('http://localhost:3006/api/sections')
+  response = requests.get('${baseUrl}/api/sections')
   sections = response.json()
           `.trim(),
           javascriptFetch: `
-  fetch('http://localhost:3006/api/sections')
+  fetch('${baseUrl}/api/sections')
     .then(response => response.json())
     .then(sections => console.log(sections));
           `.trim(),
@@ -437,15 +581,15 @@ const ApiEndpoints = () => {
       requestExamples: [
         {
           description: "Retrieve all users",
-          curlCommand: "http://localhost:3006/api/users",
+          curlCommand: `${baseUrl}/api/users`,
           pythonRequest: `
   import requests
   
-  response = requests.get('http://localhost:3006/api/users')
+  response = requests.get('${baseUrl}/api/users')
   users = response.json()
           `.trim(),
           javascriptFetch: `
-  fetch('http://localhost:3006/api/users')
+  fetch('${baseUrl}/api/users')
     .then(response => response.json())
     .then(users => console.log(users));
           `.trim(),
@@ -476,90 +620,89 @@ const ApiEndpoints = () => {
           description: "Get all movies",
           curlCommand: `
     # Get all movies
-    http://localhost:3006/api/media/movies
+    ${baseUrl}/api/media/movies
     
     # Get movies from a specific section
-    http://localhost:3006/api/media/movies?section=1
+    ${baseUrl}/api/media/movies?section=1
     
     # Limit number of results
-    http://localhost:3006/api/media/movies?count=10
+    ${baseUrl}/api/media/movies?count=10
     
     # Advanced filtering
-    http://localhost:3006/api/media/movies?year=2010&resolution=4K
+    ${baseUrl}/api/media/movies?year=2010&resolution=4K
           `.trim(),
           pythonRequest: `
     import requests
     
     # Get all movies
-    response = requests.get('http://localhost:3006/api/media/movies')
+    response = requests.get('${baseUrl}/api/media/movies')
     movies = response.json()
     
     # Get movies from a specific section
-    response = requests.get('http://localhost:3006/api/media/movies?section=1')
+    response = requests.get('${baseUrl}/api/media/movies?section=1')
     section_movies = response.json()
     
     # Limit number of results
-    response = requests.get('http://localhost:3006/api/media/movies?count=10')
+    response = requests.get('${baseUrl}/api/media/movies?count=10')
     limited_movies = response.json()
     
     # Advanced filtering
-    response = requests.get('http://localhost:3006/api/media/movies?year=2010&resolution=4K')
+    response = requests.get('${baseUrl}/api/media/movies?year=2010&resolution=4K')
     filtered_movies = response.json()
           `.trim(),
           javascriptFetch: `
     // Get all movies
-    fetch('http://localhost:3006/api/media/movies')
+    fetch('${baseUrl}/api/media/movies')
       .then(response => response.json())
       .then(movies => console.log(movies));
     
     // Get movies from a specific section
-    fetch('http://localhost:3006/api/media/movies?section=1')
+    fetch('${baseUrl}/api/media/movies?section=1')
       .then(response => response.json())
       .then(sectionMovies => console.log(sectionMovies));
     
     // Limit number of results
-    fetch('http://localhost:3006/api/media/movies?count=10')
+    fetch('${baseUrl}/api/media/movies?count=10')
       .then(response => response.json())
       .then(limitedMovies => console.log(limitedMovies));
     
     // Advanced filtering
-    fetch('http://localhost:3006/api/media/movies?year=2010&resolution=4K')
+    fetch('${baseUrl}/api/media/movies?year=2010&resolution=4K')
       .then(response => response.json())
       .then(filteredMovies => console.log(filteredMovies));
           `.trim(),
         },
         {
           description: "Get TV shows with advanced filtering",
-          curlCommand:
-            "http://localhost:3006/api/media/shows?genre=Drama&rating=8",
+          curlCommand: `${baseUrl}/api/media/shows?genre=Drama&rating=8`,
           pythonRequest: `
     import requests
     
     # Get TV shows by genre
-    response = requests.get('http://localhost:3006/api/media/shows?genre=Drama')
+    response = requests.get('${baseUrl}/api/media/shows?genre=Drama')
     drama_shows = response.json()
     
     # Get shows with high rating
-    response = requests.get('http://localhost:3006/api/media/shows?rating=8')
+    response = requests.get('${baseUrl}/api/media/shows?rating=8')
     highly_rated_shows = response.json()
     
     # Combine filters
-    response = requests.get('http://localhost:3006/api/media/shows?genre=Drama&rating=8&year=2020')
+    response = requests.get('${baseUrl}/api/media/shows?genre=Drama&rating=8&year=2020')
     specific_shows = response.json()
           `.trim(),
           javascriptFetch: `
     // Get TV shows by genre
-    fetch('http://localhost:3006/api/media/shows?genre=Drama')
+    fetch('${baseUrl}/api/media/shows?genre=Drama')
       .then(response => response.json())
       .then(dramaShows => console.log(dramaShows));
     
     // Get shows with high rating
-    fetch('http://localhost:3006/api/media/shows?rating=8')
+    fetch('${baseUrl}/api/media/shows?rating=8')
       .then(response => response.json())
       .then(highlyRatedShows => console.log(highlyRatedShows));
     
     // Combine filters
-    fetch('http://localhost:3006/api/media/shows?genre=Drama&rating=8&year=2020')
+    fetch('${baseUrl}/api/media/shows?genre=Drama&rating=8&year=2020')
       .then(response => response.json())
       .then(specificShows => console.log(specificShows));
           `.trim(),
@@ -664,30 +807,30 @@ const ApiEndpoints = () => {
           description: "Get recent movies",
           curlCommand: `
   # Get recent movies
-  http://localhost:3006/api/recent/movies
+  ${baseUrl}/api/recent/movies
   
   # Get recent movies from a specific section
-  http://localhost:3006/api/recent/movies?section=1
+  ${baseUrl}/api/recent/movies?section=1
           `.trim(),
           pythonRequest: `
   import requests
   
   # Get recent movies
-  response = requests.get('http://localhost:3006/api/recent/movies')
+  response = requests.get('${baseUrl}/api/recent/movies')
   recent_movies = response.json()
   
   # Get recent movies from a specific section
-  response = requests.get('http://localhost:3006/api/recent/movies?section=1')
+  response = requests.get('${baseUrl}/api/recent/movies?section=1')
   section_movies = response.json()
           `.trim(),
           javascriptFetch: `
   // Get recent movies
-  fetch('http://localhost:3006/api/recent/movies')
+  fetch('${baseUrl}/api/recent/movies')
     .then(response => response.json())
     .then(recentMovies => console.log(recentMovies));
   
   // Get recent movies from a specific section
-  fetch('http://localhost:3006/api/recent/movies?section=1')
+  fetch('${baseUrl}/api/recent/movies?section=1')
     .then(response => response.json())
     .then(sectionMovies => console.log(sectionMovies));
           `.trim(),
@@ -713,105 +856,6 @@ const ApiEndpoints = () => {
         ],
       },
     },
-    {
-      endpoint: "/api/libraries",
-      description: "Get all Plex media libraries.",
-      requestExamples: [
-        {
-          description: "Retrieve all libraries",
-          curlCommand: "curl http://localhost:3006/api/libraries",
-          pythonRequest: `
-  import requests
-  
-  # Get all libraries
-  response = requests.get('http://localhost:3006/api/libraries')
-  libraries = response.json()
-          `.trim(),
-          javascriptFetch: `
-  // Get all libraries
-  fetch('http://localhost:3006/api/libraries')
-    .then(response => response.json())
-    .then(libraries => console.log(libraries));
-          `.trim(),
-        },
-      ],
-      example: [
-        {
-          section_id: 1,
-          section_type: "movie",
-          section_name: "Movies",
-          count: 500,
-        },
-        {
-          section_id: 2,
-          section_type: "show",
-          section_name: "TV Shows",
-          count: 250,
-        },
-      ],
-    },
-    {
-      endpoint: "/api/config",
-      description: "Get current server configuration.",
-      requestExamples: [
-        {
-          description: "Retrieve server configuration",
-          curlCommand: "curl http://localhost:3006/api/config",
-          pythonRequest: `
-  import requests
-  
-  # Get server configuration
-  response = requests.get('http://localhost:3006/api/config')
-  config = response.json()
-          `.trim(),
-          javascriptFetch: `
-  // Get server configuration
-  fetch('http://localhost:3006/api/config')
-    .then(response => response.json())
-    .then(config => console.log(config));
-          `.trim(),
-        },
-      ],
-      example: {
-        plexUrl: "http://localhost:32400",
-        tautulliUrl: "http://localhost:8181",
-        hasPlexToken: true,
-        hasTautulliKey: true,
-      },
-    },
-    {
-      endpoint: "/health",
-      description: "Server health check endpoint.",
-      requestExamples: [
-        {
-          description: "Check server health",
-          curlCommand: "curl http://localhost:3006/health",
-          pythonRequest: `
-  import requests
-  
-  # Check server health
-  response = requests.get('http://localhost:3006/health')
-  health_status = response.json()
-          `.trim(),
-          javascriptFetch: `
-  // Check server health
-  fetch('http://localhost:3006/health')
-    .then(response => response.json())
-    .then(healthStatus => console.log(healthStatus));
-          `.trim(),
-        },
-      ],
-      example: {
-        status: "ok",
-        timestamp: "2024-02-23T12:34:56Z",
-        config: {
-          plexUrl: "http://localhost:32400",
-          tautulliUrl: "http://localhost:8181",
-          hasPlexToken: true,
-          hasTautulliKey: true,
-        },
-      },
-    },
   ];
 
   // POST endpoints definition (abbreviated to save space)
@@ -823,7 +867,7 @@ const ApiEndpoints = () => {
         {
           description: "Save download format",
           curlCommand: `
-curl -X POST http://localhost:3006/api/formats \\
+curl -X POST ${baseUrl}/api/formats \\
      -H "Content-Type: application/json" \\
      -d '{
   "type": "downloads",
@@ -850,7 +894,7 @@ payload = {
 }
 
 response = requests.post(
-    'http://localhost:3006/api/formats', 
+    '${baseUrl}/api/formats', 
     headers={'Content-Type': 'application/json'},
     data=json.dumps(payload)
 )
@@ -867,7 +911,7 @@ const payload = {
   ]
 };
 
-fetch('http://localhost:3006/api/formats', {
+fetch('${baseUrl}/api/formats', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json'
@@ -907,7 +951,7 @@ fetch('http://localhost:3006/api/formats', {
         {
           description: "Save library sections",
           curlCommand: `
-  curl -X POST http://localhost:3006/api/sections \\
+  curl -X POST ${baseUrl}/api/sections \\
        -H "Content-Type: application/json" \\
        -d '[
     {
@@ -952,7 +996,7 @@ fetch('http://localhost:3006/api/formats', {
   ]
   
   response = requests.post(
-      'http://localhost:3006/api/sections', 
+      '${baseUrl}/api/sections', 
       headers={'Content-Type': 'application/json'},
       data=json.dumps(payload)
   )
@@ -978,7 +1022,7 @@ fetch('http://localhost:3006/api/formats', {
     }
   ];
   
-  fetch('http://localhost:3006/api/sections', {
+  fetch('${baseUrl}/api/sections', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -1023,7 +1067,7 @@ fetch('http://localhost:3006/api/formats', {
         {
           description: "Update server configurations",
           curlCommand: `
-  curl -X POST http://localhost:3006/api/config \\
+  curl -X POST ${baseUrl}/api/config \\
        -H "Content-Type: application/json" \\
        -d '{
     "plexUrl": "http://localhost:32400",
@@ -1044,7 +1088,7 @@ fetch('http://localhost:3006/api/formats', {
   }
   
   response = requests.post(
-      'http://localhost:3006/api/config', 
+      '${baseUrl}/api/config', 
       headers={'Content-Type': 'application/json'},
       data=json.dumps(payload)
   )
@@ -1058,7 +1102,7 @@ fetch('http://localhost:3006/api/formats', {
     tautulliApiKey: "your_tautulli_api_key"
   };
   
-  fetch('http://localhost:3006/api/config', {
+  fetch('${baseUrl}/api/config', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -1135,7 +1179,7 @@ fetch('http://localhost:3006/api/formats', {
               className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg pl-10 pr-4 py-3
                 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200"
-              placeholder="http://localhost:3006"
+              placeholder="${baseUrl}"
             />
           </div>
         </div>

@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { useTheme } from "../../context/ThemeContext";
-import UpdatedThemeToggle from "../common/UpdatedThemeToggle";
+import { useConfig } from "../../context/ConfigContext";
+import ThemeToggle from "../common/ThemeToggle";
 import Settings from "../Settings/Settings";
+import ServiceStatusBadge from "./ServiceStatusBadge";
 import * as Icons from "lucide-react";
 import { appVersion } from "../../../version";
 
@@ -10,6 +12,7 @@ import { appVersion } from "../../../version";
  */
 const ThemedNavbar = () => {
   const { accentColor } = useTheme();
+  const { config } = useConfig();
   const [showSettings, setShowSettings] = useState(false);
 
   // Map accent colors to their RGB values for background gradient - UPDATED NAMES
@@ -54,22 +57,19 @@ const ThemedNavbar = () => {
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
-            <button
-              className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-sm font-medium 
-                text-white bg-accent-light/20 hover:bg-accent-light/30 
-                border border-accent/20 transition-colors"
-            >
-              <Icons.Server className="mr-1.5" size={16} />
-              Plex
-            </button>
-            <button
-              className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-sm font-medium 
-                text-white bg-accent-light/20 hover:bg-accent-light/30 
-                border border-accent/20 transition-colors"
-            >
-              <Icons.Database className="mr-1.5" size={16} />
-              Tautulli
-            </button>
+            {/* Plex Status Badge */}
+            <ServiceStatusBadge
+              type="plex"
+              url={config?.plexUrl}
+              token={config?.plexToken}
+            />
+
+            {/* Tautulli Status Badge */}
+            <ServiceStatusBadge
+              type="tautulli"
+              url={config?.tautulliUrl}
+              apiKey={config?.tautulliApiKey}
+            />
             {/* Settings Icon Button */}
             <button
               onClick={() => setShowSettings(true)}
@@ -78,7 +78,7 @@ const ThemedNavbar = () => {
             >
               <Icons.Settings size={20} />
             </button>
-            <UpdatedThemeToggle variant="full" showAccent={true} />
+            <ThemeToggle variant="full" showAccent={true} />
           </div>
         </div>
       </header>

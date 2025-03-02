@@ -101,14 +101,14 @@ export const ThemeProvider = ({ children }) => {
         return;
       }
 
-      // Load saved accent but map old names to new ones
+      // Load saved accent but map ONLY old names to new ones
       const savedAccent = localStorage.getItem("accentColor");
 
-      // Map old accent names to new ones
+      // Map old accent names to new ones (only legacy names)
       const accentNameMap = {
         default: "purple",
         light: "grey",
-        purple: "maroon",
+        // Remove "purple": "maroon" mapping to fix reload issue
       };
 
       if (savedAccent) {

@@ -319,38 +319,6 @@ const Settings = ({ onClose }) => {
               color.
             </p>
 
-            {/* Theme Toggle */}
-            <div className="mb-6">
-              <h4 className="text-white font-medium mb-4">Theme Mode</h4>
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setTheme("light")}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-lg border border-gray-800 transition-all
-                    ${
-                      theme === "light"
-                        ? "bg-gray-900/80 text-accent-base"
-                        : "bg-gray-900/50 text-gray-400 hover:bg-gray-800/90 hover:text-gray-300"
-                    }`}
-                >
-                  <Icons.Sun size={20} />
-                  <span>Light Mode</span>
-                </button>
-
-                <button
-                  onClick={() => setTheme("dark")}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-lg border border-gray-800 transition-all
-                    ${
-                      theme === "dark"
-                        ? "bg-gray-900/80 text-accent-base"
-                        : "bg-gray-900/50 text-gray-400 hover:bg-gray-800/90 hover:text-gray-300"
-                    }`}
-                >
-                  <Icons.Moon size={20} />
-                  <span>Dark Mode</span>
-                </button>
-              </div>
-            </div>
-
             {/* Accent Color Selection */}
             <div className="space-y-4">
               <h4 className="text-lg font-medium text-white">Accent Color</h4>

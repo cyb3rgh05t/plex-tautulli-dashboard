@@ -95,71 +95,39 @@ app.use((req, res, next) => {
   next();
 });
 
-// Helper function to format duration
-const formatDuration = (durationMs) => {
-  // Ensure we have a valid number
-  const duration = Number(durationMs);
-
-  // If duration is invalid or 0, return "0m"
-  if (isNaN(duration) || duration <= 0) return "0m";
-
-  // Convert milliseconds to minutes
-  const totalMinutes = Math.floor(duration / 60000);
-
-  // Calculate hours and remaining minutes
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-
-  // Format the output
-  if (hours > 0 && minutes > 0) {
-    return `${hours}h ${minutes}m`;
-  } else if (hours > 0) {
-    return `${hours}h`;
-  } else {
-    return `${minutes}m`;
-  }
-};
-
-// Helper functions (add these near the top of your file)
-function formatTimeHHMM(milliseconds) {
-  if (!milliseconds) return "00:00";
-
-  const totalSeconds = Math.floor(milliseconds / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-
-  return `${hours.toString().padStart(2, "0")}:${minutes
-    .toString()
-    .padStart(2, "0")}`;
-}
-
-function formatTimeDiff(timestamp) {
-  const now = Math.floor(Date.now() / 1000);
-  const diff = now - timestamp;
-
-  if (diff < 60) return "Just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)} mins ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} hrs ago`;
-  return `${Math.floor(diff / 86400)} days ago`;
-}
-
-// Date formatting helper
-// Updated formatDate function for relative time formatting
 const formatDate = (timestamp, format = "default") => {
   // Return early if no timestamp
   if (!timestamp) return "Never";
 
-  // Convert timestamp to milliseconds if needed
-  const timestampMs =
-    String(timestamp).length === 10 ? timestamp * 1000 : timestamp;
-  const date = new Date(timestampMs);
-  const now = new Date();
+  let date;
 
-  // Ensure we have a valid date
-  if (isNaN(date.getTime())) {
+  try {
+    // Handle ISO date strings (YYYY-MM-DD)
+    if (typeof timestamp === "string" && timestamp.includes("-")) {
+      date = new Date(timestamp);
+    }
+    // Handle numeric timestamps
+    else if (typeof timestamp === "number" || !isNaN(Number(timestamp))) {
+      const ts = typeof timestamp === "number" ? timestamp : Number(timestamp);
+      // If timestamp is smaller than year 2100 in seconds, assume it's in seconds
+      date = ts < 4294967296 ? new Date(ts * 1000) : new Date(ts);
+    }
+    // Fallback
+    else {
+      date = new Date(timestamp);
+    }
+  } catch (e) {
+    console.error(`Error parsing date: ${timestamp}`, e);
     return "Invalid Date";
   }
 
+  // Ensure we have a valid date
+  if (isNaN(date.getTime())) {
+    console.warn(`Invalid date from timestamp: ${timestamp}`);
+    return "Invalid Date";
+  }
+
+  const now = new Date();
   const diffMs = now - date;
   const diffSeconds = Math.floor(diffMs / 1000);
   const diffMinutes = Math.floor(diffSeconds / 60);
@@ -204,6 +172,7 @@ const formatDate = (timestamp, format = "default") => {
 
     case "full":
       return date.toLocaleDateString("en-US", {
+        weekday: "long",
         year: "numeric",
         month: "long",
         day: "numeric",
@@ -216,13 +185,88 @@ const formatDate = (timestamp, format = "default") => {
       });
 
     default:
-      return date.toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "2-digit",
+      return date.toLocaleDateString("en-US", {
         year: "numeric",
+        month: "long",
+        day: "numeric",
       });
   }
 };
+
+// Improved duration formatting function
+const formatDuration = (durationMs) => {
+  // Ensure we have a valid input
+  if (!durationMs) return "0m";
+
+  let duration;
+
+  // Handle string inputs that might already be formatted (e.g., "45m")
+  if (typeof durationMs === "string") {
+    // If it's already in the format we want (e.g., "45m" or "1h 30m"), return it
+    if (/^\d+h( \d+m)?$|^\d+m$/.test(durationMs.trim())) {
+      return durationMs.trim();
+    }
+
+    // If it's a number in string format, parse it
+    duration = Number(durationMs);
+  } else {
+    duration = Number(durationMs);
+  }
+
+  // If duration is invalid or 0, return "0m"
+  if (isNaN(duration) || duration <= 0) return "0m";
+
+  // If duration is in seconds (common for Plex/Tautulli), convert to milliseconds
+  // Heuristic: if duration is less than 10000 and greater than 0, it's likely in seconds
+  if (duration > 0 && duration < 10000) {
+    duration *= 1000;
+  }
+
+  // Convert milliseconds to minutes
+  const totalMinutes = Math.floor(duration / 60000);
+
+  // Calculate hours and remaining minutes
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  // Format the output
+  if (hours > 0 && minutes > 0) {
+    return `${hours}h ${minutes}m`;
+  } else if (hours > 0) {
+    return `${hours}h`;
+  } else {
+    return `${minutes}m`;
+  }
+};
+
+// Helper for formatting arrays
+const formatArray = (arr) => {
+  if (!arr || !Array.isArray(arr)) return "";
+  return arr.join(", ");
+};
+
+// Helper functions (add these near the top of your file)
+function formatTimeHHMM(milliseconds) {
+  if (!milliseconds) return "00:00";
+
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+  return `${hours.toString().padStart(2, "0")}:${minutes
+    .toString()
+    .padStart(2, "0")}`;
+}
+
+function formatTimeDiff(timestamp) {
+  const now = Math.floor(Date.now() / 1000);
+  const diff = now - timestamp;
+
+  if (diff < 60) return "Just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)} mins ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} hrs ago`;
+  return `${Math.floor(diff / 86400)} days ago`;
+}
 
 // Helper for two-digit padding
 const padTwoDigits = (num) => String(num).padStart(2, "0");
@@ -310,26 +354,59 @@ const processTemplate = (template, data) => {
     // Extract variable and optional format
     const match = variable.slice(1, -1).split(":");
     const key = match[0];
-    const format = match[1];
+    const format = match[1] || "default"; // Add default format if not specified
 
-    let value = data[key];
+    let value;
 
-    // Special handling for timestamp
-    if (key === "addedAt") {
-      value = formatDate(value, format);
-    }
-
-    // Special handling for show episode formatting
-    if (data.mediaType === "episode") {
-      if (key === "parent_media_index" || key === "media_index") {
-        value = formatShowEpisode(data.parent_media_index, data.media_index);
-        // Replace the entire variable with the formatted episode string
-        result = result.replace(
-          /\{parent_media_index\}E\{media_index\}/,
-          value
-        );
-        return;
+    try {
+      // Special handling for timestamps with various naming conventions
+      if (
+        [
+          "addedAt",
+          "added_at",
+          "updated_at",
+          "last_viewed_at",
+          "originally_available_at",
+        ].includes(key)
+      ) {
+        const timestamp = data[key];
+        value = formatDate(timestamp, format);
       }
+      // Special handling for duration
+      else if (key === "duration") {
+        value = formatDuration(data[key]);
+      }
+      // Special handling for show episode formatting
+      else if (
+        data.mediaType === "episode" &&
+        (key === "parent_media_index" || key === "media_index")
+      ) {
+        // Continue with the special episode formatting logic
+        value = formatShowEpisode(data.parent_media_index, data.media_index);
+
+        // Replace the entire combined pattern with the formatted episode string
+        if (result.includes("{parent_media_index}E{media_index}")) {
+          result = result.replace(
+            /\{parent_media_index\}E\{media_index\}/,
+            value
+          );
+          return; // Skip the normal replacement for this variable
+        }
+
+        // If we're here, it's just a single index being used, so we'll format it as S01 or E05
+        if (key === "parent_media_index") {
+          value = "S" + String(data[key] || "0").padStart(2, "0");
+        } else if (key === "media_index") {
+          value = "E" + String(data[key] || "0").padStart(2, "0");
+        }
+      }
+      // Default handling
+      else {
+        value = data[key];
+      }
+    } catch (error) {
+      console.error(`Error processing template variable ${key}:`, error);
+      value = ""; // Default to empty string on error
     }
 
     if (value !== undefined) {
@@ -342,6 +419,24 @@ const processTemplate = (template, data) => {
 
 // Format management endpoints
 
+// Modified formats endpoint in server.cjs
+app.get("/api/formats", (req, res) => {
+  try {
+    const formats = getFormats();
+    res.json({
+      downloads: formats.downloads || [],
+      recentlyAdded: formats.recentlyAdded || [],
+      sections: formats.sections || [],
+      libraries: formats.libraries || [], // Add libraries to the response
+      users: formats.users || [],
+    });
+  } catch (error) {
+    console.error("Error reading formats:", error);
+    res.status(500).json({ error: "Failed to read formats" });
+  }
+});
+
+// Update POST endpoint to handle libraries separately
 app.post("/api/formats", (req, res) => {
   try {
     const { type, formats } = req.body;
@@ -376,21 +471,6 @@ app.post("/api/formats", (req, res) => {
       error: "Failed to save formats",
       message: error.message,
     });
-  }
-});
-
-app.get("/api/formats", (req, res) => {
-  try {
-    const formats = getFormats();
-    res.json({
-      downloads: formats.downloads || [],
-      recentlyAdded: formats.recentlyAdded || [],
-      sections: formats.sections || [],
-      users: formats.users || [], // Add users array to response
-    });
-  } catch (error) {
-    console.error("Error reading formats:", error);
-    res.status(500).json({ error: "Failed to read formats" });
   }
 });
 
@@ -493,8 +573,8 @@ app.get("/api/media/:type", async (req, res) => {
       });
 
       return {
-        ...media,
-        formatted: formattedData,
+        ...formattedData,
+        media,
       };
     });
 
@@ -1076,7 +1156,6 @@ app.get("/api/sections", async (req, res) => {
 
       // Return with formats at top level and raw data in raw_data object
       return {
-        ...formattedData, // Custom formats at top level
         raw_data: {
           ...processedSection, // Processed section data with nulls as "Never"
         },
@@ -1391,75 +1470,109 @@ app.get("/api/recent/:type", async (req, res) => {
       return result;
     };
 
-    // Process media with formatting
-    const processedMedia = limitedMedia.map((media) => {
-      // Calculate formatted duration once
-      const formattedDuration = formatDuration(media.duration || 0);
+    const processedMedia = await Promise.all(
+      limitedMedia.map(async (media) => {
+        let videoResolution = "Unknown";
 
-      // Enhanced media object with both aliases and formatted data
-      const enhancedMedia = {
-        ...media,
-        mediaType: type,
-        media_type: type,
-        formatted_duration: formattedDuration,
-        // Add both key variations for timestamps
-        addedAt: media.added_at,
-        added_at: media.added_at,
-      };
+        try {
+          // Only attempt to fetch metadata if rating_key exists
+          if (media.rating_key) {
+            const metadataResponse = await axios.get(
+              `${config.tautulliUrl}/api/v2`,
+              {
+                params: {
+                  apikey: config.tautulliApiKey,
+                  cmd: "get_metadata",
+                  rating_key: media.rating_key,
+                },
+                timeout: 5000, // Add a timeout to prevent hanging
+              }
+            );
 
-      const formattedData = {};
-
-      // Apply formats based on media type
-      recentlyAddedFormats
-        .filter(
-          (format) =>
-            format.type === type &&
-            (format.sectionId === "all" ||
-              format.sectionId === media.section_id.toString())
-        )
-        .forEach((format) => {
-          // Process special variables before template processing
-          let processedTemplate = format.template;
-
-          // Handle added_at:format pattern specifically
-          const dateFormatPattern = /\{added_at:([^}]+)\}/g;
-          processedTemplate = processedTemplate.replace(
-            dateFormatPattern,
-            (match, formatType) => {
-              return formatDate(media.added_at, formatType);
+            // Extract video resolution from metadata
+            const mediaInfo =
+              metadataResponse.data?.response?.data?.media_info?.[0];
+            if (mediaInfo && mediaInfo.video_full_resolution) {
+              videoResolution = mediaInfo.video_full_resolution;
             }
+          }
+        } catch (error) {
+          console.error(
+            `Failed to fetch metadata for ${media.rating_key}:`,
+            error
           );
+        }
 
-          // Same for addedAt:format
-          const dateFormatPattern2 = /\{addedAt:([^}]+)\}/g;
-          processedTemplate = processedTemplate.replace(
-            dateFormatPattern2,
-            (match, formatType) => {
-              return formatDate(media.added_at, formatType);
-            }
-          );
+        // Calculate formatted duration once
+        const formattedDuration = formatDuration(media.duration || 0);
 
-          // Special handling for duration
-          processedTemplate = processedTemplate.replace(
-            /\{duration\}/g,
-            formattedDuration
-          );
-
-          // Now process the template with the enhanced media data
-          formattedData[format.name] = enhancedProcessTemplate(
-            processedTemplate,
-            enhancedMedia
-          );
-        });
-
-      return {
-        ...formattedData,
-        raw_data: {
+        // Enhanced media object with both aliases and formatted data
+        const enhancedMedia = {
           ...media,
+          mediaType: type,
+          media_type: type,
           formatted_duration: formattedDuration,
-        },
-      };
-    });
+          video_full_resolution: videoResolution, // Add resolution to the media object
+          // Add both key variations for timestamps
+          addedAt: media.added_at,
+          added_at: media.added_at,
+        };
+
+        const formattedData = {};
+
+        // Apply formats based on media type
+        recentlyAddedFormats
+          .filter(
+            (format) =>
+              format.type === type &&
+              (format.sectionId === "all" ||
+                format.sectionId === media.section_id.toString())
+          )
+          .forEach((format) => {
+            // Process special variables before template processing
+            let processedTemplate = format.template;
+
+            // Handle added_at:format pattern specifically
+            const dateFormatPattern = /\{added_at:([^}]+)\}/g;
+            processedTemplate = processedTemplate.replace(
+              dateFormatPattern,
+              (match, formatType) => {
+                return formatDate(media.added_at, formatType);
+              }
+            );
+
+            // Same for addedAt:format
+            const dateFormatPattern2 = /\{addedAt:([^}]+)\}/g;
+            processedTemplate = processedTemplate.replace(
+              dateFormatPattern2,
+              (match, formatType) => {
+                return formatDate(media.added_at, formatType);
+              }
+            );
+
+            // Special handling for duration
+            processedTemplate = processedTemplate.replace(
+              /\{duration\}/g,
+              formattedDuration
+            );
+
+            // Now process the template with the enhanced media data
+            formattedData[format.name] = enhancedProcessTemplate(
+              processedTemplate,
+              enhancedMedia
+            );
+          });
+
+        return {
+          ...formattedData,
+          raw_data: {
+            ...media,
+            formatted_duration: formattedDuration,
+            video_full_resolution: videoResolution,
+          },
+        };
+      })
+    );
 
     res.json({
       total: processedMedia.length,
@@ -1594,6 +1707,206 @@ app.post("/api/reset-all", (req, res) => {
   }
 });
 
+app.get("/api/health", async (req, res) => {
+  try {
+    const config = getConfig();
+
+    // Base response structure
+    const healthData = {
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      config: {
+        plexUrl: config.plexUrl || "Not configured",
+        tautulliUrl: config.tautulliUrl || "Not configured",
+        hasPlexToken: !!config.plexToken,
+        hasTautulliKey: !!config.tautulliApiKey,
+      },
+    };
+
+    // Add service checks if requested
+    if (req.query.check === "true") {
+      healthData.services = {
+        plex: {
+          configured: !!(config.plexUrl && config.plexToken),
+          online: false,
+        },
+        tautulli: {
+          configured: !!(config.tautulliUrl && config.tautulliApiKey),
+          online: false,
+        },
+      };
+
+      // Check Plex if configured
+      if (healthData.services.plex.configured) {
+        try {
+          const response = await axios.get(`${config.plexUrl}/identity`, {
+            headers: {
+              "X-Plex-Token": config.plexToken,
+              Accept: "application/json",
+            },
+            timeout: 5000,
+          });
+
+          healthData.services.plex.online = response.status === 200;
+          healthData.services.plex.serverName =
+            response.data?.MediaContainer?.friendlyName || null;
+        } catch (error) {
+          console.error("Plex health check failed:", error.message);
+          healthData.services.plex.error = error.message;
+        }
+      }
+
+      // Check Tautulli if configured
+      if (healthData.services.tautulli.configured) {
+        try {
+          // Important: Using 'status' instead of 'get_server_info'
+          const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
+            params: {
+              apikey: config.tautulliApiKey,
+              cmd: "status",
+            },
+            timeout: 5000,
+          });
+
+          // Check Tautulli response format
+          console.log(
+            "Tautulli response:",
+            JSON.stringify(response.data).substring(0, 200)
+          );
+
+          // Check if response indicates success
+          healthData.services.tautulli.online =
+            response.data?.response?.result === "success";
+
+          // Add additional information if available
+          if (response.data?.response?.data) {
+            healthData.services.tautulli.version =
+              response.data.response.data.version || null;
+            healthData.services.tautulli.data = response.data.response.data;
+          }
+        } catch (error) {
+          console.error("Tautulli health check failed:", error.message);
+          healthData.services.tautulli.error = error.message;
+        }
+      }
+    }
+
+    // Set appropriate headers
+    res.setHeader("Content-Type", "application/json");
+    return res.json(healthData);
+  } catch (error) {
+    console.error("Health API error:", error);
+    return res.status(500).json({
+      status: "error",
+      error: "Server error during health check",
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// Simple API to check a specific service
+app.post("/api/health/check-service", async (req, res) => {
+  try {
+    const { service } = req.body;
+    const config = getConfig();
+
+    if (!service || !["plex", "tautulli"].includes(service)) {
+      return res.status(400).json({
+        status: "error",
+        error: "Invalid or missing service parameter",
+      });
+    }
+
+    // Check Plex
+    if (service === "plex") {
+      if (!config.plexUrl || !config.plexToken) {
+        return res.json({
+          status: "unconfigured",
+          message: "Plex is not configured",
+        });
+      }
+
+      try {
+        const response = await axios.get(`${config.plexUrl}/identity`, {
+          headers: {
+            "X-Plex-Token": config.plexToken,
+            Accept: "application/json",
+          },
+          timeout: 8000,
+        });
+
+        return res.json({
+          status: "online",
+          message: "Plex is online",
+          serverName: response.data?.MediaContainer?.friendlyName || null,
+        });
+      } catch (error) {
+        console.error("Plex service check failed:", error.message);
+        return res.json({
+          status: "offline",
+          message: "Failed to connect to Plex",
+          error: error.message,
+        });
+      }
+    }
+
+    // Check Tautulli
+    if (service === "tautulli") {
+      if (!config.tautulliUrl || !config.tautulliApiKey) {
+        return res.json({
+          status: "unconfigured",
+          message: "Tautulli is not configured",
+        });
+      }
+
+      try {
+        // Using the simplest command to check status
+        const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
+          params: {
+            apikey: config.tautulliApiKey,
+            cmd: "status",
+          },
+          timeout: 8000,
+        });
+
+        // Log the response to debug
+        console.log(
+          "Tautulli check response:",
+          JSON.stringify(response.data).substring(0, 200)
+        );
+
+        // Check if response indicates success
+        if (response.data?.response?.result === "success") {
+          return res.json({
+            status: "online",
+            message: "Tautulli is online",
+            version: response.data.response.data?.version || null,
+          });
+        } else {
+          return res.json({
+            status: "offline",
+            message: "Tautulli returned an invalid response",
+            responseData: response.data,
+          });
+        }
+      } catch (error) {
+        console.error("Tautulli service check failed:", error.message);
+        return res.json({
+          status: "offline",
+          message: "Failed to connect to Tautulli",
+          error: error.message,
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Service check error:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Server error during service check",
+    });
+  }
+});
+
 const createDynamicProxy = (serviceName, options = {}) => {
   return (req, res, next) => {
     const config = getConfig();
@@ -1698,21 +2011,6 @@ const createDynamicProxy = (serviceName, options = {}) => {
 // Setup proxies
 app.use("/api/plex", createDynamicProxy("Plex"));
 app.use("/api/tautulli", createDynamicProxy("Tautulli"));
-
-// Health check endpoint
-app.get("/health", (req, res) => {
-  const config = getConfig();
-  res.json({
-    status: "ok",
-    timestamp: new Date().toISOString(),
-    config: {
-      plexUrl: config.plexUrl || "Not configured",
-      tautulliUrl: config.tautulliUrl || "Not configured",
-      hasPlexToken: !!config.plexToken,
-      hasTautulliKey: !!config.tautulliApiKey,
-    },
-  });
-});
 
 // Helper function to format configuration in the desired style
 const formatConfig = (config) => {
