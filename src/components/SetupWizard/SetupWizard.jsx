@@ -14,8 +14,7 @@ import LoadingScreen from "../common/LoadingScreen";
 import ThemedButton from "../common/ThemedButton";
 import ThemeToggle from "../common/ThemeToggle";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
+const API_BASE_URL = "";
 
 const HelpLink = ({ href, children }) => (
   <a
@@ -64,7 +63,7 @@ const SetupWizard = () => {
       const loadingToast = toast.loading("Testing connections...");
 
       // Configure the proxy server first
-      await fetch(`${API_BASE_URL}/api/config`, {
+      await fetch(`/api/config`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

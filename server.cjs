@@ -56,29 +56,29 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   : ["http://localhost:3005"]; // Default fallback
 
 const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin || ALLOWED_ORIGINS.includes("*")) {
-      return callback(null, true);
-    }
-
-    if (ALLOWED_ORIGINS.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.log("Origin not allowed by CORS:", origin);
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
+  // Simply allow all origins in production
+  origin: true,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", ...PLEX_HEADERS],
   exposedHeaders: ["Access-Control-Allow-Origin"],
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
 };
 
-// Apply middleware
+// Apply CORS middleware
 app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // Handle OPTIONS preflight explicitly
+
+// Log requests for debugging
+app.use((req, res, next) => {
+  console.log(
+    `${req.method} ${req.url} - Origin: ${req.headers.origin || "none"}`
+  );
+  next();
+});
+
 app.use(express.json());
-app.options("*", cors(corsOptions));
 
 // Logging middleware
 app.use((req, res, next) => {

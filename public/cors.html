@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>CORS Test</title>
+  </head>
+  <body>
+    <h1>CORS Test</h1>
+    <button id="test-btn">Test CORS</button>
+    <pre id="result"></pre>
+
+    <script>
+      document
+        .getElementById("test-btn")
+        .addEventListener("click", async () => {
+          const resultEl = document.getElementById("result");
+          resultEl.textContent = "Testing...";
+
+          try {
+            const response = await fetch("/api/cors-test");
+            const data = await response.json();
+            resultEl.textContent = JSON.stringify(data, null, 2);
+          } catch (error) {
+            resultEl.textContent = `Error: ${error.message}`;
+            console.error(error);
+          }
+        });
+    </script>
+  </body>
+</html>
