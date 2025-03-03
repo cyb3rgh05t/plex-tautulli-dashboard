@@ -2,14 +2,14 @@
   "name": "plex-tautulli-dashboard",
   "private": true,
   "version": "2.2.0",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "dev:frontend": "vite --port 3005",
     "dev:server": "node server.cjs",
     "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:server\"",
     "build": "vite build",
     "preview": "vite preview",
-    "update-version": "node update-version.mjs",
+    "update-version": "node update-version.js",
     "prestart": "npm run update-version",
     "prebuild": "npm run update-version"
   },
