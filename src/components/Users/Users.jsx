@@ -281,7 +281,7 @@ const Users = () => {
     0,
     REFRESH_INTERVAL - (Date.now() - lastRefreshTime)
   );
-  const secondsUntilRefresh = Math.ceil(timeUntilNextRefresh / 1000);
+  const minutesUntilRefresh = Math.ceil(timeUntilNextRefresh / 60000); // Convert to minutes
 
   // Calculate pagination values
   const totalItems = users.length;
@@ -378,7 +378,7 @@ const Users = () => {
               <span className="text-xs text-theme-muted">Refreshing...</span>
             ) : (
               <span className="text-xs text-theme-muted">
-                Auto-refresh in {secondsUntilRefresh}s
+                Auto-refresh in {minutesUntilRefresh}m
               </span>
             )}
           </div>
