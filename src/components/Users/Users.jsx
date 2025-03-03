@@ -134,13 +134,8 @@ const Users = () => {
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
-  const [retryCount, setRetryCount] = useState(0);
-  const [retryDelay, setRetryDelay] = useState(5000); // Start with 5 seconds
-  const [retryTimerId, setRetryTimerId] = useState(null);
-
-  const refreshIntervalRef = useRef(null);
+  const refreshInterval = useRef(null);
   const REFRESH_INTERVAL = 300000; // 5 minutes (300 seconds)
-  const MAX_RETRY_COUNT = 5; // Maximum number of automatic retries
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -149,19 +144,7 @@ const Users = () => {
   const fetchUsers = async () => {
     try {
       // Using a relative path to avoid base URL issues
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-
-      const response = await fetch("/api/users", {
-        signal: controller.signal,
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-          Expires: "0",
-        },
-      });
-
-      clearTimeout(timeoutId);
+      const response = await fetch("/api/users");
 
       if (!response.ok) {
         throw new Error(`Failed to fetch users (Status: ${response.status})`);
@@ -199,78 +182,25 @@ const Users = () => {
         return userB.last_seen - userA.last_seen;
       });
 
-      // Reset retry counters on success
-      setRetryCount(0);
-      setRetryDelay(5000);
       setUsers(sortedUsers);
       setError(null);
       setLastRefreshTime(Date.now());
     } catch (err) {
-      // Determine if it's a timeout error
-      const isTimeout =
-        err.name === "AbortError" ||
-        err.message.includes("timeout") ||
-        err.message.includes("524");
-
-      let errorMessage = `Failed to load users: ${err.message}`;
-
-      if (isTimeout) {
-        errorMessage =
-          "Server took too long to respond. This may be due to temporary high load.";
-      }
-
+      const errorMessage = `Failed to load users: ${err.message}`;
       setError(errorMessage);
       logError(errorMessage, err);
-
-      // Clear any existing retry timer
-      if (retryTimerId) {
-        clearTimeout(retryTimerId);
-      }
-
-      // Implement exponential backoff for automatic retries in useEffect
-      if (retryCount < MAX_RETRY_COUNT) {
-        console.log(
-          `Scheduling retry ${retryCount + 1}/${MAX_RETRY_COUNT} in ${
-            retryDelay / 1000
-          }s`
-        );
-
-        const newRetryDelay = Math.min(retryDelay * 1.5, 60000); // Increase delay up to 1 minute max
-        const timerId = setTimeout(() => {
-          setRetryCount((prev) => prev + 1);
-          setIsRefreshing(true);
-          fetchUsers();
-        }, retryDelay);
-
-        setRetryTimerId(timerId);
-        setRetryDelay(newRetryDelay);
-      }
     } finally {
       setLoading(false);
       setIsRefreshing(false);
     }
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     // Prevent multiple refreshes happening at once
     if (isRefreshing) return;
 
     setIsRefreshing(true);
-    fetchUsers();
-  };
-
-  // Reset retry counts and try refreshing
-  const handleManualRefresh = () => {
-    // Clear any existing retry timer
-    if (retryTimerId) {
-      clearTimeout(retryTimerId);
-      setRetryTimerId(null);
-    }
-
-    setRetryCount(0);
-    setRetryDelay(5000);
-    setIsRefreshing(true);
-    fetchUsers();
+    await fetchUsers();
   };
 
   // Setup auto-refresh interval
@@ -280,28 +210,19 @@ const Users = () => {
       fetchUsers();
 
       // Setup interval for auto-refresh
-      refreshIntervalRef.current = setInterval(() => {
-        // Only auto-refresh if there are no errors or we've exceeded retry count
-        if (!error || retryCount >= MAX_RETRY_COUNT) {
-          handleRefresh();
-        }
+      refreshInterval.current = setInterval(() => {
+        handleRefresh();
       }, REFRESH_INTERVAL);
 
       // Cleanup interval on unmount
       return () => {
-        if (refreshIntervalRef.current) {
-          clearInterval(refreshIntervalRef.current);
-        }
-
-        // Clear any retry timers
-        if (retryTimerId) {
-          clearTimeout(retryTimerId);
+        if (refreshInterval.current) {
+          clearInterval(refreshInterval.current);
         }
       };
     }
   }, [config.tautulliApiKey]);
 
-  // Calculate time until next refresh
   const timeUntilNextRefresh = Math.max(
     0,
     REFRESH_INTERVAL - (Date.now() - lastRefreshTime)
@@ -361,26 +282,18 @@ const Users = () => {
     return (
       <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center">
         <p className="text-red-400 mb-4">{error}</p>
-        <div className="flex flex-col items-center">
-          <ThemedButton
-            onClick={handleManualRefresh}
-            disabled={isRefreshing}
-            variant="accent"
-            icon={
-              isRefreshing
-                ? () => <Icons.RefreshCw className="animate-spin" />
-                : Icons.RefreshCw
-            }
-          >
-            {isRefreshing ? "Refreshing..." : "Try Again"}
-          </ThemedButton>
-
-          {retryCount > 0 && (
-            <p className="text-sm text-theme-muted mt-2">
-              Automatic retry {retryCount}/{MAX_RETRY_COUNT} in progress...
-            </p>
-          )}
-        </div>
+        <ThemedButton
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          variant="accent"
+          icon={
+            isRefreshing
+              ? () => <Icons.RefreshCw className="animate-spin" />
+              : Icons.RefreshCw
+          }
+        >
+          {isRefreshing ? "Refreshing..." : "Try Again"}
+        </ThemedButton>
       </div>
     );
   }
@@ -403,14 +316,14 @@ const Users = () => {
               <span className="text-xs text-theme-muted">Refreshing...</span>
             ) : (
               <span className="text-xs text-theme-muted">
-                Auto-refresh in {minutesUntilRefresh}m
+                Auto-refresh in {minutesUntilRefresh}min
               </span>
             )}
           </div>
         </div>
 
         <ThemedButton
-          onClick={handleManualRefresh}
+          onClick={handleRefresh}
           disabled={isRefreshing}
           variant="accent"
           icon={
