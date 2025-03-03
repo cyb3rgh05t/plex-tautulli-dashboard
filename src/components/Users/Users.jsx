@@ -5,9 +5,6 @@ import * as Icons from "lucide-react";
 import ThemedCard from "../common/ThemedCard";
 import ThemedButton from "../common/ThemedButton";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
-
 const UsersTable = ({ users }) => (
   <div className="overflow-x-auto">
     <table className="w-full border-separate border-spacing-0">
@@ -146,7 +143,8 @@ const Users = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch(`/api/users`);
+      // Using a relative path to avoid base URL issues
+      const response = await fetch("/api/users");
 
       if (!response.ok) {
         throw new Error(`Failed to fetch users (Status: ${response.status})`);

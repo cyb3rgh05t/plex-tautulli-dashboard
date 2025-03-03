@@ -14,7 +14,7 @@ import ThemedButton from "../common/ThemedButton";
 import * as Icons from "lucide-react";
 
 const API_BASE_URL =
-  import.meta.env.API_ENPOINTS_URL || "http://localhost:3006";
+  import.meta.env.API_ENDPOINTS_URL || "http://localhost:3006";
 
 // Reusable Sub-Tab Button Component
 const SubTabButton = ({ active, onClick, children }) => (
