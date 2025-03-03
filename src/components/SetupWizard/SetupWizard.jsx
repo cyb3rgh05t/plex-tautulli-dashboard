@@ -125,10 +125,17 @@ const SetupWizard = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    // Remove trailing slashes from URLs
-    const formattedValue = name.includes("Url")
-      ? value.replace(/\/$/, "")
-      : value;
+
+    // Allow typing '/' in URL fields - only remove trailing slashes when needed
+    let formattedValue = value;
+
+    // For URL fields, we'll only remove a trailing slash if it's not part of typing a path
+    // This allows users to type a slash, but cleans up trailing slashes upon completion
+    if (name.includes("Url") && value.endsWith("/") && !value.endsWith("://")) {
+      // Only remove trailing slash if it's not immediately after protocol (http://)
+      formattedValue = value.replace(/\/$/, "");
+    }
+
     setFormData((prev) => ({ ...prev, [name]: formattedValue }));
   };
 

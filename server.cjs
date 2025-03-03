@@ -20,6 +20,23 @@ const PROXY_TIMEOUT = parseInt(process.env.PROXY_TIMEOUT) || 30000;
 const PROXY_READ_TIMEOUT = parseInt(process.env.PROXY_READ_TIMEOUT) || 30000;
 const PROXY_WRITE_TIMEOUT = parseInt(process.env.PROXY_WRITE_TIMEOUT) || 30000;
 
+function getAppVersion() {
+  try {
+    const versionFilePath = path.join(__dirname, "version.js");
+    const versionFileContent = fs.readFileSync(versionFilePath, "utf8");
+    const versionMatch = versionFileContent.match(/appVersion = "([^"]+)"/);
+    if (versionMatch && versionMatch[1]) {
+      return versionMatch[1];
+    }
+    return "unknown";
+  } catch (error) {
+    console.error("Error reading version:", error);
+    return "unknown";
+  }
+}
+
+const appVersion = getAppVersion();
+
 // Ensure required directories exist
 const ensureDirectories = () => {
   const dirs = [path.dirname(SAVED_SECTIONS_PATH)];
@@ -2014,17 +2031,20 @@ app.use("/api/tautulli", createDynamicProxy("Tautulli"));
 
 // Helper function to format configuration in the desired style
 const formatConfig = (config) => {
-  let output = "├── Current configuration:\n";
+  let output = "";
   Object.entries(config).forEach(([key, value]) => {
+    // Capitalize the first letter of each key
+    const capitalizedKey = key.charAt(0).toUpperCase() + key.slice(1);
+
     // Redact sensitive values if key includes "token" or "apikey"
     const displayValue =
       key.toLowerCase().includes("token") ||
       key.toLowerCase().includes("apikey")
         ? value
-          ? "[REDACTED]"
+          ? "REDACTED"
           : "Not set"
         : value || "Not set";
-    output += `\t├── ${key}: ${displayValue},\n`;
+    output += `${capitalizedKey}: ${displayValue},\n`;
   });
   return output;
 };
@@ -2033,9 +2053,8 @@ const serverBanner = `
 ╔════════════════════════════════════════════════════╗
 ║                                                    ║
 ║            Plex & Tautulli Dashboard               ║
+║                  Version: ${appVersion}                    ║
 ║                                                    ║
-║                                                    ║
-║                 by cyb3rgh05t                      ║
 ╚════════════════════════════════════════════════════╝`;
 
 const endpointsBanner = `
@@ -2067,16 +2086,20 @@ const endpointsBanner = `
 
 const PORT = process.env.PORT || 3006;
 app.listen(PORT, "0.0.0.0", () => {
-  // Changed from localhost to 0.0.0.0
   console.clear();
   console.log(serverBanner);
-  //console.log(`Version: ${appVersion}`);
-  console.log("\n🚀 Server Information:");
-  console.log("├── Status: Running");
-  console.log(`├── Listening on: ${process.env.VITE_API_BASE_URL}`);
-  console.log(`├── Allowed CORS: ${ALLOWED_ORIGINS}`);
-  console.log(`├── Environment: ${process.env.NODE_ENV || "development"}`);
-  console.log("└── Time:", new Date().toLocaleString());
+  console.log("\nServer Information:");
+  console.log("==================================");
+  console.log("Status: Running");
+  console.log(`Version: ${appVersion}`);
+  console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
+  console.log("Time:", new Date().toLocaleString());
+  console.log(`\nListening on: ${process.env.VITE_API_BASE_URL}`);
+  console.log(`Allowed CORS: ${ALLOWED_ORIGINS}`);
+  console.log("==================================\n");
+  console.log("Current Service Configuration:");
+  console.log("==================================\n");
   console.log(formatConfig(getConfig()));
+  console.log("==================================\n");
   //console.log(endpointsBanner);
 });
