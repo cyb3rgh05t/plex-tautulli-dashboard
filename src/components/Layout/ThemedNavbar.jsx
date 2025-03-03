@@ -5,7 +5,7 @@ import ThemeToggle from "../common/ThemeToggle";
 import Settings from "../Settings/Settings";
 import ServiceStatusBadge from "./ServiceStatusBadge";
 import * as Icons from "lucide-react";
-import { appVersion } from "../../../version";
+import { appVersion } from "../../../version.mjs";
 
 /**
  * A navbar component that changes color based on the current accent theme

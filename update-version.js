@@ -2,7 +2,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { appVersion } from "./version.js";
+import { appVersion } from "./version.mjs";
 
 // Get directory name in ES modules
 const __filename = fileURLToPath(import.meta.url);

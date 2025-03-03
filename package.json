@@ -9,7 +9,7 @@
     "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:server\"",
     "build": "vite build",
     "preview": "vite preview",
-    "update-version": "node update-version.js",
+    "update-version": "node update-version.mjs",
     "prestart": "npm run update-version",
     "prebuild": "npm run update-version"
   },

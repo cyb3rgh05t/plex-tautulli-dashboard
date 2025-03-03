@@ -7,7 +7,7 @@ import ThemedTabBar from "./ThemedTabBar";
 import ThemeToggleFooter from "./ThemedToggleFooter";
 import useConnectionStatus from "../../hooks/useConnectionStatus";
 import * as Icons from "lucide-react";
-import { appVersion } from "../../../version";
+import { appVersion } from "../../../version.mjs";
 
 /**
  * Status indicator component for the footer
