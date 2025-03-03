@@ -1,17 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import {
-  FaServer,
-  FaCheck,
-  FaTimes,
-  FaExternalLinkAlt,
-  FaKey,
-  FaCopy,
-} from "react-icons/fa";
+import { FaServer, FaCheck, FaKey, FaCopy } from "react-icons/fa";
 import toast from "react-hot-toast";
 import axios from "axios";
 import ThemedCard from "../common/ThemedCard";
 import ThemedButton from "../common/ThemedButton";
-import * as Icons from "lucide-react";
 
 const API_BASE_URL =
   import.meta.env.API_ENDPOINTS_URL || "http://localhost:3006";
@@ -1174,12 +1166,12 @@ fetch('${baseUrl}/api/formats', {
             </div>
             <input
               type="url"
-              value={baseUrl}
+              value={API_BASE_URL}
               onChange={(e) => handleBaseUrlChange(e.target.value)}
               className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg pl-10 pr-4 py-3
                 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200"
-              placeholder="${baseUrl}"
+              placeholder="API Endpoint URL"
             />
           </div>
         </div>
