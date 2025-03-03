@@ -8,18 +8,46 @@
     <script>
       // Theme detection script to run before React loads
       (function () {
-        const savedTheme = localStorage.getItem("theme") || "dark";
-        const validThemes = ["dark", "light", "blue", "purple", "green"];
+        // Get theme preference (now always dark)
+        const savedTheme = "dark"; // Force dark theme
 
-        // Ensure only valid themes are applied
-        const theme = validThemes.includes(savedTheme) ? savedTheme : "dark";
+        // Get saved Accent color
+        const savedAccent = localStorage.getItem("accentColor") || "purple";
+
+        // Define valid accent colors
+        const validAccents = [
+          "purple",
+          "grey",
+          "green",
+          "maroon",
+          "orange",
+          "blue",
+          "red",
+        ];
+
+        // Ensure only valid accents are applied
+        const accent = validAccents.includes(savedAccent)
+          ? savedAccent
+          : "purple";
 
         // Apply theme classes immediately
-        document.documentElement.classList.add(theme);
-        document.body.classList.add(theme);
+        document.documentElement.classList.add("theme-" + savedTheme);
+        document.body.classList.add("theme-" + savedTheme);
 
-        // Set CSS variables for theme
-        document.documentElement.setAttribute("data-theme", theme);
+        // Apply accent classes immediately
+        document.documentElement.classList.add("accent-" + accent);
+        document.body.classList.add("accent-" + accent);
+
+        // Set data attributes for theme and accent
+        document.documentElement.setAttribute("data-theme", savedTheme);
+        document.documentElement.setAttribute("data-accent", accent);
+
+        console.log(
+          "Initial theme applied:",
+          savedTheme,
+          "with accent:",
+          accent
+        );
       })();
     </script>
   </head>

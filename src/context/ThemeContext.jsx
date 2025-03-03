@@ -62,6 +62,55 @@ const ACCENTS = {
   },
 };
 
+// Storage key constants
+const STORAGE_KEYS = {
+  THEME: "theme",
+  ACCENT_COLOR: "accentColor",
+};
+
+// Default values
+const DEFAULT_VALUES = {
+  THEME: "dark",
+  ACCENT_COLOR: "purple",
+};
+
+// Valid themes and accents
+const VALID_THEMES = ["dark"];
+const VALID_ACCENTS = Object.keys(ACCENTS);
+
+// Storage helper functions
+const getStoredTheme = () => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.THEME);
+    return VALID_THEMES.includes(stored) ? stored : DEFAULT_VALUES.THEME;
+  } catch (error) {
+    console.error("Error reading theme from localStorage:", error);
+    return DEFAULT_VALUES.THEME;
+  }
+};
+
+const getStoredAccent = () => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.ACCENT_COLOR);
+    return VALID_ACCENTS.includes(stored)
+      ? stored
+      : DEFAULT_VALUES.ACCENT_COLOR;
+  } catch (error) {
+    console.error("Error reading accent from localStorage:", error);
+    return DEFAULT_VALUES.ACCENT_COLOR;
+  }
+};
+
+const saveToStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    console.error(`Error saving ${key} to localStorage:`, error);
+    return false;
+  }
+};
+
 // Custom hook to use the theme context
 export const useTheme = () => {
   const context = useContext(ThemeContext);
@@ -73,24 +122,9 @@ export const useTheme = () => {
 
 export const ThemeProvider = ({ children }) => {
   // State for theme (always dark) and accent color
-  const [theme, setTheme] = useState("dark");
-  const [accentColor, setAccentColor] = useState("purple"); // Changed default from "default" to "purple"
+  const [theme, setTheme] = useState(DEFAULT_VALUES.THEME);
+  const [accentColor, setAccentColor] = useState(DEFAULT_VALUES.ACCENT_COLOR);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Function to get accent RGB values - updated names
-  const getAccentRgb = (accent) => {
-    const accentColorMap = {
-      purple: "167, 139, 250", // Renamed from default
-      grey: "220, 220, 220", // Renamed from light
-      green: "109, 247, 81",
-      maroon: "166, 40, 140", // Renamed from purple
-      orange: "255, 153, 0",
-      blue: "0, 98, 255",
-      red: "232, 12, 11",
-    };
-
-    return accentColorMap[accent] || accentColorMap.purple;
-  };
 
   // Load saved preferences from localStorage
   useEffect(() => {
@@ -101,30 +135,17 @@ export const ThemeProvider = ({ children }) => {
         return;
       }
 
-      // Load saved accent but map ONLY old names to new ones
-      const savedAccent = localStorage.getItem("accentColor");
+      // Get stored values
+      const storedTheme = getStoredTheme();
+      const storedAccent = getStoredAccent();
 
-      // Map old accent names to new ones (only legacy names)
-      const accentNameMap = {
-        default: "purple",
-        light: "grey",
-        // Remove "purple": "maroon" mapping to fix reload issue
-      };
-
-      if (savedAccent) {
-        // If the saved accent is one of the renamed ones, use the new name
-        if (accentNameMap[savedAccent]) {
-          setAccentColor(accentNameMap[savedAccent]);
-        } else {
-          setAccentColor(savedAccent);
-        }
-      }
+      // Apply stored values
+      setTheme(storedTheme);
+      setAccentColor(storedAccent);
 
       logInfo("Theme preferences loaded", {
-        theme: "dark", // Always dark theme
-        accent: savedAccent
-          ? accentNameMap[savedAccent] || savedAccent
-          : accentColor,
+        theme: storedTheme,
+        accent: storedAccent,
       });
     } catch (error) {
       console.error("Failed to load theme preferences:", error);
@@ -155,19 +176,15 @@ export const ThemeProvider = ({ children }) => {
       htmlElement.classList.add("theme-dark");
 
       // Apply accent classes - remove all possible classes first
-      htmlElement.classList.remove(
-        "accent-purple", // Renamed from default
-        "accent-grey", // Renamed from light
-        "accent-green",
-        "accent-maroon", // Renamed from purple
-        "accent-orange",
-        "accent-blue",
-        "accent-red",
-        // Also remove old class names for backward compatibility
+      const allAccentClasses = [
+        ...VALID_ACCENTS.map((accent) => `accent-${accent}`),
+        // Also include legacy class names for backward compatibility
         "accent-default",
         "accent-light",
-        "accent-purple"
-      );
+        "accent-purple",
+      ];
+
+      htmlElement.classList.remove(...allAccentClasses);
       htmlElement.classList.add(`accent-${accentColor}`);
 
       // DIRECT APPLICATION OF STYLES
@@ -196,24 +213,30 @@ export const ThemeProvider = ({ children }) => {
       });
 
       // Save preferences to localStorage (with safety check)
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem("theme", "dark"); // Always dark theme
-        localStorage.setItem("accentColor", accentColor);
-      }
+      saveToStorage(STORAGE_KEYS.THEME, theme);
+      saveToStorage(STORAGE_KEYS.ACCENT_COLOR, accentColor);
 
-      logInfo("Applied theme directly", { theme: "dark", accentColor });
+      logInfo("Applied theme directly", { theme, accentColor });
     } catch (error) {
       console.error("Failed to apply theme:", error);
     }
   }, [accentColor, isLoading]);
 
-  // Create the context value with the RGB value
+  // Function to get accent RGB values based on current accent
+  const getAccentRgb = () => {
+    const accentValue =
+      ACCENTS[accentColor]?.["--accent-color"] ||
+      ACCENTS.purple["--accent-color"];
+    return accentValue;
+  };
+
+  // Create the context value
   const contextValue = {
     theme: "dark", // Always dark
     setTheme: () => {}, // No-op function since we always use dark theme
     accentColor,
     setAccentColor,
-    accentRgb: getAccentRgb(accentColor),
+    accentRgb: getAccentRgb(),
     isLoading,
   };
 
