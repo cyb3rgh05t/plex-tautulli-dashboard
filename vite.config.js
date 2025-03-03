@@ -14,11 +14,10 @@ export default defineConfig(({ command, mode }) => {
   // For production, we use relative URLs
   const backendUrl = isProduction
     ? "" // Empty for production - use relative URLs
-    : process.env.VITE_API_BASE_URL || "http://localhost:3006";
+    : "http://0.0.0.0:3006";
 
   return {
     plugins: [react()],
-    // Set base to '/' for both dev and prod to ensure relative paths work properly
     base: "/",
     server: {
       host: true,

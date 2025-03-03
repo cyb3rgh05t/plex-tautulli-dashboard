@@ -6,7 +6,7 @@ import ThemedCard from "../common/ThemedCard";
 import ThemedButton from "../common/ThemedButton";
 
 const API_BASE_URL =
-  import.meta.env.API_ENDPOINTS_URL || "http://localhost:3006";
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
 
 // Reusable Sub-Tab Button Component
 const SubTabButton = ({ active, onClick, children }) => (
@@ -1166,7 +1166,7 @@ fetch('${baseUrl}/api/formats', {
             </div>
             <input
               type="url"
-              value={API_BASE_URL}
+              value={baseUrl}
               onChange={(e) => handleBaseUrlChange(e.target.value)}
               className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg pl-10 pr-4 py-3
                 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
