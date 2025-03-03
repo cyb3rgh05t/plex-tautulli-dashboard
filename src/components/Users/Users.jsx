@@ -135,7 +135,7 @@ const Users = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
   const refreshInterval = useRef(null);
-  const REFRESH_INTERVAL = 60000; // 60 seconds
+  const REFRESH_INTERVAL = 300000; // 5 minutes (300 seconds)
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -282,7 +282,19 @@ const Users = () => {
   if (error) {
     return (
       <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center">
-        <p className="text-red-400">{error}</p>
+        <p className="text-red-400 mb-4">{error}</p>
+        <ThemedButton
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          variant="accent"
+          icon={
+            isRefreshing
+              ? () => <Icons.RefreshCw className="animate-spin" />
+              : Icons.RefreshCw
+          }
+        >
+          {isRefreshing ? "Refreshing..." : "Try Again"}
+        </ThemedButton>
       </div>
     );
   }
