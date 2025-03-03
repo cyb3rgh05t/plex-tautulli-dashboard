@@ -134,8 +134,13 @@ const Users = () => {
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
-  const refreshInterval = useRef(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [retryDelay, setRetryDelay] = useState(5000); // Start with 5 seconds
+  const [retryTimerId, setRetryTimerId] = useState(null);
+
+  const refreshIntervalRef = useRef(null);
   const REFRESH_INTERVAL = 300000; // 5 minutes (300 seconds)
+  const MAX_RETRY_COUNT = 5; // Maximum number of automatic retries
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -217,20 +222,28 @@ const Users = () => {
       setError(errorMessage);
       logError(errorMessage, err);
 
-      // Implement exponential backoff for automatic retries
+      // Clear any existing retry timer
+      if (retryTimerId) {
+        clearTimeout(retryTimerId);
+      }
+
+      // Implement exponential backoff for automatic retries in useEffect
       if (retryCount < MAX_RETRY_COUNT) {
         console.log(
           `Scheduling retry ${retryCount + 1}/${MAX_RETRY_COUNT} in ${
             retryDelay / 1000
           }s`
         );
-        const retryTimeout = setTimeout(() => {
+
+        const newRetryDelay = Math.min(retryDelay * 1.5, 60000); // Increase delay up to 1 minute max
+        const timerId = setTimeout(() => {
           setRetryCount((prev) => prev + 1);
-          setRetryDelay((prev) => Math.min(prev * 1.5, 60000)); // Increase delay up to 1 minute max
-          handleRefresh();
+          setIsRefreshing(true);
+          fetchUsers();
         }, retryDelay);
 
-        return () => clearTimeout(retryTimeout);
+        setRetryTimerId(timerId);
+        setRetryDelay(newRetryDelay);
       }
     } finally {
       setLoading(false);
@@ -238,19 +251,26 @@ const Users = () => {
     }
   };
 
-  const handleRefresh = async () => {
+  const handleRefresh = () => {
     // Prevent multiple refreshes happening at once
     if (isRefreshing) return;
 
     setIsRefreshing(true);
-    await fetchUsers();
+    fetchUsers();
   };
 
   // Reset retry counts and try refreshing
-  const handleManualRefresh = async () => {
+  const handleManualRefresh = () => {
+    // Clear any existing retry timer
+    if (retryTimerId) {
+      clearTimeout(retryTimerId);
+      setRetryTimerId(null);
+    }
+
     setRetryCount(0);
     setRetryDelay(5000);
-    await handleRefresh();
+    setIsRefreshing(true);
+    fetchUsers();
   };
 
   // Setup auto-refresh interval
@@ -272,9 +292,14 @@ const Users = () => {
         if (refreshIntervalRef.current) {
           clearInterval(refreshIntervalRef.current);
         }
+
+        // Clear any retry timers
+        if (retryTimerId) {
+          clearTimeout(retryTimerId);
+        }
       };
     }
-  }, [config.tautulliApiKey, error, retryCount]);
+  }, [config.tautulliApiKey]);
 
   // Calculate time until next refresh
   const timeUntilNextRefresh = Math.max(
