@@ -679,7 +679,7 @@ app.get("/api/users", async (req, res) => {
     const userFormats = formats.users || [];
 
     // OPTIMIZATION 1: Fetch both active sessions and users in parallel
-    // This reduces the overall request time by executing these API calls concurrently
+    console.log("Fetching active sessions and users in parallel...");
     const [activeSessionsResponse, usersResponse] = await Promise.all([
       axios.get(`${config.tautulliUrl}/api/v2`, {
         params: {
@@ -703,8 +703,11 @@ app.get("/api/users", async (req, res) => {
       activeSessionsResponse.data?.response?.data?.sessions || [];
     const allUsers = usersResponse.data?.response?.data?.data || [];
 
+    console.log(
+      `Found ${activeSessions.length} active sessions and ${allUsers.length} users`
+    );
+
     // OPTIMIZATION 2: Pre-process active sessions into a lookup map
-    // This is faster than finding sessions with .find() for each user
     const watchingUsers = {};
     activeSessions.forEach((session) => {
       if (session.state === "playing") {
@@ -736,9 +739,11 @@ app.get("/api/users", async (req, res) => {
       (user) => user.friendly_name !== "Local"
     );
 
-    // OPTIMIZATION 3: Use Promise.all with a limited batch of history fetches
-    // This processes users immediately while history fetches happen in parallel
-    // Create history fetch promises for users who aren't watching but have played something
+    console.log(
+      `Processing ${filteredUsers.length} users (excluding Local users)...`
+    );
+
+    // OPTIMIZATION 3: Create indexed history promises to track which promise belongs to which user
     const historyPromises = [];
     const processedUsers = filteredUsers.map((user, index) => {
       const watching = watchingUsers[user.user_id];
@@ -804,60 +809,81 @@ app.get("/api/users", async (req, res) => {
       };
 
       // If user is not watching but has played something, queue up history fetch
+      // Store the index along with the promise to track which user it belongs to
       if (!watching && user.last_played) {
+        console.log(
+          `User ${user.friendly_name} (${user.user_id}) has history to fetch...`
+        );
         const historyPromise = getUserHistory(
           config.tautulliUrl,
           config.tautulliApiKey,
           user.user_id
-        )
-          .then((lastSession) => {
-            if (lastSession) {
-              // Update user data with history information
-              userData.media_type = lastSession.media_type
-                ? lastSession.media_type.charAt(0).toUpperCase() +
-                  lastSession.media_type.slice(1)
-                : "";
-              userData.title = lastSession.title || "";
-              userData.original_title = lastSession.original_title || "";
-              userData.year = lastSession.year || "";
-              userData.full_title = lastSession.full_title || "";
-              userData.parent_title = lastSession.parent_title || "";
-              userData.grandparent_title = lastSession.grandparent_title || "";
-              userData.media_index = lastSession.media_index
-                ? String(lastSession.media_index).padStart(2, "0")
-                : "";
-              userData.parent_media_index = lastSession.parent_media_index
-                ? String(lastSession.parent_media_index).padStart(2, "0")
-                : "";
+        );
 
-              // Update formatted show title
-              userData.last_played_modified = formatShowTitle(lastSession);
-
-              return userData;
-            }
-            return userData;
-          })
-          .catch(() => userData);
-
-        historyPromises.push(historyPromise);
-        return userData;
+        // Store the user index along with the promise
+        historyPromises.push({ index, promise: historyPromise });
       }
 
-      // No history needed, return as is
       return userData;
     });
 
-    // Wait for all history promises and merge results with processed users
+    // Create a copy of the processed users array to update with history data
     let userResults = [...processedUsers];
+
+    // Wait for all history promises and update the corresponding users
     if (historyPromises.length > 0) {
-      const historyResults = await Promise.all(historyPromises);
-      // Update users with history data
-      historyResults.forEach((historyUser) => {
-        const index = userResults.findIndex(
-          (u) => u.user_id === historyUser.user_id && !u._is_watching
-        );
-        if (index !== -1) {
-          userResults[index] = historyUser;
+      console.log(
+        `Fetching history data for ${historyPromises.length} users...`
+      );
+
+      // Get all the promise results
+      const historyResultsPromise = Promise.all(
+        historyPromises.map(({ promise }) => promise)
+      );
+
+      const historyResults = await historyResultsPromise;
+
+      // Update each user with their corresponding history data
+      historyPromises.forEach(({ index }, i) => {
+        const lastSession = historyResults[i];
+
+        // Find the user by their stored index
+        if (lastSession && index >= 0 && index < userResults.length) {
+          console.log(`Updating user index ${index} with history data...`);
+
+          userResults[index].media_type = lastSession.media_type
+            ? lastSession.media_type.charAt(0).toUpperCase() +
+              lastSession.media_type.slice(1)
+            : "";
+          userResults[index].title = lastSession.title || "";
+          userResults[index].original_title = lastSession.original_title || "";
+          userResults[index].year = lastSession.year || "";
+          userResults[index].full_title = lastSession.full_title || "";
+          userResults[index].parent_title = lastSession.parent_title || "";
+          userResults[index].grandparent_title =
+            lastSession.grandparent_title || "";
+          userResults[index].media_index = lastSession.media_index
+            ? String(lastSession.media_index).padStart(2, "0")
+            : "";
+          userResults[index].parent_media_index = lastSession.parent_media_index
+            ? String(lastSession.parent_media_index).padStart(2, "0")
+            : "";
+
+          // Update formatted show title
+          userResults[index].last_played_modified =
+            formatShowTitle(lastSession);
+
+          console.log(
+            `Updated user ${
+              userResults[index].friendly_name
+            } with history data: ${JSON.stringify({
+              media_type: userResults[index].media_type,
+              title: userResults[index].title,
+              last_played_modified: userResults[index].last_played_modified,
+            })}`
+          );
+        } else {
+          console.log(`No history data found for user index ${index}`);
         }
       });
     }
@@ -875,8 +901,19 @@ app.get("/api/users", async (req, res) => {
     // Limit the number of users based on count parameter
     const limitedUsers = userResults.slice(0, requestedCount);
 
+    console.log(
+      `Returning ${limitedUsers.length} users (limited by requestedCount=${requestedCount})`
+    );
+
     // OPTIMIZATION 4: Apply formats more efficiently
     const formattedUsers = limitedUsers.map((userData) => {
+      // For logging purposes: check for missing data
+      if (!userData.media_type && userData.last_played !== "Nothing") {
+        console.log(
+          `Warning: User ${userData.friendly_name} has last_played="${userData.last_played}" but no media_type`
+        );
+      }
+
       const formattedOutput = {};
       const mediaTypeStr = (userData.media_type || "").toLowerCase();
 
@@ -942,7 +979,7 @@ app.get("/api/users", async (req, res) => {
 });
 
 /**
- * Get user history from Tautulli API with caching
+ * Get user history from Tautulli API
  *
  * @async
  * @param {string} baseUrl - Tautulli API base URL
@@ -952,6 +989,7 @@ app.get("/api/users", async (req, res) => {
  */
 async function getUserHistory(baseUrl, apiKey, userId) {
   try {
+    console.log(`Fetching history for user ${userId}...`);
     const response = await axios.get(`${baseUrl}/api/v2`, {
       params: {
         apikey: apiKey,
@@ -962,7 +1000,14 @@ async function getUserHistory(baseUrl, apiKey, userId) {
       timeout: 5000,
     });
 
-    return response.data?.response?.data?.data?.[0] || null;
+    const historyItem = response.data?.response?.data?.data?.[0] || null;
+    console.log(
+      `History fetch result for ${userId}: ${
+        historyItem ? "found data" : "no data found"
+      }`
+    );
+
+    return historyItem;
   } catch (error) {
     console.error(`Error fetching history for user ${userId}:`, error.message);
     return null;
