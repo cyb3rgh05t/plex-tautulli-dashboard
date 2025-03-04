@@ -732,8 +732,8 @@ app.get("/api/users", async (req, res) => {
     res.setHeader("Expires", "0");
 
     // Get stored formats
-    const formats = getFormats();
-    const userFormats = formats.users || [];
+    const formatsData = getFormats();
+    const userFormats = formatsData.users || [];
 
     console.log(`[${requestId}] Fetching active sessions and users...`);
 
@@ -1033,48 +1033,33 @@ app.get("/api/users", async (req, res) => {
       });
     }
 
-    // STEP 8: Apply formats
-    console.log(
-      `[${requestId}] Applying formats to ${processedUsers.length} users (${
-        processedUsers.filter((u) => u._cached).length
-      } from cache)`
-    );
-
     const formattedUsers = processedUsers.map((userData) => {
-      // Report users with missing media type
-      if (!userData.media_type && userData.last_played !== "Nothing") {
-        console.log(
-          `[${requestId}] Warning: User ${userData.friendly_name} has last_played="${userData.last_played}" but no media_type`
-        );
-      }
+      const rawData = userData.raw_data || userData;
 
-      const formattedOutput = {};
-      const mediaTypeStr = (userData.media_type || "").toLowerCase();
+      // Determine media type for format matching
+      const mediaTypeMap = {
+        movie: "movie",
+        episode: "episode",
+      };
+      const mediaType = (rawData.media_type || "").toLowerCase();
+      const mappedMediaType = mediaTypeMap[mediaType] || mediaType;
+
+      // Filter formats based on media type
+      const applicableFormats = userFormats.filter(
+        (format) =>
+          !format.mediaType || // No media type specified (applies to all)
+          format.mediaType === mappedMediaType
+      );
 
       // Apply each applicable format
-      userFormats.forEach((format) => {
+      const formattedOutput = {};
+      applicableFormats.forEach((format) => {
         try {
-          let processedTemplate = format.template;
-
-          // Special handling for S01E01 pattern
-          if (
-            processedTemplate.includes("{parent_media_index}E{media_index}") &&
-            userData.parent_media_index &&
-            userData.media_index
-          ) {
-            const formattedEpisode = `S${userData.parent_media_index}E${userData.media_index}`;
-            processedTemplate = processedTemplate.replace(
-              "{parent_media_index}E{media_index}",
-              formattedEpisode
-            );
-          }
-
-          // Process template and apply it
-          const result = processTemplate(processedTemplate, userData);
+          const result = processTemplate(format.template, userData);
           formattedOutput[format.name] = result;
         } catch (err) {
           console.error(
-            `[${requestId}] Error applying format to user ${userData.friendly_name}:`,
+            `[${requestId}] Error applying format to user ${rawData.friendly_name}:`,
             err.message
           );
           formattedOutput[format.name] = "";
@@ -1082,7 +1067,7 @@ app.get("/api/users", async (req, res) => {
       });
 
       // Remove internal tracking properties
-      const { _index, _cached, ...cleanData } = userData;
+      const { _index, _cached, ...cleanData } = rawData;
 
       return {
         ...formattedOutput,
