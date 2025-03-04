@@ -840,69 +840,76 @@ app.get("/api/users", async (req, res) => {
     );
 
     // STEP 5: Process each limited user
-    const processedUsers = limitedUsers.map((user, index) => {
-      const watching = watchingUsers[user.user_id];
-      const lastSeen = watching
-        ? watching.last_seen
-        : parseInt(user.last_seen, 10);
+    const processedUsers = await Promise.all(
+      limitedUsers.map(async (user, index) => {
+        const watching = watchingUsers[user.user_id];
+        const lastSeen = watching
+          ? watching.last_seen
+          : parseInt(user.last_seen, 10);
 
-      // If user is watching, clear their cache entry to ensure fresh data next time
-      if (watching) {
-        historyCache.delete(`user_history:${user.user_id}`);
-      }
+        // If user is watching, clear their cache entry to ensure fresh data next time
+        if (watching) {
+          historyCache.delete(`user_history:${user.user_id}`);
+        }
 
-      // Create base user data object
-      return {
-        friendly_name: user.friendly_name || "",
-        user_id: user.user_id,
-        email: user.email || "",
-        plays: parseInt(user.plays || "0", 10),
-        duration: user.duration || 0,
-        last_seen: lastSeen,
-        last_seen_formatted: watching
-          ? "🟢"
-          : user.last_seen
-          ? formatTimeDiff(user.last_seen)
-          : "Never",
-        is_active: !!watching,
-        is_watching: watching ? "Watching" : "Watched",
-        state: watching ? "watching" : "watched",
+        // Calculate formatted duration (match your existing logic)
+        const rawDuration = user.duration || watching?.duration || 0;
+        const formattedDuration = formatDuration(rawDuration);
 
-        // Default values
-        media_type: watching
-          ? watching.media_type.charAt(0).toUpperCase() +
-            watching.media_type.slice(1)
-          : "",
-        progress_percent: watching ? `${watching.progress_percent}%` : "",
-        progress_time: watching
-          ? `${formatTimeHHMM(watching.view_offset)} / ${formatTimeHHMM(
-              watching.duration
-            )}`
-          : "",
-        title: watching ? watching.title : "",
-        original_title: watching ? watching.original_title : "",
-        year: watching ? watching.year : "",
-        full_title: watching ? watching.full_title : "",
-        last_played: watching
-          ? watching.current_media
-          : user.last_played || "Nothing",
-        last_played_modified: watching
-          ? watching.last_played_modified
-          : user.last_played || "Nothing",
-        parent_title: watching ? watching.parent_title : "",
-        grandparent_title: watching ? watching.grandparent_title : "",
-        media_index: watching
-          ? String(watching.media_index).padStart(2, "0")
-          : "",
-        parent_media_index: watching
-          ? String(watching.parent_media_index).padStart(2, "0")
-          : "",
+        // Create base user data object
+        return {
+          friendly_name: user.friendly_name || "",
+          user_id: user.user_id,
+          email: user.email || "",
+          plays: parseInt(user.plays || "0", 10),
+          duration: rawDuration,
+          formatted_duration: formattedDuration, // Add formatted duration
+          last_seen: lastSeen,
+          last_seen_formatted: watching
+            ? "🟢"
+            : user.last_seen
+            ? formatTimeDiff(user.last_seen)
+            : "Never",
+          is_active: !!watching,
+          is_watching: watching ? "Watching" : "Watched",
+          state: watching ? "watching" : "watched",
 
-        // Track original index for updating
-        _index: index,
-        _cached: false,
-      };
-    });
+          // Existing properties...
+          media_type: watching
+            ? watching.media_type.charAt(0).toUpperCase() +
+              watching.media_type.slice(1)
+            : "",
+          progress_percent: watching ? `${watching.progress_percent}%` : "",
+          progress_time: watching
+            ? `${formatTimeHHMM(watching.view_offset)} / ${formatTimeHHMM(
+                watching.duration
+              )}`
+            : "",
+          title: watching ? watching.title : "",
+          original_title: watching ? watching.original_title : "",
+          year: watching ? watching.year : "",
+          full_title: watching ? watching.full_title : "",
+          last_played: watching
+            ? watching.current_media
+            : user.last_played || "Nothing",
+          last_played_modified: watching
+            ? watching.last_played_modified
+            : user.last_played || "Nothing",
+          parent_title: watching ? watching.parent_title : "",
+          grandparent_title: watching ? watching.grandparent_title : "",
+          media_index: watching
+            ? String(watching.media_index).padStart(2, "0")
+            : "",
+          parent_media_index: watching
+            ? String(watching.parent_media_index).padStart(2, "0")
+            : "",
+
+          // Track original index for updating
+          _index: index,
+          _cached: false,
+        };
+      })
+    );
 
     // STEP 6: ONLY fetch history for users who aren't watching and are in our limited set
     const historyPromises = [];
