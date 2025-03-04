@@ -719,7 +719,7 @@ app.get("/api/users", async (req, res) => {
       (user) => user.friendly_name !== "Local"
     );
 
-    // Fetch history for each user
+    // Process users with a more efficient approach - no metadata calls
     const usersWithHistory = await Promise.all(
       filteredUsers.map(async (user) => {
         try {
@@ -759,38 +759,16 @@ app.get("/api/users", async (req, res) => {
           // Get the active item (either current session or history)
           const activeItem = activeSession || historyItem;
 
-          // If we have an active item, fetch its metadata
-          let metadata = null;
-          if (activeItem && activeItem.rating_key) {
-            try {
-              const metadataResponse = await axios.get(
-                `${config.tautulliUrl}/api/v2`,
-                {
-                  params: {
-                    apikey: config.tautulliApiKey,
-                    cmd: "get_metadata",
-                    rating_key: activeItem.rating_key,
-                  },
-                }
-              );
-              metadata = metadataResponse.data?.response?.data || null;
-            } catch (error) {
-              console.error(
-                `Failed to fetch metadata for rating_key ${activeItem.rating_key}:`,
-                error
-              );
-            }
-          }
-
           // Determine current state and duration
           const isWatching = !!activeSession;
           const state = isWatching ? "watching" : "watched";
 
-          // Format duration properly - extract it from metadata if possible
+          // Format duration properly
           let duration = "0m";
           let durationMs = 0;
-          if (metadata && metadata.duration) {
-            durationMs = Number(metadata.duration);
+
+          if (activeItem && activeItem.duration) {
+            durationMs = Number(activeItem.duration);
             // Convert to milliseconds if needed
             if (durationMs > 0 && durationMs < 10000) {
               durationMs *= 1000;
@@ -843,6 +821,8 @@ app.get("/api/users", async (req, res) => {
             : "Never";
 
           // Construct base user object with all fields that could be referenced in templates
+          // All these fields come from either the user data, active session, or history
+          // No need for get_metadata calls!
           const userData = {
             friendly_name: user.friendly_name || "",
             user_id: user.user_id,
@@ -864,31 +844,21 @@ app.get("/api/users", async (req, res) => {
             progress_percent: progressPercent,
             progress_time: progressTime,
 
-            // Media-specific fields
-            title: activeItem?.title || metadata?.title || "",
-            original_title: metadata?.original_title || "",
-            year: activeItem?.year || metadata?.year || "",
+            // Media-specific fields - all available directly from activeItem
+            title: activeItem?.title || "",
+            original_title: activeItem?.original_title || "",
+            year: activeItem?.year || "",
+            full_title: activeItem?.full_title || "",
             last_played: activeItem
               ? activeItem.title || activeItem.full_title || ""
               : "Nothing",
             last_played_modified: activeItem ? activeItem.state || "" : "",
 
-            // Show-specific details
-            full_title: metadata?.full_title || activeItem?.full_title || "",
-            parent_title:
-              metadata?.parent_title || activeItem?.parent_title || "",
-            grandparent_title:
-              metadata?.grandparent_title ||
-              activeItem?.grandparent_title ||
-              "",
-            media_index: metadata?.media_index || activeItem?.media_index || "",
-            parent_media_index:
-              metadata?.parent_media_index ||
-              activeItem?.parent_media_index ||
-              "",
-
-            // Include raw metadata for debugging and additional fields
-            //raw_metadata: metadata,
+            // Show-specific details - all available directly from activeItem
+            parent_title: activeItem?.parent_title || "",
+            grandparent_title: activeItem?.grandparent_title || "",
+            media_index: activeItem?.media_index || "",
+            parent_media_index: activeItem?.parent_media_index || "",
           };
 
           return userData;
@@ -909,6 +879,11 @@ app.get("/api/users", async (req, res) => {
 
     // Sort by last_seen (most recent first)
     const sortedUsers = usersWithHistory.sort((a, b) => {
+      // Active users come first
+      if (a.state === "watching" && b.state !== "watching") return -1;
+      if (a.state !== "watching" && b.state === "watching") return 1;
+
+      // Then sort by last_seen
       if (!a.last_seen && !b.last_seen) return 0;
       if (!a.last_seen) return 1;
       if (!b.last_seen) return -1;
@@ -943,56 +918,8 @@ app.get("/api/users", async (req, res) => {
       // Apply each format to the user data
       applicableFormats.forEach((format) => {
         try {
-          let result = format.template;
-
-          // Process variables in template with replacements
-          const variableRegex = /\{([^}:]+)(?::([^}]+))?\}/g;
-          result = result.replace(
-            variableRegex,
-            (match, key, formatModifier) => {
-              // Handle different keys with special formatting
-              switch (key) {
-                case "duration":
-                  return user.formatted_duration || "0m";
-
-                case "last_seen":
-                  // Apply date formatting if available
-                  if (!user.last_seen) return "Never";
-                  return formatModifier
-                    ? formatDate(user.last_seen, formatModifier)
-                    : user.last_seen_formatted ||
-                        formatDate(user.last_seen, "relative");
-
-                case "state":
-                  return user.state || "watched";
-
-                case "media_index":
-                case "parent_media_index":
-                  // Format as 2-digit number
-                  if (!user[key]) return "";
-                  return String(user[key]).padStart(2, "0");
-
-                default:
-                  // Use the value if it exists in the user object
-                  if (user[key] !== undefined && user[key] !== null) {
-                    return String(user[key]);
-                  }
-
-                  // Try to get from raw_metadata if available
-                  if (
-                    user.raw_metadata &&
-                    user.raw_metadata[key] !== undefined
-                  ) {
-                    return String(user.raw_metadata[key]);
-                  }
-
-                  // Return an empty string if not found
-                  return "";
-              }
-            }
-          );
-
-          // Store the formatted output
+          // Process template with user data
+          const result = processTemplate(format.template, user);
           formattedOutput[format.name] = result;
         } catch (err) {
           console.error(`Error applying format ${format.name}:`, err);
