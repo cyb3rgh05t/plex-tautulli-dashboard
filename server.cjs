@@ -9,50 +9,18 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
+// ======================================================================
 // Constants and Configuration
+// ======================================================================
 const SAVED_SECTIONS_PATH = path.join(
   process.cwd(),
   "configs",
   "sections.json"
 );
-
 const PROXY_TIMEOUT = parseInt(process.env.PROXY_TIMEOUT) || 30000;
-const PROXY_READ_TIMEOUT = parseInt(process.env.PROXY_READ_TIMEOUT) || 30000;
-const PROXY_WRITE_TIMEOUT = parseInt(process.env.PROXY_WRITE_TIMEOUT) || 30000;
-
-function getAppVersion() {
-  try {
-    const versionFilePath = path.join(__dirname, "version.js");
-    const versionFileContent = fs.readFileSync(versionFilePath, "utf8");
-    const versionMatch = versionFileContent.match(/appVersion = "([^"]+)"/);
-    if (versionMatch && versionMatch[1]) {
-      return versionMatch[1];
-    }
-    return "unknown";
-  } catch (error) {
-    console.error("Error reading version:", error);
-    return "unknown";
-  }
-}
-
-const appVersion = getAppVersion();
-
-// Ensure required directories exist
-const ensureDirectories = () => {
-  const dirs = [path.dirname(SAVED_SECTIONS_PATH)];
-
-  dirs.forEach((dir) => {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-      console.log(`Created directory: ${dir}`);
-    }
-  });
-};
-
-// Initialize directories
-ensureDirectories();
-
-const app = express();
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
+  : ["http://localhost:3005"];
 
 // Plex headers configuration
 const PLEX_HEADERS = [
@@ -68,12 +36,7 @@ const PLEX_HEADERS = [
 ];
 
 // CORS Configuration
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
-  : ["http://localhost:3005"]; // Default fallback
-
 const corsOptions = {
-  // Simply allow all origins in production
   origin: true,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -83,34 +46,37 @@ const corsOptions = {
   optionsSuccessStatus: 204,
 };
 
-// Apply CORS middleware
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // Handle OPTIONS preflight explicitly
+// ======================================================================
+// Utility Functions
+// ======================================================================
 
-// Log requests for debugging
-app.use((req, res, next) => {
-  console.log(
-    `${req.method} ${req.url} - Origin: ${req.headers.origin || "none"}`
-  );
-  next();
-});
+// Version Management
+function getAppVersion() {
+  try {
+    const versionFilePath = path.join(__dirname, "version.js");
+    const versionFileContent = fs.readFileSync(versionFilePath, "utf8");
+    const versionMatch = versionFileContent.match(/appVersion = "([^"]+)"/);
+    return versionMatch && versionMatch[1] ? versionMatch[1] : "unknown";
+  } catch (error) {
+    console.error("Error reading version:", error);
+    return "unknown";
+  }
+}
 
-app.use(express.json());
-
-// Logging middleware
-app.use((req, res, next) => {
-  console.log("Request:", {
-    method: req.method,
-    url: req.url,
-    origin: req.headers.origin,
-    headers: {
-      ...req.headers,
-      "x-plex-token": req.headers["x-plex-token"] ? "[REDACTED]" : undefined,
-      authorization: req.headers.authorization ? "[REDACTED]" : undefined,
-    },
+// Directory Management
+const ensureDirectories = () => {
+  const dirs = [path.dirname(SAVED_SECTIONS_PATH)];
+  dirs.forEach((dir) => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      console.log(`Created directory: ${dir}`);
+    }
   });
-  next();
-});
+};
+
+// ======================================================================
+// Formatting Utilities
+// ======================================================================
 
 const formatDate = (timestamp, format = "default") => {
   // Return early if no timestamp
@@ -210,16 +176,15 @@ const formatDate = (timestamp, format = "default") => {
   }
 };
 
-// Improved duration formatting function
 const formatDuration = (durationMs) => {
   // Ensure we have a valid input
   if (!durationMs) return "0m";
 
   let duration;
 
-  // Handle string inputs that might already be formatted (e.g., "45m")
+  // Handle string inputs that might already be formatted
   if (typeof durationMs === "string") {
-    // If it's already in the format we want (e.g., "45m" or "1h 30m"), return it
+    // If it's already in the format we want, return it
     if (/^\d+h( \d+m)?$|^\d+m$/.test(durationMs.trim())) {
       return durationMs.trim();
     }
@@ -233,8 +198,7 @@ const formatDuration = (durationMs) => {
   // If duration is invalid or 0, return "0m"
   if (isNaN(duration) || duration <= 0) return "0m";
 
-  // If duration is in seconds (common for Plex/Tautulli), convert to milliseconds
-  // Heuristic: if duration is less than 10000 and greater than 0, it's likely in seconds
+  // If duration is in seconds, convert to milliseconds
   if (duration > 0 && duration < 10000) {
     duration *= 1000;
   }
@@ -256,13 +220,11 @@ const formatDuration = (durationMs) => {
   }
 };
 
-// Helper for formatting arrays
 const formatArray = (arr) => {
   if (!arr || !Array.isArray(arr)) return "";
   return arr.join(", ");
 };
 
-// Helper functions (add these near the top of your file)
 function formatTimeHHMM(milliseconds) {
   if (!milliseconds) return "00:00";
 
@@ -276,13 +238,15 @@ function formatTimeHHMM(milliseconds) {
 }
 
 function formatTimeDiff(timestamp) {
+  if (!timestamp) return "Never";
+
   const now = Math.floor(Date.now() / 1000);
   const diff = now - timestamp;
 
   if (diff < 60) return "Just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)} mins ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} hrs ago`;
-  return `${Math.floor(diff / 86400)} days ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
 }
 
 // Helper for two-digit padding
@@ -295,72 +259,7 @@ const formatShowEpisode = (seasonNumber, episodeNumber) => {
   return `S${paddedSeason}E${paddedEpisode}`;
 };
 
-const formatMediaWithCustomFormats = (media, formats, sectionId = "all") => {
-  const applicableFormats = formats.filter(
-    (format) =>
-      format.sectionId === "all" || format.sectionId === sectionId.toString()
-  );
-
-  const formattedData = {};
-  applicableFormats.forEach((format) => {
-    formattedData[format.name] = processTemplate(format.template, media);
-  });
-
-  return {
-    ...media,
-    formatted: formattedData,
-  };
-};
-
-// Add this function to help fetch library details
-const getLibraryDetails = async (sectionId, config) => {
-  try {
-    // Get library stats
-    const statsResponse = await axios.get(`${config.tautulliUrl}/api/v2`, {
-      params: {
-        apikey: config.tautulliApiKey,
-        cmd: "get_library_media_info",
-        section_id: sectionId,
-      },
-    });
-
-    // Get watch statistics
-    const watchStatsResponse = await axios.get(`${config.tautulliUrl}/api/v2`, {
-      params: {
-        apikey: config.tautulliApiKey,
-        cmd: "get_library_watch_time_stats",
-        section_id: sectionId,
-      },
-    });
-
-    const stats = statsResponse.data?.response?.data || {};
-    const watchStats = watchStatsResponse.data?.response?.data || {};
-
-    return {
-      count: stats.count || 0,
-      parent_count: stats.parent_count || 0,
-      child_count: stats.child_count || 0,
-      total_plays: watchStats.total_plays || 0,
-      last_accessed: watchStats.last_accessed || null,
-      last_played: watchStats.last_played || null,
-    };
-  } catch (error) {
-    console.error(
-      `Error fetching library details for section ${sectionId}:`,
-      error
-    );
-    return {
-      count: 0,
-      parent_count: 0,
-      child_count: 0,
-      total_plays: 0,
-      last_accessed: null,
-      last_played: null,
-    };
-  }
-};
-
-// Template processing function
+// Template processing
 const processTemplate = (template, data) => {
   if (!template) return "";
 
@@ -435,6 +334,82 @@ const processTemplate = (template, data) => {
   return result;
 };
 
+// Enhanced template processing with full support for season/episode formatting
+const enhancedProcessTemplate = (template, data) => {
+  if (!template) return "";
+
+  let result = template;
+  const variables = template.match(/\{([^}]+)\}/g) || [];
+
+  variables.forEach((variable) => {
+    const match = variable.slice(1, -1).split(":");
+    const key = match[0];
+    const format = match[1] || "default";
+
+    let value;
+
+    // Special handling for timestamp
+    if (key === "addedAt" || key === "added_at") {
+      const timestamp = data.addedAt || data.added_at;
+      value = formatDate(timestamp, format);
+    }
+    // Special handling for duration
+    else if (key === "duration") {
+      value = data.formatted_duration || formatDuration(Number(data[key]) || 0);
+    }
+    // Special handling for season and episode numbers
+    else if (key === "parent_media_index" || key === "media_index") {
+      // Get raw value with fallback to "0"
+      const rawValue = data[key] || "0";
+
+      // Parse to number (important for proper padding)
+      const numberValue =
+        typeof rawValue === "number" ? rawValue : parseInt(rawValue, 10);
+
+      // Apply 2-digit padding
+      value = String(numberValue).padStart(2, "0");
+
+      // Add S or E prefix for show/episode media types
+      if (data.media_type === "show" || data.media_type === "episode") {
+        if (key === "parent_media_index") {
+          value = `S${value}`;
+        } else if (key === "media_index") {
+          value = `E${value}`;
+        }
+      }
+    }
+    // Default handling for all other variables
+    else {
+      value = data[key];
+    }
+
+    if (value !== undefined) {
+      result = result.replace(variable, value);
+    }
+  });
+
+  return result;
+};
+
+// Format media with custom formats
+const formatMediaWithCustomFormats = (media, formats, sectionId = "all") => {
+  const applicableFormats = formats.filter(
+    (format) =>
+      format.sectionId === "all" || format.sectionId === sectionId.toString()
+  );
+
+  const formattedData = {};
+  applicableFormats.forEach((format) => {
+    formattedData[format.name] = processTemplate(format.template, media);
+  });
+
+  return {
+    ...media,
+    formatted: formattedData,
+  };
+};
+
+// Format library with custom formats
 function formatLibraryWithCustomFormats(library, formats) {
   const applicableFormats = formats.filter((format) => {
     // Map section_type to media type for matching
@@ -471,9 +446,342 @@ function formatLibraryWithCustomFormats(library, formats) {
   };
 }
 
-// Format management endpoints
+// Format show title with season and episode
+function formatShowTitle(session) {
+  if (!session) return "";
 
-// Modified formats endpoint in server.cjs
+  if (
+    session.grandparent_title &&
+    session.parent_media_index &&
+    session.media_index
+  ) {
+    // Remove year from grandparent_title (show name)
+    const showTitle = session.grandparent_title.replace(
+      /\s*\(\d{4}\)|\s+[-–]\s+\d{4}/,
+      ""
+    );
+    return `${showTitle} - S${String(session.parent_media_index).padStart(
+      2,
+      "0"
+    )}E${String(session.media_index).padStart(2, "0")}`;
+  }
+
+  const title = session.title || "";
+  return title.replace(/\s*\(\d{4}\)|\s+[-–]\s+\d{4}/, "");
+}
+
+// ======================================================================
+// API Services
+// ======================================================================
+
+// Get library details (stats & watch time)
+const getLibraryDetails = async (sectionId, config) => {
+  try {
+    // Get library stats and watch statistics in parallel
+    const [statsResponse, watchStatsResponse] = await Promise.all([
+      axios.get(`${config.tautulliUrl}/api/v2`, {
+        params: {
+          apikey: config.tautulliApiKey,
+          cmd: "get_library_media_info",
+          section_id: sectionId,
+        },
+      }),
+      axios.get(`${config.tautulliUrl}/api/v2`, {
+        params: {
+          apikey: config.tautulliApiKey,
+          cmd: "get_library_watch_time_stats",
+          section_id: sectionId,
+        },
+      }),
+    ]);
+
+    const stats = statsResponse.data?.response?.data || {};
+    const watchStats = watchStatsResponse.data?.response?.data || {};
+
+    return {
+      count: stats.count || 0,
+      parent_count: stats.parent_count || 0,
+      child_count: stats.child_count || 0,
+      total_plays: watchStats.total_plays || 0,
+      last_accessed: watchStats.last_accessed || null,
+      last_played: watchStats.last_played || null,
+    };
+  } catch (error) {
+    console.error(
+      `Error fetching library details for section ${sectionId}:`,
+      error
+    );
+    return {
+      count: 0,
+      parent_count: 0,
+      child_count: 0,
+      total_plays: 0,
+      last_accessed: null,
+      last_played: null,
+    };
+  }
+};
+
+// Get user history from Tautulli API
+async function getUserHistory(baseUrl, apiKey, userId, requestId = "") {
+  try {
+    console.log(`[${requestId}] Fetching history for user ${userId}...`);
+
+    const response = await axios.get(`${baseUrl}/api/v2`, {
+      params: {
+        apikey: apiKey,
+        cmd: "get_history",
+        user_id: userId,
+        length: 1,
+      },
+      timeout: 10000, // 10 second timeout
+    });
+
+    const historyItem = response.data?.response?.data?.data?.[0] || null;
+
+    if (historyItem) {
+      console.log(
+        `[${requestId}] History fetch success for ${userId}: ${historyItem.media_type}: ${historyItem.title}`
+      );
+    } else {
+      console.log(`[${requestId}] No history found for user ${userId}`);
+    }
+
+    return historyItem;
+  } catch (error) {
+    console.error(
+      `[${requestId}] Error fetching history for user ${userId}:`,
+      error.message
+    );
+    return null;
+  }
+}
+
+// ======================================================================
+// Caching System
+// ======================================================================
+
+// Generic cache factory to create different cache instances
+const createCache = (defaultTTL = 10 * 60 * 1000) => {
+  return {
+    cache: new Map(),
+    ttl: defaultTTL,
+
+    get(key) {
+      const item = this.cache.get(key);
+      if (!item) return null;
+
+      // Check if cached item has expired
+      if (Date.now() > item.expires) {
+        this.cache.delete(key);
+        return null;
+      }
+
+      return item.value;
+    },
+
+    set(key, value, ttl = this.ttl) {
+      this.cache.set(key, {
+        value,
+        expires: Date.now() + ttl,
+      });
+    },
+
+    delete(key) {
+      this.cache.delete(key);
+    },
+
+    clear() {
+      this.cache.clear();
+    },
+
+    keys() {
+      return Array.from(this.cache.keys());
+    },
+
+    stats() {
+      return {
+        size: this.cache.size,
+        keys: this.keys(),
+      };
+    },
+  };
+};
+
+// Create specific cache instances
+const historyCache = createCache(10 * 60 * 1000); // 10 minutes
+const mediaCache = createCache(5 * 60 * 1000); // 5 minutes
+const metadataCache = createCache(30 * 60 * 1000); // 30 minutes
+
+// ======================================================================
+// Dynamic Proxy Helper
+// ======================================================================
+
+const createDynamicProxy = (serviceName, options = {}) => {
+  return (req, res, next) => {
+    const config = getConfig();
+    const target = serviceName === "Plex" ? config.plexUrl : config.tautulliUrl;
+
+    if (!target) {
+      return res.status(500).json({
+        error: `${serviceName} URL not configured`,
+        detail: `Please configure ${serviceName} URL in settings`,
+      });
+    }
+
+    const proxy = createProxyMiddleware({
+      target,
+      changeOrigin: true,
+      secure: false,
+      timeout: PROXY_TIMEOUT,
+      proxyTimeout: PROXY_TIMEOUT,
+      xfwd: true, // Forward the x-forwarded-* headers
+      pathRewrite: (path) => {
+        const newPath = path.replace(
+          new RegExp(`^/api/${serviceName.toLowerCase()}`),
+          ""
+        );
+        console.log(`${serviceName} path rewrite:`, {
+          from: path,
+          to: newPath,
+        });
+        return newPath;
+      },
+      onProxyReq: (proxyReq, req, res) => {
+        // Add service-specific headers
+        if (serviceName === "Plex" && config.plexToken) {
+          proxyReq.setHeader(
+            "X-Plex-Client-Identifier",
+            "PlexTautulliDashboard"
+          );
+          proxyReq.setHeader("X-Plex-Product", "Plex Tautulli Dashboard");
+          proxyReq.setHeader("X-Plex-Version", "1.0.0");
+
+          if (!req.query["X-Plex-Token"]) {
+            proxyReq.setHeader("X-Plex-Token", config.plexToken);
+          }
+        }
+
+        // Log the proxied request (with sensitive data redacted)
+        console.log(`${serviceName} proxy request:`, {
+          path: proxyReq.path,
+          headers: {
+            ...proxyReq.getHeaders(),
+            "x-plex-token": "[REDACTED]",
+            authorization: "[REDACTED]",
+          },
+        });
+      },
+      onProxyRes: (proxyRes, req, res) => {
+        // Handle CORS headers
+        const origin = req.headers.origin || ALLOWED_ORIGINS[0];
+        proxyRes.headers["Access-Control-Allow-Origin"] =
+          ALLOWED_ORIGINS.includes("*") ? "*" : origin;
+        proxyRes.headers["Access-Control-Allow-Credentials"] = "true";
+        proxyRes.headers["Access-Control-Allow-Headers"] = [
+          "Content-Type",
+          "Authorization",
+          ...PLEX_HEADERS,
+        ].join(", ");
+
+        // Log the response (without sensitive data)
+        console.log(`${serviceName} proxy response:`, {
+          status: proxyRes.statusCode,
+          url: req.url,
+          headers: {
+            ...proxyRes.headers,
+            authorization: proxyRes.headers.authorization
+              ? "[REDACTED]"
+              : undefined,
+          },
+        });
+      },
+      onError: (err, req, res) => {
+        console.error(`${serviceName} proxy error:`, {
+          message: err.message,
+          code: err.code,
+          stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
+        });
+
+        // Send a more detailed error response
+        res.status(500).json({
+          error: `${serviceName} Proxy Error`,
+          message: err.message,
+          code: err.code,
+          detail: `Failed to proxy request to ${serviceName}. Please check your connection and settings.`,
+        });
+      },
+      ...options,
+    });
+
+    return proxy(req, res, next);
+  };
+};
+
+// Helper for configuration display
+const formatConfig = (config) => {
+  let output = "";
+  Object.entries(config).forEach(([key, value]) => {
+    // Capitalize the first letter of each key
+    const capitalizedKey = key.charAt(0).toUpperCase() + key.slice(1);
+
+    // Redact sensitive values if key includes "token" or "apikey"
+    const displayValue =
+      key.toLowerCase().includes("token") ||
+      key.toLowerCase().includes("apikey")
+        ? value
+          ? "REDACTED"
+          : "Not set"
+        : value || "Not set";
+    output += `${capitalizedKey}: ${displayValue},\n`;
+  });
+  return output;
+};
+
+// ======================================================================
+// Server Setup
+// ======================================================================
+
+const app = express();
+const appVersion = getAppVersion();
+
+// Initialize directories
+ensureDirectories();
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // Handle OPTIONS preflight explicitly
+
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(
+    `${req.method} ${req.url} - Origin: ${req.headers.origin || "none"}`
+  );
+  next();
+});
+
+app.use(express.json());
+
+// Detailed logging middleware
+app.use((req, res, next) => {
+  console.log("Request:", {
+    method: req.method,
+    url: req.url,
+    origin: req.headers.origin,
+    headers: {
+      ...req.headers,
+      "x-plex-token": req.headers["x-plex-token"] ? "[REDACTED]" : undefined,
+      authorization: req.headers.authorization ? "[REDACTED]" : undefined,
+    },
+  });
+  next();
+});
+
+// ======================================================================
+// API Routes
+// ======================================================================
+
+// Formats Management
 app.get("/api/formats", (req, res) => {
   try {
     const formats = getFormats();
@@ -493,7 +801,6 @@ app.get("/api/formats", (req, res) => {
   }
 });
 
-// Update the POST /api/formats endpoint to properly handle libraries formats
 app.post("/api/formats", (req, res) => {
   try {
     const { type, formats } = req.body;
@@ -543,7 +850,7 @@ app.post("/api/formats", (req, res) => {
   }
 });
 
-// Update the media endpoint
+// Media API
 app.get("/api/media/:type", async (req, res) => {
   try {
     const { type } = req.params;
@@ -664,57 +971,7 @@ app.get("/api/media/:type", async (req, res) => {
   }
 });
 
-// Create a simple in-memory cache with TTL (time to live)
-const historyCache = {
-  cache: new Map(),
-  ttl: 10 * 60 * 1000, // 10 minutes in milliseconds - adjust as needed
-
-  // Get a value from cache
-  get(key) {
-    const item = this.cache.get(key);
-    if (!item) return null;
-
-    // Check if cached item has expired
-    if (Date.now() > item.expires) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    return item.value;
-  },
-
-  // Set a value in cache with TTL
-  set(key, value, ttl = this.ttl) {
-    this.cache.set(key, {
-      value,
-      expires: Date.now() + ttl,
-    });
-  },
-
-  // Delete a value from cache
-  delete(key) {
-    this.cache.delete(key);
-  },
-
-  // Clear entire cache
-  clear() {
-    this.cache.clear();
-  },
-
-  // Get all keys
-  keys() {
-    return Array.from(this.cache.keys());
-  },
-
-  // Get cache stats
-  stats() {
-    return {
-      size: this.cache.size,
-      keys: this.keys(),
-    };
-  },
-};
-
+// Users API
 app.get("/api/users", async (req, res) => {
   try {
     // Generate unique request ID for logging
@@ -882,9 +1139,9 @@ app.get("/api/users", async (req, res) => {
             : "",
           progress_percent: watching ? `${watching.progress_percent}%` : "",
           progress_time: watching
-            ? `${formatTimeHHMM(watching.view_offset)} / ${formatTimeHHMM(
-                watching.duration
-              )}`
+            ? `${formatTimeHHMM(
+                watching.view_offset * 1000
+              )} / ${formatTimeHHMM(watching.duration * 1000)}`
             : "",
           title: watching ? watching.title : "",
           original_title: watching ? watching.original_title : "",
@@ -1110,15 +1367,28 @@ app.get("/api/users", async (req, res) => {
   }
 });
 
-// Add a cache clear endpoint
-app.post("/api/users/clear-cache", (req, res) => {
+// Cache control
+// Add a route to clear all caches
+app.post("/api/clear-cache", (req, res) => {
   try {
-    const previousSize = historyCache.stats().size;
+    const previousSizes = {
+      history: historyCache.stats().size,
+      media: mediaCache.stats().size,
+      metadata: metadataCache.stats().size,
+    };
+
+    const totalSize =
+      previousSizes.history + previousSizes.media + previousSizes.metadata;
+
+    // Clear all caches
     historyCache.clear();
+    mediaCache.clear();
+    metadataCache.clear();
 
     res.json({
       success: true,
-      message: `Successfully cleared cache with ${previousSize} entries`,
+      message: `Successfully cleared all caches with ${totalSize} total entries`,
+      details: previousSizes,
     });
   } catch (error) {
     res.status(500).json({
@@ -1128,98 +1398,67 @@ app.post("/api/users/clear-cache", (req, res) => {
   }
 });
 
-/**
- * Get user history from Tautulli API with caching
- */
-async function getUserHistory(baseUrl, apiKey, userId, requestId = "") {
+// Maintain backward compatibility with the old endpoint
+app.post("/api/users/clear-cache", (req, res) => {
   try {
-    console.log(`[${requestId}] Fetching history for user ${userId}...`);
+    const previousSize = historyCache.stats().size;
+    historyCache.clear();
 
-    const response = await axios.get(`${baseUrl}/api/v2`, {
-      params: {
-        apikey: apiKey,
-        cmd: "get_history",
-        user_id: userId,
-        length: 1,
-      },
-      timeout: 10000, // 10 second timeout
+    res.json({
+      success: true,
+      message: `Successfully cleared user history cache with ${previousSize} entries`,
     });
+  } catch (error) {
+    res.status(500).json({
+      error: "Failed to clear cache",
+      message: error.message,
+    });
+  }
+});
 
-    const historyItem = response.data?.response?.data?.data?.[0] || null;
+// Add a selective cache clear endpoint
+app.post("/api/clear-cache/:type", (req, res) => {
+  try {
+    const { type } = req.params;
+    let message = "";
+    let details = {};
 
-    if (historyItem) {
-      console.log(
-        `[${requestId}] History fetch success for ${userId}: ${historyItem.media_type}: ${historyItem.title}`
-      );
+    if (type === "media") {
+      const size = mediaCache.stats().size;
+      mediaCache.clear();
+      message = `Successfully cleared media cache with ${size} entries`;
+      details = { media: size };
+    } else if (type === "metadata") {
+      const size = metadataCache.stats().size;
+      metadataCache.clear();
+      message = `Successfully cleared metadata cache with ${size} entries`;
+      details = { metadata: size };
+    } else if (type === "history") {
+      const size = historyCache.stats().size;
+      historyCache.clear();
+      message = `Successfully cleared history cache with ${size} entries`;
+      details = { history: size };
     } else {
-      console.log(`[${requestId}] No history found for user ${userId}`);
+      return res.status(400).json({
+        error: "Invalid cache type",
+        message: "Cache type must be one of: media, metadata, history",
+      });
     }
 
-    return historyItem;
+    res.json({
+      success: true,
+      message,
+      details,
+    });
   } catch (error) {
-    console.error(
-      `[${requestId}] Error fetching history for user ${userId}:`,
-      error.message
-    );
-    return null;
+    res.status(500).json({
+      error: "Failed to clear cache",
+      message: error.message,
+    });
   }
-}
+});
 
-/**
- * Format show title with season and episode
- */
-function formatShowTitle(session) {
-  if (!session) return "";
-
-  if (
-    session.grandparent_title &&
-    session.parent_media_index &&
-    session.media_index
-  ) {
-    // Remove year from grandparent_title (show name)
-    const showTitle = session.grandparent_title.replace(
-      /\s*\(\d{4}\)|\s+[-–]\s+\d{4}/,
-      ""
-    );
-    return `${showTitle} - S${String(session.parent_media_index).padStart(
-      2,
-      "0"
-    )}E${String(session.media_index).padStart(2, "0")}`;
-  }
-
-  const title = session.title || "";
-  return title.replace(/\s*\(\d{4}\)|\s+[-–]\s+\d{4}/, "");
-}
-
-/**
- * Format time difference for last seen
- */
-function formatTimeDiff(timestamp) {
-  if (!timestamp) return "Never";
-
-  const now = Date.now() / 1000;
-  const diff = Math.floor(now - timestamp);
-
-  if (diff < 60) return "Just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
-
-/**
- * Format seconds into hours and minutes
- */
-function formatTimeHHMM(totalSeconds) {
-  if (!totalSeconds) return "0m";
-
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-
-  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-}
-
-// Downloads endpoint with format processing
-
+// Downloads endpoint
 app.get("/api/downloads", async (req, res) => {
   try {
     const config = getConfig();
@@ -1377,6 +1616,7 @@ app.get("/api/libraries", async (req, res) => {
   }
 });
 
+// Sections API
 app.get("/api/sections", async (req, res) => {
   try {
     // Read saved sections
@@ -1429,9 +1669,8 @@ app.get("/api/sections", async (req, res) => {
 
       // Return with formats at top level and raw data in raw_data object
       return {
-        raw_data: {
-          ...processedSection, // Processed section data with nulls as "Never"
-        },
+        ...formattedData,
+        raw_data: processedSection, // Processed section data with nulls as "Never"
       };
     });
 
@@ -1448,7 +1687,7 @@ app.get("/api/sections", async (req, res) => {
   }
 });
 
-// Save sections POST endpoint
+// Save sections
 app.post("/api/sections", async (req, res) => {
   try {
     const sections = req.body;
@@ -1548,12 +1787,19 @@ app.post("/api/sections", async (req, res) => {
   }
 });
 
+// Recently Added endpoint
 app.get("/api/recent/:type", async (req, res) => {
   try {
     const config = getConfig();
     const { type } = req.params;
-    const { section, count = 50 } = req.query; // Default to 50 if not specified
-    const requestedCount = parseInt(count, 10); // Ensure it's parsed as an integer
+    const { section, count = 50, refresh = "false" } = req.query; // Add refresh parameter
+    const requestedCount = parseInt(count, 10);
+    const forceRefresh = refresh === "true";
+
+    // Generate request ID for logging and cache key
+    const requestId =
+      Date.now().toString(36) + Math.random().toString(36).substring(2);
+    console.log(`[${requestId}] Processing /api/recent/${type} request`);
 
     // Validate type
     const validTypes = {
@@ -1564,6 +1810,30 @@ app.get("/api/recent/:type", async (req, res) => {
 
     if (!validTypes[type]) {
       return res.status(400).json({ error: "Invalid media type" });
+    }
+
+    // Create cache key based on request parameters
+    const cacheKey = `media:${type}:${section || "all"}:${requestedCount}`;
+
+    // Try to get from cache if not forcing refresh
+    if (!forceRefresh) {
+      const cachedMedia = mediaCache.get(cacheKey);
+      if (cachedMedia) {
+        console.log(`[${requestId}] Cache hit for ${cacheKey}`);
+
+        // Add cache metadata to response
+        return res.json({
+          ...cachedMedia,
+          _cache: {
+            hit: true,
+            age: Math.floor((Date.now() - cachedMedia._timestamp) / 1000) + "s",
+            key: cacheKey,
+          },
+        });
+      }
+      console.log(`[${requestId}] Cache miss for ${cacheKey}`);
+    } else {
+      console.log(`[${requestId}] Forced refresh, bypassing cache`);
     }
 
     // Get formats
@@ -1620,6 +1890,25 @@ app.get("/api/recent/:type", async (req, res) => {
     // Fetch media for matching sections
     const sectionMediaPromises = matchingSections.map(async (section) => {
       try {
+        // Generate section cache key
+        const sectionCacheKey = `section:${section.section_id}:media`;
+        let sectionMedia;
+
+        // Try to get section media from cache unless forced refresh
+        if (!forceRefresh) {
+          sectionMedia = mediaCache.get(sectionCacheKey);
+          if (sectionMedia) {
+            console.log(
+              `[${requestId}] Using cached media for section ${section.section_id}`
+            );
+            return sectionMedia;
+          }
+        }
+
+        // If not in cache, fetch from API
+        console.log(
+          `[${requestId}] Fetching media for section ${section.section_id}`
+        );
         const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
           params: {
             apikey: config.tautulliApiKey,
@@ -1629,13 +1918,19 @@ app.get("/api/recent/:type", async (req, res) => {
           },
         });
 
-        return (response.data?.response?.data?.recently_added || []).map(
-          (item) => ({
-            ...item,
-            section_id: section.section_id,
-            section_name: section.section_name || section.name,
-          })
-        );
+        // Process and cache the section media data
+        sectionMedia = (
+          response.data?.response?.data?.recently_added || []
+        ).map((item) => ({
+          ...item,
+          section_id: section.section_id,
+          section_name: section.section_name || section.name,
+        }));
+
+        // Cache the section media for future requests
+        mediaCache.set(sectionCacheKey, sectionMedia);
+
+        return sectionMedia;
       } catch (error) {
         console.error(
           `Error fetching recently added for section ${section.section_id}:`,
@@ -1667,76 +1962,34 @@ app.get("/api/recent/:type", async (req, res) => {
       (a, b) => parseInt(b.added_at || 0) - parseInt(a.added_at || 0)
     );
 
-    // *** APPLY COUNT LIMIT HERE ***
-    // This is the fix: we limit all results to the requested count after sorting
-    // Previously this limit might have been applied before or not at all
+    // Limit results to the requested count
     const limitedMedia = allMedia.slice(0, requestedCount);
-
-    // Enhanced processTemplate function that properly handles season/episode formatting
-    const enhancedProcessTemplate = (template, data) => {
-      if (!template) return "";
-
-      let result = template;
-      const variables = template.match(/\{([^}]+)\}/g) || [];
-
-      variables.forEach((variable) => {
-        const match = variable.slice(1, -1).split(":");
-        const key = match[0];
-        const format = match[1] || "default";
-
-        let value;
-
-        // Special handling for timestamp
-        if (key === "addedAt" || key === "added_at") {
-          const timestamp = data.addedAt || data.added_at;
-          value = formatDate(timestamp, format);
-        }
-        // Special handling for duration
-        else if (key === "duration") {
-          value =
-            data.formatted_duration || formatDuration(Number(data[key]) || 0);
-        }
-        // Special handling for season and episode numbers
-        else if (key === "parent_media_index" || key === "media_index") {
-          // Get raw value with fallback to "0"
-          const rawValue = data[key] || "0";
-
-          // Parse to number (important for proper padding)
-          const numberValue =
-            typeof rawValue === "number" ? rawValue : parseInt(rawValue, 10);
-
-          // Apply 2-digit padding
-          value = String(numberValue).padStart(2, "0");
-
-          // Add S or E prefix for show/episode media types
-          if (data.media_type === "show" || data.media_type === "episode") {
-            if (key === "parent_media_index") {
-              value = `S${value}`;
-            } else if (key === "media_index") {
-              value = `E${value}`;
-            }
-          }
-        }
-        // Default handling for all other variables
-        else {
-          value = data[key];
-        }
-
-        if (value !== undefined) {
-          result = result.replace(variable, value);
-        }
-      });
-
-      return result;
-    };
 
     const processedMedia = await Promise.all(
       limitedMedia.map(async (media) => {
+        // Try to get metadata from cache
+        const metadataCacheKey = `metadata:${media.rating_key}`;
         let videoResolution = "Unknown";
+        let cachedMetadata = false;
 
-        try {
-          // Only attempt to fetch metadata if rating_key exists
-          if (media.rating_key) {
+        // Check metadata cache
+        if (!forceRefresh && media.rating_key) {
+          const metadata = metadataCache.get(metadataCacheKey);
+          if (metadata) {
+            videoResolution = metadata.video_full_resolution || "Unknown";
+            cachedMetadata = true;
+            console.log(
+              `[${requestId}] Using cached metadata for ${media.rating_key}`
+            );
+          }
+        }
+
+        // Fetch metadata if not cached
+        if (!cachedMetadata && media.rating_key) {
+          try {
+            console.log(
+              `[${requestId}] Fetching metadata for ${media.rating_key}`
+            );
             const metadataResponse = await axios.get(
               `${config.tautulliUrl}/api/v2`,
               {
@@ -1754,13 +2007,20 @@ app.get("/api/recent/:type", async (req, res) => {
               metadataResponse.data?.response?.data?.media_info?.[0];
             if (mediaInfo && mediaInfo.video_full_resolution) {
               videoResolution = mediaInfo.video_full_resolution;
+
+              // Cache the metadata
+              metadataCache.set(metadataCacheKey, {
+                video_full_resolution: videoResolution,
+                media_info: mediaInfo,
+                timestamp: Date.now(),
+              });
             }
+          } catch (error) {
+            console.error(
+              `Failed to fetch metadata for ${media.rating_key}:`,
+              error
+            );
           }
-        } catch (error) {
-          console.error(
-            `Failed to fetch metadata for ${media.rating_key}:`,
-            error
-          );
         }
 
         // Calculate formatted duration once
@@ -1829,12 +2089,14 @@ app.get("/api/recent/:type", async (req, res) => {
             ...media,
             formatted_duration: formattedDuration,
             video_full_resolution: videoResolution,
+            _cached_metadata: cachedMetadata,
           },
         };
       })
     );
 
-    res.json({
+    // Prepare the full response
+    const responseData = {
       total: processedMedia.length,
       media: processedMedia,
       sections: matchingSections.map((s) => ({
@@ -1847,6 +2109,21 @@ app.get("/api/recent/:type", async (req, res) => {
           name: f.name,
           sectionId: f.sectionId,
         })),
+      _timestamp: Date.now(),
+    };
+
+    // Cache the entire response
+    mediaCache.set(cacheKey, responseData);
+    console.log(`[${requestId}] Cached response with key ${cacheKey}`);
+
+    // Send response
+    res.json({
+      ...responseData,
+      _cache: {
+        hit: false,
+        fresh: true,
+        key: cacheKey,
+      },
     });
   } catch (error) {
     console.error("Error processing recently added media:", error);
@@ -1858,15 +2135,15 @@ app.get("/api/recent/:type", async (req, res) => {
   }
 });
 
-// Configuration endpoint
+// Configuration Management
 app.post("/api/config", (req, res) => {
   const { plexUrl, plexToken, tautulliUrl, tautulliApiKey } = req.body;
 
   console.log("Received config update:", {
     plexUrl,
-    plexToken,
+    plexToken: plexToken ? "[REDACTED]" : undefined,
     tautulliUrl,
-    tautulliApiKey,
+    tautulliApiKey: tautulliApiKey ? "[REDACTED]" : undefined,
   });
 
   const currentConfig = getConfig();
@@ -1877,8 +2154,6 @@ app.post("/api/config", (req, res) => {
     tautulliUrl: tautulliUrl || currentConfig.tautulliUrl,
     tautulliApiKey: tautulliApiKey || currentConfig.tautulliApiKey,
   };
-
-  console.log("Updated config:", updatedConfig);
 
   setConfig(updatedConfig);
 
@@ -1967,6 +2242,7 @@ app.post("/api/reset-all", (req, res) => {
   }
 });
 
+// Health & Status APIs
 app.get("/api/health", async (req, res) => {
   try {
     const config = getConfig();
@@ -2019,7 +2295,7 @@ app.get("/api/health", async (req, res) => {
       // Check Tautulli if configured
       if (healthData.services.tautulli.configured) {
         try {
-          // Important: Using 'status' instead of 'get_server_info'
+          // Using 'status' instead of 'get_server_info'
           const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
             params: {
               apikey: config.tautulliApiKey,
@@ -2027,12 +2303,6 @@ app.get("/api/health", async (req, res) => {
             },
             timeout: 5000,
           });
-
-          // Check Tautulli response format
-          console.log(
-            "Tautulli response:",
-            JSON.stringify(response.data).substring(0, 200)
-          );
 
           // Check if response indicates success
           healthData.services.tautulli.online =
@@ -2064,7 +2334,6 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// Simple API to check a specific service
 app.post("/api/health/check-service", async (req, res) => {
   try {
     const { service } = req.body;
@@ -2129,12 +2398,6 @@ app.post("/api/health/check-service", async (req, res) => {
           timeout: 8000,
         });
 
-        // Log the response to debug
-        console.log(
-          "Tautulli check response:",
-          JSON.stringify(response.data).substring(0, 200)
-        );
-
         // Check if response indicates success
         if (response.data?.response?.result === "success") {
           return res.json({
@@ -2167,130 +2430,13 @@ app.post("/api/health/check-service", async (req, res) => {
   }
 });
 
-const createDynamicProxy = (serviceName, options = {}) => {
-  return (req, res, next) => {
-    const config = getConfig();
-    const target = serviceName === "Plex" ? config.plexUrl : config.tautulliUrl;
-
-    if (!target) {
-      return res.status(500).json({
-        error: `${serviceName} URL not configured`,
-        detail: `Please configure ${serviceName} URL in settings`,
-      });
-    }
-
-    const proxy = createProxyMiddleware({
-      target,
-      changeOrigin: true,
-      secure: false,
-      timeout: PROXY_TIMEOUT,
-      proxyTimeout: PROXY_TIMEOUT,
-      xfwd: true, // Forward the x-forwarded-* headers
-      pathRewrite: (path) => {
-        const newPath = path.replace(
-          new RegExp(`^/api/${serviceName.toLowerCase()}`),
-          ""
-        );
-        console.log(`${serviceName} path rewrite:`, {
-          from: path,
-          to: newPath,
-        });
-        return newPath;
-      },
-      onProxyReq: (proxyReq, req, res) => {
-        // Add service-specific headers
-        if (serviceName === "Plex" && config.plexToken) {
-          proxyReq.setHeader(
-            "X-Plex-Client-Identifier",
-            "PlexTautulliDashboard"
-          );
-          proxyReq.setHeader("X-Plex-Product", "Plex Tautulli Dashboard");
-          proxyReq.setHeader("X-Plex-Version", "1.0.0");
-
-          if (!req.query["X-Plex-Token"]) {
-            proxyReq.setHeader("X-Plex-Token", config.plexToken);
-          }
-        }
-
-        // Log the proxied request (with sensitive data redacted)
-        console.log(`${serviceName} proxy request:`, {
-          path: proxyReq.path,
-          headers: {
-            ...proxyReq.getHeaders(),
-            "x-plex-token": "[REDACTED]",
-            authorization: "[REDACTED]",
-          },
-        });
-      },
-      onProxyRes: (proxyRes, req, res) => {
-        // Handle CORS headers
-        const origin = req.headers.origin || ALLOWED_ORIGINS[0];
-        proxyRes.headers["Access-Control-Allow-Origin"] =
-          ALLOWED_ORIGINS.includes("*") ? "*" : origin;
-        proxyRes.headers["Access-Control-Allow-Credentials"] = "true";
-        proxyRes.headers["Access-Control-Allow-Headers"] = [
-          "Content-Type",
-          "Authorization",
-          ...PLEX_HEADERS,
-        ].join(", ");
-
-        // Log the response (without sensitive data)
-        console.log(`${serviceName} proxy response:`, {
-          status: proxyRes.statusCode,
-          url: req.url,
-          headers: {
-            ...proxyRes.headers,
-            authorization: proxyRes.headers.authorization
-              ? "[REDACTED]"
-              : undefined,
-          },
-        });
-      },
-      onError: (err, req, res) => {
-        console.error(`${serviceName} proxy error:`, {
-          message: err.message,
-          code: err.code,
-          stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
-        });
-
-        // Send a more detailed error response
-        res.status(500).json({
-          error: `${serviceName} Proxy Error`,
-          message: err.message,
-          code: err.code,
-          detail: `Failed to proxy request to ${serviceName}. Please check your connection and settings.`,
-        });
-      },
-      ...options,
-    });
-
-    return proxy(req, res, next);
-  };
-};
-
 // Setup proxies
 app.use("/api/plex", createDynamicProxy("Plex"));
 app.use("/api/tautulli", createDynamicProxy("Tautulli"));
 
-// Helper function to format configuration in the desired style
-const formatConfig = (config) => {
-  let output = "";
-  Object.entries(config).forEach(([key, value]) => {
-    // Capitalize the first letter of each key
-    const capitalizedKey = key.charAt(0).toUpperCase() + key.slice(1);
-
-    // Redact sensitive values if key includes "token" or "apikey"
-    const displayValue =
-      key.toLowerCase().includes("token") ||
-      key.toLowerCase().includes("apikey")
-        ? value
-          ? "REDACTED"
-          : "Not set"
-        : value || "Not set";
-    output += `${capitalizedKey}: ${displayValue},\n`;
-  });
-  return output;
-};
+// ======================================================================
+// Server Startup
+// ======================================================================
 
 const serverBanner = `
 ╔════════════════════════════════════════════════════╗
@@ -2299,33 +2445,6 @@ const serverBanner = `
 ║                  Version: ${appVersion}                    ║
 ║                                                    ║
 ╚════════════════════════════════════════════════════╝`;
-
-const endpointsBanner = `
-📍 Available Endpoints:
-|
-├── GET /api/formats
-│   └── Retrieves all Formats
-│
-├── GET  /api/users
-│   └── Retrieves formatted User Activities
-│
-├── GET /api/downlaods
-│   └── Retrieves formatted Plex Downloads
-│
-├── GET /api/recent/movies
-│   └── Retrieves formatted Movies info
-│
-├── GET /api/recent/shows
-│   └── Retrieves formatted Shows info
-│
-├── GET /api/libraries
-│   └── Retrieves all Plex Media Libraries
-│
-├── GET /api/sections
-│   └── Retrieves saved Media Sections
-│
-└── GET  /api/config
-    └── Get current Server configuration`;
 
 const PORT = process.env.PORT || 3006;
 app.listen(PORT, "0.0.0.0", () => {
@@ -2344,5 +2463,4 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log("==================================\n");
   console.log(formatConfig(getConfig()));
   console.log("==================================\n");
-  //console.log(endpointsBanner);
 });

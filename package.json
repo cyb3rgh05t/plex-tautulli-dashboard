@@ -1,7 +1,7 @@
 {
   "name": "plex-tautulli-dashboard",
   "private": true,
-  "version": "2.1.5-dev",
+  "version": "2.1.5",
   "type": "module",
   "scripts": {
     "dev:frontend": "vite --port 3005",
