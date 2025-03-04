@@ -1,9 +1,65 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useQuery } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
+import { useTheme } from "../../context/ThemeContext";
 import { logError } from "../../utils/logger";
 import * as Icons from "lucide-react";
 import ThemedCard from "../common/ThemedCard";
 import ThemedButton from "../common/ThemedButton";
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
+
+const ActivityBadge = ({ type }) => {
+  // Map activity types to their visual styles
+  const styles = {
+    watching: {
+      icon: Icons.Play,
+      bg: "bg-green-500/10",
+      text: "text-green-400",
+      border: "border-green-500/20",
+      label: "Watching",
+    },
+    watched: {
+      icon: Icons.Clock,
+      bg: "bg-gray-500/10",
+      text: "text-gray-400",
+      border: "border-gray-500/20",
+      label: "Watched",
+    },
+    movie: {
+      icon: Icons.Film,
+      bg: "bg-brand-primary-500/10",
+      text: "text-accent-base",
+      border: "border-accent/20",
+      label: "Movie",
+    },
+    episode: {
+      icon: Icons.Tv,
+      bg: "bg-brand-primary-500/10",
+      text: "text-accent-base",
+      border: "border-accent/20",
+      label: "TV Show",
+    },
+  };
+
+  // Safety check for undefined type
+  const activityType = type ? type.toLowerCase() : "watched";
+
+  // Use default style if type is not recognized
+  const style = styles[activityType] || styles.watched;
+  const Icon = style.icon;
+
+  return (
+    <div
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border
+        ${style.bg} ${style.text} ${style.border}`}
+    >
+      <Icon size={14} />
+      <span className="text-xs font-medium">{style.label}</span>
+    </div>
+  );
+};
 
 const UsersTable = ({ users }) => (
   <div className="overflow-x-auto">
@@ -36,28 +92,30 @@ const UsersTable = ({ users }) => (
           </th>
           <th className="px-4 py-3 text-right bg-gray-800/50 rounded-tr-lg border-b border-gray-700/50">
             <div className="flex items-center justify-end gap-2 text-theme-muted font-medium">
-              <Icons.Timer size={14} />
-              Last Played Duration
+              <Icons.Type size={14} />
+              Type
             </div>
           </th>
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-700/50">
-        {users.map((user) => {
+        {users.map((user, index) => {
           // Use raw_data for consistent information retrieval
           const userData = user.raw_data || user;
+          const isWatching = userData.is_watching === "Watching";
+
           return (
             <tr
-              key={userData.user_id || Math.random()}
+              key={userData.user_id || index}
               className={`hover:bg-gray-800/30 transition-colors duration-200 ${
-                userData.state === "watching" ? "bg-gray-800/20" : ""
+                isWatching ? "bg-gray-800/20" : ""
               }`}
             >
               <td className="px-4 py-3 font-medium text-white">
                 {userData.friendly_name || "Unknown User"}
               </td>
               <td className="px-4 py-3">
-                {userData.state === "watching" ? (
+                {isWatching ? (
                   <span className="font-medium text-green-400 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-green-500"></span>
                     Is Watching
@@ -68,20 +126,69 @@ const UsersTable = ({ users }) => (
                   </span>
                 )}
               </td>
-              <td className="px-4 py-3 text-theme">
-                {userData.full_title || userData.title || "Nothing played yet"}
+              <td className="px-4 py-3 text-theme max-w-[400px] truncate">
+                {userData.last_played_modified ||
+                  userData.last_played ||
+                  "Nothing played yet"}
               </td>
               <td className="px-4 py-3 text-right text-accent-base font-medium">
                 {userData.plays ? userData.plays.toLocaleString() : "0"}
               </td>
-              <td className="px-4 py-3 text-right text-accent-base font-medium">
-                {userData.formatted_duration || "0m"}
+              <td className="px-4 py-3 text-right">
+                <ActivityBadge
+                  type={
+                    userData.media_type || (isWatching ? "watching" : "watched")
+                  }
+                />
               </td>
             </tr>
           );
         })}
       </tbody>
     </table>
+  </div>
+);
+
+const LoadingSkeleton = () => (
+  <div className="space-y-6 animate-pulse">
+    {/* Header skeleton */}
+    <div className="flex justify-between items-center">
+      <div>
+        <div className="h-8 w-48 bg-gray-800/50 rounded-lg mb-2"></div>
+        <div className="h-6 w-32 bg-gray-800/50 rounded-lg"></div>
+      </div>
+      <div className="h-10 w-28 bg-gray-800/50 rounded-lg"></div>
+    </div>
+
+    {/* Table skeleton */}
+    <div className="bg-gray-900/30 rounded-xl overflow-hidden border border-gray-800/50">
+      {/* Table header */}
+      <div className="h-14 bg-gray-800/50 border-b border-gray-700/50 px-4 flex items-center">
+        <div className="flex-1 h-6 bg-gray-700/50 rounded-md"></div>
+      </div>
+
+      {/* Table rows */}
+      {[...Array(5)].map((_, i) => (
+        <div
+          key={i}
+          className="h-16 px-4 flex items-center border-b border-gray-800/30"
+        >
+          <div className="w-1/5 h-6 bg-gray-800/70 rounded-md mr-4"></div>
+          <div className="w-1/5 h-6 bg-gray-800/70 rounded-md mr-4"></div>
+          <div className="w-2/5 h-6 bg-gray-800/70 rounded-md mr-4"></div>
+          <div className="w-1/5 h-6 bg-gray-800/70 rounded-md"></div>
+        </div>
+      ))}
+    </div>
+
+    {/* Pagination skeleton */}
+    <div className="flex justify-center mt-6">
+      <div className="flex gap-2">
+        <div className="w-10 h-10 bg-gray-800/70 rounded-lg"></div>
+        <div className="w-10 h-10 bg-gray-800/70 rounded-lg"></div>
+        <div className="w-10 h-10 bg-gray-800/70 rounded-lg"></div>
+      </div>
+    </div>
   </div>
 );
 
@@ -129,111 +236,71 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
 
 const Users = () => {
   const { config } = useConfig();
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastRefreshTime, setLastRefreshTime] = useState(0);
-  const refreshInterval = useRef(null);
-  const REFRESH_INTERVAL = 300000; // 5 minutes (300 seconds)
-
-  // Pagination state
+  const { theme } = useTheme();
   const [currentPage, setCurrentPage] = useState(1);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState(Date.now());
   const itemsPerPage = 10;
+  const refreshInterval = useRef(null);
+  const REFRESH_INTERVAL = 60000; // 60 seconds
 
-  const fetchUsers = async () => {
-    try {
-      // Using a relative path to avoid base URL issues
-      const response = await fetch("/api/users");
-
+  // Use React Query for data fetching with better loading state handling
+  const { data, error, isLoading, isError, refetch } = useQuery(
+    ["users", config.tautulliApiKey],
+    async () => {
+      const response = await fetch(`/api/users`);
       if (!response.ok) {
-        throw new Error(`Failed to fetch users (Status: ${response.status})`);
+        throw new Error(`Error fetching users: ${response.statusText}`);
       }
-
       const data = await response.json();
+      return data.users || [];
+    },
+    {
+      enabled: !!config.tautulliApiKey,
+      refetchInterval: false, // We'll handle manual refresh
+      refetchOnWindowFocus: false,
+      staleTime: 30000, // 30 seconds
+    }
+  );
 
-      if (!data.success) {
-        throw new Error(data.message || "Failed to fetch users data");
-      }
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
 
-      // Sort users - active users first, then by last_seen time (most recent first)
-      const sortedUsers = [...data.users].sort((a, b) => {
-        // Get user data from raw_data if available, otherwise use the user object directly
-        const userA = a.raw_data || a;
-        const userB = b.raw_data || b;
-
-        // First priority: Active users (is_watching/state is "watching")
-        const isActiveA =
-          userA.state === "watching" || userA.is_watching === "Watching";
-        const isActiveB =
-          userB.state === "watching" || userB.is_watching === "Watching";
-
-        // If one is active and the other is not, the active one goes first
-        if (isActiveA && !isActiveB) return -1;
-        if (!isActiveA && isActiveB) return 1;
-
-        // If both have same active status, sort by last_seen (most recent first)
-        // Handle users with no last_seen (they go to the end)
-        if (!userA.last_seen && !userB.last_seen) return 0;
-        if (!userA.last_seen) return 1;
-        if (!userB.last_seen) return -1;
-
-        // Sort by timestamp (higher/more recent first)
-        return userB.last_seen - userA.last_seen;
-      });
-
-      setUsers(sortedUsers);
-      setError(null);
+    setIsRefreshing(true);
+    try {
+      await refetch();
       setLastRefreshTime(Date.now());
     } catch (err) {
-      const errorMessage = `Failed to load users: ${err.message}`;
-      setError(errorMessage);
-      logError(errorMessage, err);
+      logError("Failed to refresh users data", err);
     } finally {
-      setLoading(false);
       setIsRefreshing(false);
     }
   };
 
-  const handleRefresh = async () => {
-    // Prevent multiple refreshes happening at once
-    if (isRefreshing) return;
-
-    setIsRefreshing(true);
-    await fetchUsers();
-  };
-
-  // Setup auto-refresh interval
+  // Set up auto-refresh
   useEffect(() => {
+    // Initial refresh
     if (config.tautulliApiKey) {
-      // Initial fetch
-      fetchUsers();
-
-      // Setup interval for auto-refresh
-      refreshInterval.current = setInterval(() => {
-        handleRefresh();
-      }, REFRESH_INTERVAL);
-
-      // Cleanup interval on unmount
-      return () => {
-        if (refreshInterval.current) {
-          clearInterval(refreshInterval.current);
-        }
-      };
+      handleRefresh();
     }
+
+    // Set up interval for refresh
+    refreshInterval.current = setInterval(() => {
+      handleRefresh();
+    }, REFRESH_INTERVAL);
+
+    return () => {
+      if (refreshInterval.current) {
+        clearInterval(refreshInterval.current);
+      }
+    };
   }, [config.tautulliApiKey]);
 
-  const timeUntilNextRefresh = Math.max(
-    0,
-    REFRESH_INTERVAL - (Date.now() - lastRefreshTime)
-  );
-  const minutesUntilRefresh = Math.ceil(timeUntilNextRefresh / 60000); // Convert to minutes
-
-  // Calculate pagination values
-  const totalItems = users.length;
+  // Pagination calculations
+  const totalItems = data?.length || 0;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
 
-  // If current page is higher than total pages (e.g. after refresh), reset to page 1
+  // Reset to page 1 if needed
   useEffect(() => {
     if (totalPages > 0 && currentPage > totalPages) {
       setCurrentPage(1);
@@ -241,59 +308,36 @@ const Users = () => {
   }, [totalPages, currentPage]);
 
   // Get current page items
-  const currentUsers = users.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const currentItems = data
+    ? data.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+    : [];
 
-  const handlePageChange = (pageNumber) => {
-    setCurrentPage(pageNumber);
-    // Scroll to top of the component
+  // Handle page change
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    // Smooth scroll to top
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  if (loading) {
-    return (
-      <div className="w-full space-y-4">
-        <div className="flex justify-between items-center mb-6">
-          <div className="animate-pulse">
-            <div className="h-8 w-48 bg-gray-800/50 rounded mb-2"></div>
-            <div className="h-6 w-32 bg-gray-800/50 rounded"></div>
-          </div>
-          <div className="h-10 w-28 bg-gray-800/50 rounded"></div>
-        </div>
-        <ThemedCard>
-          <div className="p-4 space-y-4">
-            {[...Array(5)].map((_, index) => (
-              <div key={index} className="flex justify-between items-center">
-                <div className="w-1/4 h-6 bg-gray-800/50 rounded"></div>
-                <div className="w-1/4 h-6 bg-gray-800/50 rounded"></div>
-                <div className="w-1/6 h-6 bg-gray-800/50 rounded"></div>
-                <div className="w-1/6 h-6 bg-gray-800/50 rounded"></div>
-              </div>
-            ))}
-          </div>
-        </ThemedCard>
-      </div>
-    );
+  // Calculate time until next refresh
+  const timeUntilNextRefresh = Math.max(
+    0,
+    REFRESH_INTERVAL - (Date.now() - lastRefreshTime)
+  );
+  const secondsUntilRefresh = Math.ceil(timeUntilNextRefresh / 1000);
+
+  // If loading, show skeleton
+  if (isLoading) {
+    return <LoadingSkeleton />;
   }
 
-  if (error) {
+  // If error, show error state
+  if (isError) {
     return (
       <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center">
-        <p className="text-red-400 mb-4">{error}</p>
-        <ThemedButton
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          variant="accent"
-          icon={
-            isRefreshing
-              ? () => <Icons.RefreshCw className="animate-spin" />
-              : Icons.RefreshCw
-          }
-        >
-          {isRefreshing ? "Refreshing..." : "Try Again"}
-        </ThemedButton>
+        <p className="text-red-400">
+          {error?.message || "Failed to load users"}
+        </p>
       </div>
     );
   }
@@ -309,14 +353,14 @@ const Users = () => {
             <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
               <Icons.Users size={14} className="text-accent-base" />
               <span className="text-theme-muted text-sm">
-                {users.length} Users
+                {totalItems} Users
               </span>
             </div>
             {isRefreshing ? (
               <span className="text-xs text-theme-muted">Refreshing...</span>
             ) : (
               <span className="text-xs text-theme-muted">
-                Auto-refresh in {minutesUntilRefresh}min
+                Auto-refresh in {secondsUntilRefresh}s
               </span>
             )}
           </div>
@@ -337,7 +381,7 @@ const Users = () => {
       </div>
 
       <ThemedCard className="overflow-hidden">
-        <UsersTable users={currentUsers} />
+        <UsersTable users={currentItems} />
       </ThemedCard>
 
       {/* Pagination controls */}
