@@ -663,13 +663,70 @@ app.get("/api/media/:type", async (req, res) => {
   }
 });
 
+// Create a simple in-memory cache with TTL (time to live)
+const historyCache = {
+  cache: new Map(),
+  ttl: 10 * 60 * 1000, // 10 minutes in milliseconds - adjust as needed
+
+  // Get a value from cache
+  get(key) {
+    const item = this.cache.get(key);
+    if (!item) return null;
+
+    // Check if cached item has expired
+    if (Date.now() > item.expires) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return item.value;
+  },
+
+  // Set a value in cache with TTL
+  set(key, value, ttl = this.ttl) {
+    this.cache.set(key, {
+      value,
+      expires: Date.now() + ttl,
+    });
+  },
+
+  // Delete a value from cache
+  delete(key) {
+    this.cache.delete(key);
+  },
+
+  // Clear entire cache
+  clear() {
+    this.cache.clear();
+  },
+
+  // Get all keys
+  keys() {
+    return Array.from(this.cache.keys());
+  },
+
+  // Get cache stats
+  stats() {
+    return {
+      size: this.cache.size,
+      keys: this.keys(),
+    };
+  },
+};
+
 app.get("/api/users", async (req, res) => {
   try {
+    // Generate unique request ID for logging
+    const requestId =
+      Date.now().toString(36) + Math.random().toString(36).substring(2);
+    console.log(`[${requestId}] Starting /api/users request`);
+
     const config = getConfig();
     const { count = 20 } = req.query; // Default to 20 if not specified
     const requestedCount = Math.max(1, parseInt(count, 10) || 50);
+    const forceRefresh = req.query.refresh === "true"; // Optional force refresh parameter
 
-    // No caching headers
+    // No caching headers for browser
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
@@ -678,38 +735,49 @@ app.get("/api/users", async (req, res) => {
     const formats = getFormats();
     const userFormats = formats.users || [];
 
-    // OPTIMIZATION 1: Fetch both active sessions and users in parallel
-    console.log("Fetching active sessions and users in parallel...");
-    const [activeSessionsResponse, usersResponse] = await Promise.all([
-      axios.get(`${config.tautulliUrl}/api/v2`, {
-        params: {
-          apikey: config.tautulliApiKey,
-          cmd: "get_activity",
-        },
-        timeout: 10000, // 10 second timeout for activity data
-      }),
-      axios.get(`${config.tautulliUrl}/api/v2`, {
-        params: {
-          apikey: config.tautulliApiKey,
-          cmd: "get_users_table",
-          length: 1000, // Fetch all users at once instead of paginating
-        },
-        timeout: 10000, // 10 second timeout for user data
-      }),
-    ]);
+    console.log(`[${requestId}] Fetching active sessions and users...`);
 
-    // Process responses
-    const activeSessions =
-      activeSessionsResponse.data?.response?.data?.sessions || [];
-    const allUsers = usersResponse.data?.response?.data?.data || [];
+    // STEP 1: Fetch both active sessions and users in parallel
+    let activeSessions = [];
+    let allUsers = [];
 
-    console.log(
-      `Found ${activeSessions.length} active sessions and ${allUsers.length} users`
-    );
+    try {
+      const [activeSessionsResponse, usersResponse] = await Promise.all([
+        axios.get(`${config.tautulliUrl}/api/v2`, {
+          params: {
+            apikey: config.tautulliApiKey,
+            cmd: "get_activity",
+          },
+          timeout: 10000,
+        }),
+        axios.get(`${config.tautulliUrl}/api/v2`, {
+          params: {
+            apikey: config.tautulliApiKey,
+            cmd: "get_users_table",
+            length: 1000,
+          },
+          timeout: 10000,
+        }),
+      ]);
 
-    // OPTIMIZATION 2: Pre-process active sessions into a lookup map
+      activeSessions =
+        activeSessionsResponse.data?.response?.data?.sessions || [];
+      allUsers = usersResponse.data?.response?.data?.data || [];
+
+      console.log(
+        `[${requestId}] Successfully fetched ${activeSessions.length} active sessions and ${allUsers.length} users`
+      );
+    } catch (error) {
+      console.error(
+        `[${requestId}] Error fetching initial data:`,
+        error.message
+      );
+      throw new Error(`Failed to fetch initial user data: ${error.message}`);
+    }
+
+    // STEP 2: Create a lookup map for active sessions
     const watchingUsers = {};
-    activeSessions.forEach((session) => {
+    for (const session of activeSessions) {
       if (session.state === "playing") {
         watchingUsers[session.user_id] = {
           current_media: session.grandparent_title
@@ -732,32 +800,64 @@ app.get("/api/users", async (req, res) => {
           rating_key: session.rating_key,
         };
       }
-    });
+    }
 
-    // Filter out Local users
-    const filteredUsers = allUsers.filter(
-      (user) => user.friendly_name !== "Local"
-    );
+    // STEP 3: Filter out Local users and sort by last_seen (most recent first)
+    const filteredUsers = allUsers
+      .filter((user) => user.friendly_name !== "Local")
+      .sort((a, b) => {
+        // First check if user is watching (active users first)
+        const aIsWatching = !!watchingUsers[a.user_id];
+        const bIsWatching = !!watchingUsers[b.user_id];
+
+        if (aIsWatching && !bIsWatching) return -1;
+        if (!aIsWatching && bIsWatching) return 1;
+
+        // If neither is watching or both are watching, sort by last_seen
+        const aLastSeen = aIsWatching
+          ? Date.now() / 1000
+          : a.last_seen
+          ? parseInt(a.last_seen, 10)
+          : 0;
+        const bLastSeen = bIsWatching
+          ? Date.now() / 1000
+          : b.last_seen
+          ? parseInt(b.last_seen, 10)
+          : 0;
+
+        return bLastSeen - aLastSeen;
+      });
 
     console.log(
-      `Processing ${filteredUsers.length} users (excluding Local users)...`
+      `[${requestId}] Sorted ${filteredUsers.length} users by active status and last seen time`
     );
 
-    // OPTIMIZATION 3: Create indexed history promises to track which promise belongs to which user
-    const historyPromises = [];
-    const processedUsers = filteredUsers.map((user, index) => {
+    // STEP 4: Limit users to those we'll actually return
+    const limitedUsers = filteredUsers.slice(0, requestedCount);
+
+    console.log(
+      `[${requestId}] Processing ${limitedUsers.length} users (top ${requestedCount} active users)`
+    );
+
+    // STEP 5: Process each limited user
+    const processedUsers = limitedUsers.map((user, index) => {
       const watching = watchingUsers[user.user_id];
       const lastSeen = watching
         ? watching.last_seen
         : parseInt(user.last_seen, 10);
 
-      // Determine basic user data
-      const userData = {
+      // If user is watching, clear their cache entry to ensure fresh data next time
+      if (watching) {
+        historyCache.delete(`user_history:${user.user_id}`);
+      }
+
+      // Create base user data object
+      return {
         friendly_name: user.friendly_name || "",
         user_id: user.user_id,
         email: user.email || "",
         plays: parseInt(user.plays || "0", 10),
-        duration: user.duration || 0, // Total watch time from stats
+        duration: user.duration || 0,
         last_seen: lastSeen,
         last_seen_formatted: watching
           ? "🟢"
@@ -768,7 +868,7 @@ app.get("/api/users", async (req, res) => {
         is_watching: watching ? "Watching" : "Watched",
         state: watching ? "watching" : "watched",
 
-        // Default values for when history needs to be fetched
+        // Default values
         media_type: watching
           ? watching.media_type.charAt(0).toUpperCase() +
             watching.media_type.slice(1)
@@ -779,8 +879,6 @@ app.get("/api/users", async (req, res) => {
               watching.duration
             )}`
           : "",
-
-        // Media-specific fields - from active session if available
         title: watching ? watching.title : "",
         original_title: watching ? watching.original_title : "",
         year: watching ? watching.year : "",
@@ -791,8 +889,6 @@ app.get("/api/users", async (req, res) => {
         last_played_modified: watching
           ? watching.last_played_modified
           : user.last_played || "Nothing",
-
-        // Show-specific details
         parent_title: watching ? watching.parent_title : "",
         grandparent_title: watching ? watching.grandparent_title : "",
         media_index: watching
@@ -802,133 +898,161 @@ app.get("/api/users", async (req, res) => {
           ? String(watching.parent_media_index).padStart(2, "0")
           : "",
 
-        // Internal properties for sorting
-        _last_seen: lastSeen || 0,
-        _is_watching: !!watching,
+        // Track original index for updating
         _index: index,
+        _cached: false,
       };
-
-      // If user is not watching but has played something, queue up history fetch
-      // Store the index along with the promise to track which user it belongs to
-      if (!watching && user.last_played) {
-        console.log(
-          `User ${user.friendly_name} (${user.user_id}) has history to fetch...`
-        );
-        const historyPromise = getUserHistory(
-          config.tautulliUrl,
-          config.tautulliApiKey,
-          user.user_id
-        );
-
-        // Store the user index along with the promise
-        historyPromises.push({ index, promise: historyPromise });
-      }
-
-      return userData;
     });
 
-    // Create a copy of the processed users array to update with history data
-    let userResults = [...processedUsers];
+    // STEP 6: ONLY fetch history for users who aren't watching and are in our limited set
+    const historyPromises = [];
 
-    // Wait for all history promises and update the corresponding users
+    for (let i = 0; i < processedUsers.length; i++) {
+      const userData = processedUsers[i];
+
+      // Only fetch history if user isn't watching but has played something
+      if (!userData.is_active && userData.last_played !== "Nothing") {
+        const cacheKey = `user_history:${userData.user_id}`;
+
+        // Check cache first
+        const cachedHistory = forceRefresh ? null : historyCache.get(cacheKey);
+
+        if (cachedHistory) {
+          // Use cached history data
+          console.log(
+            `[${requestId}] Using cached history for user ${userData.friendly_name} (${userData.user_id})`
+          );
+
+          // Update user data with cached history
+          processedUsers[i].media_type = cachedHistory.media_type || "";
+          processedUsers[i].title = cachedHistory.title || "";
+          processedUsers[i].original_title = cachedHistory.original_title || "";
+          processedUsers[i].year = cachedHistory.year || "";
+          processedUsers[i].full_title = cachedHistory.full_title || "";
+          processedUsers[i].parent_title = cachedHistory.parent_title || "";
+          processedUsers[i].grandparent_title =
+            cachedHistory.grandparent_title || "";
+          processedUsers[i].media_index = cachedHistory.media_index || "";
+          processedUsers[i].parent_media_index =
+            cachedHistory.parent_media_index || "";
+          processedUsers[i].last_played_modified =
+            cachedHistory.last_played_modified || processedUsers[i].last_played;
+          processedUsers[i]._cached = true;
+        } else {
+          // Queue up history fetch with index attached
+          console.log(
+            `[${requestId}] Queueing history fetch for user ${userData.friendly_name} (${userData.user_id})`
+          );
+
+          historyPromises.push({
+            index: i,
+            userId: userData.user_id,
+            promise: getUserHistory(
+              config.tautulliUrl,
+              config.tautulliApiKey,
+              userData.user_id,
+              requestId
+            ),
+          });
+        }
+      }
+    }
+
+    // STEP 7: Fetch history for users with no cache hit
     if (historyPromises.length > 0) {
       console.log(
-        `Fetching history data for ${historyPromises.length} users...`
+        `[${requestId}] Fetching history for ${historyPromises.length} users (cache miss or forced refresh)...`
       );
 
-      // Get all the promise results
-      const historyResultsPromise = Promise.all(
-        historyPromises.map(({ promise }) => promise)
+      // Wait for all history promises to complete
+      const historyResults = await Promise.allSettled(
+        historyPromises.map((item) => item.promise)
       );
 
-      const historyResults = await historyResultsPromise;
+      // Apply history results to users
+      historyPromises.forEach((item, i) => {
+        const { index, userId } = item;
+        const result = historyResults[i];
 
-      // Update each user with their corresponding history data
-      historyPromises.forEach(({ index }, i) => {
-        const lastSession = historyResults[i];
+        if (result.status === "fulfilled" && result.value) {
+          const historyItem = result.value;
+          const cacheKey = `user_history:${userId}`;
 
-        // Find the user by their stored index
-        if (lastSession && index >= 0 && index < userResults.length) {
-          console.log(`Updating user index ${index} with history data...`);
+          // Prepare the cache object
+          const cacheObj = {
+            media_type: historyItem.media_type
+              ? historyItem.media_type.charAt(0).toUpperCase() +
+                historyItem.media_type.slice(1)
+              : "",
+            title: historyItem.title || "",
+            original_title: historyItem.original_title || "",
+            year: historyItem.year || "",
+            full_title: historyItem.full_title || "",
+            parent_title: historyItem.parent_title || "",
+            grandparent_title: historyItem.grandparent_title || "",
+            media_index: historyItem.media_index
+              ? String(historyItem.media_index).padStart(2, "0")
+              : "",
+            parent_media_index: historyItem.parent_media_index
+              ? String(historyItem.parent_media_index).padStart(2, "0")
+              : "",
+            last_played_modified: formatShowTitle(historyItem),
+            timestamp: Date.now(),
+          };
 
-          userResults[index].media_type = lastSession.media_type
-            ? lastSession.media_type.charAt(0).toUpperCase() +
-              lastSession.media_type.slice(1)
-            : "";
-          userResults[index].title = lastSession.title || "";
-          userResults[index].original_title = lastSession.original_title || "";
-          userResults[index].year = lastSession.year || "";
-          userResults[index].full_title = lastSession.full_title || "";
-          userResults[index].parent_title = lastSession.parent_title || "";
-          userResults[index].grandparent_title =
-            lastSession.grandparent_title || "";
-          userResults[index].media_index = lastSession.media_index
-            ? String(lastSession.media_index).padStart(2, "0")
-            : "";
-          userResults[index].parent_media_index = lastSession.parent_media_index
-            ? String(lastSession.parent_media_index).padStart(2, "0")
-            : "";
+          // Update user data with history
+          processedUsers[index].media_type = cacheObj.media_type;
+          processedUsers[index].title = cacheObj.title;
+          processedUsers[index].original_title = cacheObj.original_title;
+          processedUsers[index].year = cacheObj.year;
+          processedUsers[index].full_title = cacheObj.full_title;
+          processedUsers[index].parent_title = cacheObj.parent_title;
+          processedUsers[index].grandparent_title = cacheObj.grandparent_title;
+          processedUsers[index].media_index = cacheObj.media_index;
+          processedUsers[index].parent_media_index =
+            cacheObj.parent_media_index;
+          processedUsers[index].last_played_modified =
+            cacheObj.last_played_modified;
 
-          // Update formatted show title
-          userResults[index].last_played_modified =
-            formatShowTitle(lastSession);
+          // Store in cache
+          historyCache.set(cacheKey, cacheObj);
 
           console.log(
-            `Updated user ${
-              userResults[index].friendly_name
-            } with history data: ${JSON.stringify({
-              media_type: userResults[index].media_type,
-              title: userResults[index].title,
-              last_played_modified: userResults[index].last_played_modified,
-            })}`
+            `[${requestId}] Updated and cached history for user ${processedUsers[index].friendly_name}: ${processedUsers[index].media_type} - ${processedUsers[index].title}`
           );
         } else {
-          console.log(`No history data found for user index ${index}`);
+          // If history fetch failed, log the error
+          console.log(
+            `[${requestId}] Failed to fetch history for user ${
+              processedUsers[index].friendly_name
+            }: ${
+              result.status === "rejected" ? result.reason : "No history found"
+            }`
+          );
         }
       });
     }
 
-    // Sort by watching status and last seen
-    userResults.sort((a, b) => {
-      // Active users come first
-      if (a._is_watching && !b._is_watching) return -1;
-      if (!a._is_watching && b._is_watching) return 1;
-
-      // Then sort by last_seen
-      return (b._last_seen || 0) - (a._last_seen || 0);
-    });
-
-    // Limit the number of users based on count parameter
-    const limitedUsers = userResults.slice(0, requestedCount);
-
+    // STEP 8: Apply formats
     console.log(
-      `Returning ${limitedUsers.length} users (limited by requestedCount=${requestedCount})`
+      `[${requestId}] Applying formats to ${processedUsers.length} users (${
+        processedUsers.filter((u) => u._cached).length
+      } from cache)`
     );
 
-    // OPTIMIZATION 4: Apply formats more efficiently
-    const formattedUsers = limitedUsers.map((userData) => {
-      // For logging purposes: check for missing data
+    const formattedUsers = processedUsers.map((userData) => {
+      // Report users with missing media type
       if (!userData.media_type && userData.last_played !== "Nothing") {
         console.log(
-          `Warning: User ${userData.friendly_name} has last_played="${userData.last_played}" but no media_type`
+          `[${requestId}] Warning: User ${userData.friendly_name} has last_played="${userData.last_played}" but no media_type`
         );
       }
 
       const formattedOutput = {};
       const mediaTypeStr = (userData.media_type || "").toLowerCase();
 
-      // Find applicable formats
-      const applicableFormats = userFormats.filter((format) => {
-        const formatType = (format.mediaType || "").toLowerCase();
-        if (!mediaTypeStr || !formatType) return true;
-        if (formatType === mediaTypeStr) return true;
-        if (mediaTypeStr === "episode" && formatType === "show") return true;
-        if (mediaTypeStr === "show" && formatType === "episode") return true;
-        return false;
-      });
-
-      // Handle specially formatted season/episode patterns
-      applicableFormats.forEach((format) => {
+      // Apply each applicable format
+      userFormats.forEach((format) => {
         try {
           let processedTemplate = format.template;
 
@@ -945,17 +1069,20 @@ app.get("/api/users", async (req, res) => {
             );
           }
 
-          // Process the template
+          // Process template and apply it
           const result = processTemplate(processedTemplate, userData);
           formattedOutput[format.name] = result;
         } catch (err) {
-          console.error(`Error applying format ${format.name}:`, err);
+          console.error(
+            `[${requestId}] Error applying format to user ${userData.friendly_name}:`,
+            err.message
+          );
           formattedOutput[format.name] = "";
         }
       });
 
-      // Clean up internal properties and return with raw data
-      const { _last_seen, _is_watching, _index, ...cleanData } = userData;
+      // Remove internal tracking properties
+      const { _index, _cached, ...cleanData } = userData;
 
       return {
         ...formattedOutput,
@@ -963,14 +1090,26 @@ app.get("/api/users", async (req, res) => {
       };
     });
 
+    // STEP 9: Send response
+    console.log(
+      `[${requestId}] Sending response with ${formattedUsers.length} users`
+    );
+
     res.json({
       success: true,
-      total: formattedUsers.length,
+      total: filteredUsers.length,
       requestedCount: requestedCount,
       users: formattedUsers,
+      cache: {
+        hits: processedUsers.filter((u) => u._cached).length,
+        misses: historyPromises.length,
+        total: historyCache.stats().size,
+      },
     });
+
+    console.log(`[${requestId}] Request completed successfully`);
   } catch (error) {
-    console.error("Error processing users:", error);
+    console.error("Error processing users:", error.message);
     res.status(500).json({
       error: "Failed to process users",
       message: error.message,
@@ -978,18 +1117,31 @@ app.get("/api/users", async (req, res) => {
   }
 });
 
-/**
- * Get user history from Tautulli API
- *
- * @async
- * @param {string} baseUrl - Tautulli API base URL
- * @param {string} apiKey - Tautulli API key
- * @param {number|string} userId - User ID to get history for
- * @returns {Object|null} User's last played item or null if error
- */
-async function getUserHistory(baseUrl, apiKey, userId) {
+// Add a cache clear endpoint
+app.post("/api/users/clear-cache", (req, res) => {
   try {
-    console.log(`Fetching history for user ${userId}...`);
+    const previousSize = historyCache.stats().size;
+    historyCache.clear();
+
+    res.json({
+      success: true,
+      message: `Successfully cleared cache with ${previousSize} entries`,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: "Failed to clear cache",
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * Get user history from Tautulli API with caching
+ */
+async function getUserHistory(baseUrl, apiKey, userId, requestId = "") {
+  try {
+    console.log(`[${requestId}] Fetching history for user ${userId}...`);
+
     const response = await axios.get(`${baseUrl}/api/v2`, {
       params: {
         apikey: apiKey,
@@ -997,32 +1149,35 @@ async function getUserHistory(baseUrl, apiKey, userId) {
         user_id: userId,
         length: 1,
       },
-      timeout: 5000,
+      timeout: 10000, // 10 second timeout
     });
 
     const historyItem = response.data?.response?.data?.data?.[0] || null;
-    console.log(
-      `History fetch result for ${userId}: ${
-        historyItem ? "found data" : "no data found"
-      }`
-    );
+
+    if (historyItem) {
+      console.log(
+        `[${requestId}] History fetch success for ${userId}: ${historyItem.media_type}: ${historyItem.title}`
+      );
+    } else {
+      console.log(`[${requestId}] No history found for user ${userId}`);
+    }
 
     return historyItem;
   } catch (error) {
-    console.error(`Error fetching history for user ${userId}:`, error.message);
+    console.error(
+      `[${requestId}] Error fetching history for user ${userId}:`,
+      error.message
+    );
     return null;
   }
 }
 
 /**
- * Format show title for consistent display
- * Removes year from title and formats with season/episode info if available
- *
- * @param {Object} session - Session object containing show information
- * @returns {string} Formatted show title
+ * Format show title with season and episode
  */
 function formatShowTitle(session) {
   if (!session) return "";
+
   if (
     session.grandparent_title &&
     session.parent_media_index &&
@@ -1038,18 +1193,17 @@ function formatShowTitle(session) {
       "0"
     )}E${String(session.media_index).padStart(2, "0")}`;
   }
+
   const title = session.title || "";
   return title.replace(/\s*\(\d{4}\)|\s+[-–]\s+\d{4}/, "");
 }
 
 /**
- * Format time difference from now in a human-readable string
- *
- * @param {number} timestamp - Unix timestamp in seconds
- * @returns {string} Formatted time difference (e.g. "5m ago")
+ * Format time difference for last seen
  */
 function formatTimeDiff(timestamp) {
   if (!timestamp) return "Never";
+
   const now = Date.now() / 1000;
   const diff = Math.floor(now - timestamp);
 
@@ -1060,15 +1214,14 @@ function formatTimeDiff(timestamp) {
 }
 
 /**
- * Format seconds into hours and minutes display string
- *
- * @param {number} totalSeconds - Total seconds to format
- * @returns {string} Formatted time string (e.g. "2h 30m" or "45m")
+ * Format seconds into hours and minutes
  */
 function formatTimeHHMM(totalSeconds) {
   if (!totalSeconds) return "0m";
+
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
+
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
