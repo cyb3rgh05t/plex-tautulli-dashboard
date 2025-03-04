@@ -434,17 +434,56 @@ const processTemplate = (template, data) => {
   return result;
 };
 
+function formatLibraryWithCustomFormats(library, formats) {
+  const applicableFormats = formats.filter((format) => {
+    // Map section_type to media type for matching
+    const sectionType = (
+      library.section_type ||
+      library.type ||
+      ""
+    ).toLowerCase();
+    let mediaType = null;
+
+    if (sectionType === "movie") mediaType = "movies";
+    if (sectionType === "show") mediaType = "shows";
+    if (sectionType === "artist") mediaType = "music";
+
+    // Match by section ID AND media type
+    const sectionMatches =
+      format.sectionId === "all" ||
+      format.sectionId === library.section_id.toString();
+
+    const mediaTypeMatches =
+      !format.mediaType || format.mediaType === mediaType;
+
+    return sectionMatches && mediaTypeMatches;
+  });
+
+  const formattedData = {};
+  applicableFormats.forEach((format) => {
+    formattedData[format.name] = processTemplate(format.template, library);
+  });
+
+  return {
+    ...library,
+    formatted: formattedData,
+  };
+}
+
 // Format management endpoints
 
 // Modified formats endpoint in server.cjs
 app.get("/api/formats", (req, res) => {
   try {
     const formats = getFormats();
+    // Ensure libraries array exists
+    formats.libraries = formats.libraries || [];
+
     res.json({
       downloads: formats.downloads || [],
       recentlyAdded: formats.recentlyAdded || [],
       sections: formats.sections || [],
-      libraries: formats.libraries || [], // Add libraries to the response
+      libraries: formats.libraries,
       users: formats.users || [],
     });
   } catch (error) {
@@ -453,7 +492,7 @@ app.get("/api/formats", (req, res) => {
   }
 });
 
-// Update POST endpoint to handle libraries separately
+// Update the POST /api/formats endpoint to properly handle libraries formats
 app.post("/api/formats", (req, res) => {
   try {
     const { type, formats } = req.body;
@@ -465,7 +504,19 @@ app.post("/api/formats", (req, res) => {
     // Get current formats
     const allFormats = getFormats();
 
-    if (type === "recentlyAdded") {
+    // Make sure libraries array exists
+    if (!allFormats.libraries) {
+      allFormats.libraries = [];
+    }
+
+    if (type === "libraries") {
+      // For libraries formats, store media type with each format
+      allFormats.libraries = formats.map((format) => ({
+        ...format,
+        // Ensure mediaType exists (defaulting to "movies" if missing)
+        mediaType: format.mediaType || "movies",
+      }));
+    } else if (type === "recentlyAdded") {
       // Completely replace the recentlyAdded formats with the new array
       allFormats.recentlyAdded = formats;
     } else {
@@ -615,7 +666,7 @@ app.get("/api/media/:type", async (req, res) => {
 app.get("/api/users", async (req, res) => {
   try {
     const config = getConfig();
-    const { count = 50 } = req.query; // Default to 50 if not specified
+    const { count = 20 } = req.query; // Default to 20 if not specified
     const requestedCount = Math.max(1, parseInt(count, 10) || 50);
 
     let allUsers = [];
@@ -1059,6 +1110,7 @@ app.get("/api/downloads", async (req, res) => {
 app.get("/api/libraries", async (req, res) => {
   try {
     const config = getConfig();
+    const { mediaType } = req.query; // Allow filtering by media type
 
     const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
       params: {
@@ -1072,7 +1124,7 @@ app.get("/api/libraries", async (req, res) => {
     }
 
     // Get formats
-    const formats = getFormats().sections || [];
+    const formats = getFormats().libraries || [];
 
     // Process libraries with formatting
     const libraries = response.data.response.data.data.map((library) => {
@@ -1089,12 +1141,26 @@ app.get("/api/libraries", async (req, res) => {
         last_played: library.last_played || "Never",
       };
 
-      // Find applicable formats for this library
-      const applicableFormats = formats.filter(
-        (format) =>
+      // Map section_type to media type for format filtering
+      const sectionMediaType = (() => {
+        const type = (library.section_type || library.type || "").toLowerCase();
+        if (type === "movie") return "movies";
+        if (type === "show") return "shows";
+        if (type === "artist") return "music";
+        return null;
+      })();
+
+      // Find applicable formats for this library based on section ID AND media type
+      const applicableFormats = formats.filter((format) => {
+        const sectionMatches =
           format.sectionId === "all" ||
-          format.sectionId === library.section_id.toString()
-      );
+          format.sectionId === library.section_id.toString();
+
+        const mediaTypeMatches =
+          !format.mediaType || format.mediaType === sectionMediaType;
+
+        return sectionMatches && mediaTypeMatches;
+      });
 
       // Apply each format to create formatted data
       const formattedData = {};
@@ -1105,13 +1171,31 @@ app.get("/api/libraries", async (req, res) => {
       // Return with formats at top level and raw data in raw_data object
       return {
         ...formattedData, // Custom formats at top level
-        raw_data: library, // Full library details
+        raw_data: {
+          ...library,
+          media_type: sectionMediaType, // Add mapped media type
+        },
       };
     });
 
+    // Filter by media type if requested
+    const filteredLibraries = mediaType
+      ? libraries.filter((lib) => {
+          const type = (
+            lib.raw_data.section_type ||
+            lib.raw_data.type ||
+            ""
+          ).toLowerCase();
+          if (mediaType === "movies" && type === "movie") return true;
+          if (mediaType === "shows" && type === "show") return true;
+          if (mediaType === "music" && type === "artist") return true;
+          return false;
+        })
+      : libraries;
+
     res.json({
-      total: libraries.length,
-      libraries: libraries,
+      total: filteredLibraries.length,
+      libraries: filteredLibraries,
     });
   } catch (error) {
     console.error("Error fetching libraries:", error);
@@ -1143,13 +1227,15 @@ app.get("/api/sections", async (req, res) => {
         ...section,
         last_accessed: section.last_accessed || "Never",
         last_played: section.last_played || "Never",
+        // Ensure type is always available
+        type: section.type || section.section_type || "unknown",
       };
 
       // Create a base data object with all section fields
       const baseData = {
         section_id: section.section_id,
         section_name: section.name,
-        section_type: section.type,
+        section_type: section.type || section.section_type || "unknown",
         count: section.count || 0,
         parent_count: section.parent_count || 0,
         child_count: section.child_count || 0,
@@ -1260,19 +1346,6 @@ app.post("/api/sections", async (req, res) => {
             last_played: libraryDetails.last_played || null,
             section_type: libraryDetails.section_type || section.type,
             section_name: libraryDetails.section_name || section.name,
-          };
-
-          const stats = statsResponse.data?.response?.data || {};
-          const watchStats = watchStatsResponse.data?.response?.data || {};
-
-          return {
-            ...section,
-            count: stats.count || 0,
-            parent_count: stats.parent_count || 0,
-            child_count: stats.child_count || 0,
-            total_plays: watchStats.total_plays || 0,
-            last_accessed: watchStats.last_accessed || null,
-            last_played: watchStats.last_played || null,
           };
         } catch (error) {
           console.error(

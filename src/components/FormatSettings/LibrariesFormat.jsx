@@ -50,6 +50,14 @@ const FormatCard = ({ format, onDelete, onEdit, previewValue }) => (
           {format.sectionId === "all"
             ? "All Libraries"
             : `Section ${format.sectionId}`}
+          {format.mediaType && (
+            <span className="ml-2 text-accent-base">
+              (
+              {format.mediaType.charAt(0).toUpperCase() +
+                format.mediaType.slice(1)}
+              )
+            </span>
+          )}
         </p>
       </div>
       <div className="flex gap-2">
@@ -290,6 +298,7 @@ const LibrariesFormat = () => {
     name: "",
     template: "",
     sectionId: "all",
+    mediaType: "movies", // Default to movies
   });
   const [isLoading, setIsLoading] = useState(false);
   const [previewData, setPreviewData] = useState(EXAMPLE_DATA);
@@ -400,6 +409,14 @@ const LibrariesFormat = () => {
     }
   };
 
+  // Update media type when tab changes
+  useEffect(() => {
+    setNewFormat((prev) => ({
+      ...prev,
+      mediaType: activeMediaType, // Update media type in the form
+    }));
+  }, [activeMediaType]);
+
   // Handle form submission for new format or update existing format
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -423,28 +440,32 @@ const LibrariesFormat = () => {
         updatedFormats = currentFormats.map((format) => {
           if (
             format.name === editingFormat.name &&
-            format.sectionId === editingFormat.sectionId
+            format.sectionId === editingFormat.sectionId &&
+            format.mediaType === editingFormat.mediaType
           ) {
             return {
               ...format,
               name: newFormat.name,
               template: newFormat.template,
               sectionId: newFormat.sectionId,
+              mediaType: newFormat.mediaType, // Preserve media type
             };
           }
           return format;
         });
         successMessage = "Format updated successfully";
       } else {
-        // Check for duplicate names for the same section
+        // Check for duplicate names for the same section and media type
         if (
           currentFormats.some(
             (f) =>
-              f.name === newFormat.name && f.sectionId === newFormat.sectionId
+              f.name === newFormat.name &&
+              f.sectionId === newFormat.sectionId &&
+              f.mediaType === newFormat.mediaType
           )
         ) {
           toast.error(
-            "A format with this name already exists for this section"
+            "A format with this name already exists for this section and media type"
           );
           return;
         }
@@ -475,7 +496,12 @@ const LibrariesFormat = () => {
       setFormats(updatedFormats);
 
       // Reset form
-      setNewFormat({ name: "", template: "", sectionId: "all" });
+      setNewFormat({
+        name: "",
+        template: "",
+        sectionId: "all",
+        mediaType: activeMediaType, // Keep the current active media type
+      });
       setIsEditing(false);
       setEditingFormat(null);
 
@@ -503,9 +529,15 @@ const LibrariesFormat = () => {
       name: format.name,
       template: format.template,
       sectionId: format.sectionId || "all",
+      mediaType: format.mediaType || activeMediaType, // Use format's media type or current active type
     });
     setIsEditing(true);
     setEditingFormat(format);
+
+    // Change active media type tab to match the format being edited
+    if (format.mediaType) {
+      setActiveMediaType(format.mediaType);
+    }
 
     // Get position of the format card being edited to maintain context
     const formatElement = document.getElementById(
@@ -535,7 +567,12 @@ const LibrariesFormat = () => {
 
     setIsEditing(false);
     setEditingFormat(null);
-    setNewFormat({ name: "", template: "", sectionId: "all" });
+    setNewFormat({
+      name: "",
+      template: "",
+      sectionId: "all",
+      mediaType: activeMediaType, // Keep the current active media type
+    });
 
     // Restore scroll position
     restoreScrollPosition();
@@ -552,9 +589,14 @@ const LibrariesFormat = () => {
       // Change to use libraries array
       const currentFormats = data.libraries || [];
 
-      // Remove format using both name and sectionId
+      // Remove format using name, sectionId, and mediaType
       const updatedFormats = currentFormats.filter(
-        (f) => !(f.name === format.name && f.sectionId === format.sectionId)
+        (f) =>
+          !(
+            f.name === format.name &&
+            f.sectionId === format.sectionId &&
+            f.mediaType === format.mediaType
+          )
       );
 
       // Save updated formats
@@ -583,7 +625,8 @@ const LibrariesFormat = () => {
         isEditing &&
         editingFormat &&
         editingFormat.name === format.name &&
-        editingFormat.sectionId === format.sectionId
+        editingFormat.sectionId === format.sectionId &&
+        editingFormat.mediaType === format.mediaType
       ) {
         handleCancelEdit();
       }
@@ -614,6 +657,13 @@ const LibrariesFormat = () => {
       setPreviewData(EXAMPLE_DATA[activeMediaType]);
     }
   }, [newFormat.sectionId, sections, activeMediaType]);
+
+  // Filter formats based on active media type
+  const filteredFormats = useMemo(() => {
+    return formats.filter(
+      (format) => format.mediaType === activeMediaType || !format.mediaType
+    );
+  }, [formats, activeMediaType]);
 
   // Render loading state
   if (isLoading) {
@@ -648,6 +698,7 @@ const LibrariesFormat = () => {
               setActiveMediaType(type);
               setNewFormat((prev) => ({
                 ...prev,
+                mediaType: type,
                 sectionId: "all",
               }));
             }}
@@ -716,16 +767,35 @@ const LibrariesFormat = () => {
                 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200"
             >
-              <option value="all">All Sections</option>
-              {sections.map((section) => (
-                <option
-                  key={String(section.section_id || `section-${Math.random()}`)}
-                  value={section.section_id}
-                >
-                  {section.name || "Unknown"} (ID: {section.section_id || "N/A"}
-                  )
-                </option>
-              ))}
+              <option value="all">
+                All{" "}
+                {activeMediaType.charAt(0).toUpperCase() +
+                  activeMediaType.slice(1)}{" "}
+                Sections
+              </option>
+              {sections
+                .filter((section) => {
+                  // Map section type to media type
+                  const type = (section.type || "").toLowerCase();
+                  if (activeMediaType === "movies" && type === "movie")
+                    return true;
+                  if (activeMediaType === "shows" && type === "show")
+                    return true;
+                  if (activeMediaType === "music" && type === "artist")
+                    return true;
+                  return false;
+                })
+                .map((section) => (
+                  <option
+                    key={String(
+                      section.section_id || `section-${Math.random()}`
+                    )}
+                    value={section.section_id}
+                  >
+                    {section.name || "Unknown"} (ID:{" "}
+                    {section.section_id || "N/A"})
+                  </option>
+                ))}
             </select>
           </div>
 
@@ -746,11 +816,11 @@ const LibrariesFormat = () => {
               className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-4 py-3
                 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200 font-mono"
-              placeholder="e.g., {title} ({year}) - Added {added_at:relative}"
+              placeholder="e.g., {section_name} ({count} items) - Last updated {last_accessed:relative}"
             />
             <p className="text-theme-muted text-xs mt-2">
               Tip: For timestamps, you can use formats: default, short,
-              relative, full, time (e.g., {"{added_at:relative}"})
+              relative, full, time (e.g., {"{last_accessed:relative}"})
             </p>
           </div>
 
@@ -765,6 +835,18 @@ const LibrariesFormat = () => {
               </code>
             </div>
           )}
+
+          {/* Current Media Type Display */}
+          <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+            <div className="flex items-center gap-2">
+              <Icons.Film className="text-accent-base" size={16} />
+              <span className="text-theme-muted">Media Type:</span>
+              <span className="font-medium text-accent-base">
+                {activeMediaType.charAt(0).toUpperCase() +
+                  activeMediaType.slice(1)}
+              </span>
+            </div>
+          </div>
 
           <div className="flex gap-3">
             <ThemedButton
@@ -791,23 +873,26 @@ const LibrariesFormat = () => {
       </ThemedCard>
 
       {/* Existing Formats Section */}
-      {formats.length > 0 && (
+      {filteredFormats.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-white flex items-center gap-2">
               <Icons.List className="text-accent-base" size={18} />
-              Existing Formats
+              {activeMediaType.charAt(0).toUpperCase() +
+                activeMediaType.slice(1)}{" "}
+              Formats
             </h3>
             <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-gray-700/50">
               <span className="text-sm font-medium text-theme-muted">
-                {formats.length} Format{formats.length !== 1 ? "s" : ""}
+                {filteredFormats.length} Format
+                {filteredFormats.length !== 1 ? "s" : ""}
               </span>
             </div>
           </div>
           <div className="grid grid-cols-1 gap-4">
-            {formats.map((format, index) => (
+            {filteredFormats.map((format, index) => (
               <FormatCard
-                key={index}
+                key={`${format.name}-${format.sectionId}-${format.mediaType}-${index}`}
                 format={format}
                 onDelete={handleDelete}
                 onEdit={handleEdit}
