@@ -32,13 +32,10 @@ const BASE_VARIABLES = [
   },
   {
     name: "last_seen_formatted",
-    description: "Pre-formatted last seen time (e.g., '2 hrs ago')",
-  },
-  {
-    name: "is_online",
     description:
-      "Shows a green dot (🟢) if user is currently watching something",
+      "Pre-formatted last seen time (e.g., '2 hrs ago') / Shows a green dot (🟢) if user is currently watching something",
   },
+
   { name: "is_active", description: "User's active status (true/false)" },
   {
     name: "is_watching",
@@ -298,11 +295,6 @@ const processTemplate = (template, data) => {
                 ? formatDate(combinedData.last_seen, "relative")
                 : "Never");
           }
-          break;
-
-        case "is_online":
-          // Simply use the is_online value which will be the green dot emoji if watching
-          value = combinedData.is_online || "";
           break;
 
         case "is_active":

@@ -381,6 +381,7 @@ const processTemplate = (template, data) => {
         [
           "addedAt",
           "added_at",
+          "last_seen",
           "updated_at",
           "last_viewed_at",
           "originally_available_at",
