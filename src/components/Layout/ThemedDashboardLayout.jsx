@@ -1,13 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { useTheme } from "../../context/ThemeContext";
 import { useConfig } from "../../context/ConfigContext";
 import ThemedNavbar from "./ThemedNavbar";
 import ThemedTabBar from "./ThemedTabBar";
 import ThemeToggleFooter from "./ThemedToggleFooter";
-import useConnectionStatus from "../../hooks/useConnectionStatus";
 import * as Icons from "lucide-react";
 import { appVersion } from "../../../version.js";
+import axios from "axios";
 
 /**
  * Status indicator component for the footer
@@ -64,9 +64,89 @@ const ConnectionStatusIndicator = ({ status, service }) => {
 const ThemedDashboardLayout = () => {
   const { accentColor } = useTheme();
   const { config } = useConfig();
-  const { plex, tautulli, isChecking, lastChecked, checkNow } =
-    useConnectionStatus(config);
+
+  // Create state variables directly in this component instead of using useConnectionStatus
+  const [plex, setPlex] = useState("unknown");
+  const [tautulli, setTautulli] = useState("unknown");
+  const [isChecking, setIsChecking] = useState(false);
+  const [lastChecked, setLastChecked] = useState(null);
   const [showStatusDetails, setShowStatusDetails] = useState(false);
+
+  // Check service status
+  const checkServiceStatus = async (service) => {
+    if (!config) return "unconfigured";
+
+    try {
+      // Check configuration
+      if (service === "plex") {
+        if (!config.plexUrl || !config.plexToken) return "unconfigured";
+
+        // Check Plex connection
+        const response = await axios.post(
+          "/api/health/check-service",
+          {
+            service: "plex",
+          },
+          { timeout: 5000 }
+        );
+
+        return response.data?.status || "unknown";
+      } else if (service === "tautulli") {
+        if (!config.tautulliUrl || !config.tautulliApiKey)
+          return "unconfigured";
+
+        // Check Tautulli connection
+        const response = await axios.post(
+          "/api/health/check-service",
+          {
+            service: "tautulli",
+          },
+          { timeout: 5000 }
+        );
+
+        return response.data?.status || "unknown";
+      }
+    } catch (error) {
+      console.error(`Error checking ${service} status:`, error);
+      return "offline";
+    }
+
+    return "unknown";
+  };
+
+  // Check all services
+  const checkNow = async () => {
+    if (isChecking) return;
+
+    setIsChecking(true);
+
+    try {
+      const [plexStatus, tautulliStatus] = await Promise.all([
+        checkServiceStatus("plex"),
+        checkServiceStatus("tautulli"),
+      ]);
+
+      setPlex(plexStatus);
+      setTautulli(tautulliStatus);
+      setLastChecked(new Date());
+    } catch (error) {
+      console.error("Error checking services:", error);
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  // Initial check when component mounts or config changes
+  useEffect(() => {
+    if (config) {
+      checkNow();
+
+      // Set up interval for periodic checks
+      const interval = setInterval(checkNow, 60000); // Check every minute
+
+      return () => clearInterval(interval);
+    }
+  }, [config]);
 
   // Function to capitalize first letter
   const capitalizeFirstLetter = (string) => {
@@ -150,9 +230,7 @@ const ThemedDashboardLayout = () => {
                 <div className="flex items-center gap-1 text-xs mt-1 text-gray-400 border-t border-accent/20 pt-1">
                   <span>Last checked:</span>
                   <span>
-                    {lastChecked
-                      ? new Date(lastChecked).toLocaleTimeString()
-                      : "Never"}
+                    {lastChecked ? lastChecked.toLocaleTimeString() : "Never"}
                   </span>
                   <button
                     onClick={() => checkNow()}

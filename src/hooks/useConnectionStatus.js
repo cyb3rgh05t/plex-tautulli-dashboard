@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 
 /**
@@ -15,11 +15,12 @@ const useConnectionStatus = (config) => {
 
   // Get service statuses from the dedicated endpoint
   const checkAllServices = async () => {
-    if (isChecking)
+    if (isChecking) {
       return {
         plex: plexStatus,
         tautulli: tautulliStatus,
       };
+    }
 
     setIsChecking(true);
     setError(null);
