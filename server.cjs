@@ -669,257 +669,247 @@ app.get("/api/users", async (req, res) => {
     const { count = 20 } = req.query; // Default to 20 if not specified
     const requestedCount = Math.max(1, parseInt(count, 10) || 50);
 
-    let allUsers = [];
-    let start = 0;
-    let hasMore = true;
-
-    // Get active sessions
-    const activeSessionsResponse = await axios.get(
-      `${config.tautulliUrl}/api/v2`,
-      {
-        params: {
-          apikey: config.tautulliApiKey,
-          cmd: "get_activity",
-        },
-      }
-    );
-
-    const activeSessions =
-      activeSessionsResponse.data?.response?.data?.sessions || [];
-
-    // Get all users
-    while (hasMore) {
-      const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
-        params: {
-          apikey: config.tautulliApiKey,
-          cmd: "get_users_table",
-          start: start,
-        },
-      });
-
-      if (response.data?.response?.result !== "success") {
-        throw new Error("Failed to fetch users data");
-      }
-
-      const users = response.data.response.data.data;
-      if (!users || users.length === 0) {
-        hasMore = false;
-      } else {
-        allUsers = [...allUsers, ...users];
-        start += 25;
-      }
-    }
+    // No caching headers
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
 
     // Get stored formats
     const formats = getFormats();
     const userFormats = formats.users || [];
+
+    // OPTIMIZATION 1: Fetch both active sessions and users in parallel
+    // This reduces the overall request time by executing these API calls concurrently
+    const [activeSessionsResponse, usersResponse] = await Promise.all([
+      axios.get(`${config.tautulliUrl}/api/v2`, {
+        params: {
+          apikey: config.tautulliApiKey,
+          cmd: "get_activity",
+        },
+        timeout: 10000, // 10 second timeout for activity data
+      }),
+      axios.get(`${config.tautulliUrl}/api/v2`, {
+        params: {
+          apikey: config.tautulliApiKey,
+          cmd: "get_users_table",
+          length: 1000, // Fetch all users at once instead of paginating
+        },
+        timeout: 10000, // 10 second timeout for user data
+      }),
+    ]);
+
+    // Process responses
+    const activeSessions =
+      activeSessionsResponse.data?.response?.data?.sessions || [];
+    const allUsers = usersResponse.data?.response?.data?.data || [];
+
+    // OPTIMIZATION 2: Pre-process active sessions into a lookup map
+    // This is faster than finding sessions with .find() for each user
+    const watchingUsers = {};
+    activeSessions.forEach((session) => {
+      if (session.state === "playing") {
+        watchingUsers[session.user_id] = {
+          current_media: session.grandparent_title
+            ? `${session.grandparent_title} - ${session.title}`
+            : session.title,
+          last_played_modified: formatShowTitle(session),
+          media_type: session.media_type,
+          progress_percent: session.progress_percent || "0",
+          view_offset: Math.floor((session.view_offset || 0) / 1000),
+          duration: Math.floor((session.duration || 0) / 1000),
+          last_seen: Math.floor(Date.now() / 1000),
+          parent_media_index: session.parent_media_index,
+          media_index: session.media_index,
+          title: session.title || "",
+          full_title: session.full_title || "",
+          parent_title: session.parent_title || "",
+          grandparent_title: session.grandparent_title || "",
+          original_title: session.original_title || "",
+          year: session.year || "",
+          rating_key: session.rating_key,
+        };
+      }
+    });
 
     // Filter out Local users
     const filteredUsers = allUsers.filter(
       (user) => user.friendly_name !== "Local"
     );
 
-    // Process users with a more efficient approach - no metadata calls
-    const usersWithHistory = await Promise.all(
-      filteredUsers.map(async (user) => {
-        try {
-          // First check if user is currently watching something
-          const activeSession = activeSessions.find(
-            (session) =>
-              session.user_id === user.user_id ||
-              session.user === user.friendly_name
-          );
+    // OPTIMIZATION 3: Use Promise.all with a limited batch of history fetches
+    // This processes users immediately while history fetches happen in parallel
+    // Create history fetch promises for users who aren't watching but have played something
+    const historyPromises = [];
+    const processedUsers = filteredUsers.map((user, index) => {
+      const watching = watchingUsers[user.user_id];
+      const lastSeen = watching
+        ? watching.last_seen
+        : parseInt(user.last_seen, 10);
 
-          // If not watching, fetch recent history
-          let historyItem = null;
-          if (!activeSession) {
-            try {
-              const historyResponse = await axios.get(
-                `${config.tautulliUrl}/api/v2`,
-                {
-                  params: {
-                    apikey: config.tautulliApiKey,
-                    cmd: "get_history",
-                    user_id: user.user_id,
-                    length: 1, // Only get the most recent item
-                  },
-                }
-              );
+      // Determine basic user data
+      const userData = {
+        friendly_name: user.friendly_name || "",
+        user_id: user.user_id,
+        email: user.email || "",
+        plays: parseInt(user.plays || "0", 10),
+        duration: user.duration || 0, // Total watch time from stats
+        last_seen: lastSeen,
+        last_seen_formatted: watching
+          ? "🟢"
+          : user.last_seen
+          ? formatTimeDiff(user.last_seen)
+          : "Never",
+        is_active: !!watching,
+        is_watching: watching ? "Watching" : "Watched",
+        state: watching ? "watching" : "watched",
 
-              historyItem =
-                historyResponse.data?.response?.data?.data?.[0] || null;
-            } catch (error) {
-              console.error(
-                `Failed to fetch history for user ${user.friendly_name}:`,
-                error
-              );
+        // Default values for when history needs to be fetched
+        media_type: watching
+          ? watching.media_type.charAt(0).toUpperCase() +
+            watching.media_type.slice(1)
+          : "",
+        progress_percent: watching ? `${watching.progress_percent}%` : "",
+        progress_time: watching
+          ? `${formatTimeHHMM(watching.view_offset)} / ${formatTimeHHMM(
+              watching.duration
+            )}`
+          : "",
+
+        // Media-specific fields - from active session if available
+        title: watching ? watching.title : "",
+        original_title: watching ? watching.original_title : "",
+        year: watching ? watching.year : "",
+        full_title: watching ? watching.full_title : "",
+        last_played: watching
+          ? watching.current_media
+          : user.last_played || "Nothing",
+        last_played_modified: watching
+          ? watching.last_played_modified
+          : user.last_played || "Nothing",
+
+        // Show-specific details
+        parent_title: watching ? watching.parent_title : "",
+        grandparent_title: watching ? watching.grandparent_title : "",
+        media_index: watching
+          ? String(watching.media_index).padStart(2, "0")
+          : "",
+        parent_media_index: watching
+          ? String(watching.parent_media_index).padStart(2, "0")
+          : "",
+
+        // Internal properties for sorting
+        _last_seen: lastSeen || 0,
+        _is_watching: !!watching,
+        _index: index,
+      };
+
+      // If user is not watching but has played something, queue up history fetch
+      if (!watching && user.last_played) {
+        const historyPromise = getUserHistory(
+          config.tautulliUrl,
+          config.tautulliApiKey,
+          user.user_id
+        )
+          .then((lastSession) => {
+            if (lastSession) {
+              // Update user data with history information
+              userData.media_type = lastSession.media_type
+                ? lastSession.media_type.charAt(0).toUpperCase() +
+                  lastSession.media_type.slice(1)
+                : "";
+              userData.title = lastSession.title || "";
+              userData.original_title = lastSession.original_title || "";
+              userData.year = lastSession.year || "";
+              userData.full_title = lastSession.full_title || "";
+              userData.parent_title = lastSession.parent_title || "";
+              userData.grandparent_title = lastSession.grandparent_title || "";
+              userData.media_index = lastSession.media_index
+                ? String(lastSession.media_index).padStart(2, "0")
+                : "";
+              userData.parent_media_index = lastSession.parent_media_index
+                ? String(lastSession.parent_media_index).padStart(2, "0")
+                : "";
+
+              // Update formatted show title
+              userData.last_played_modified = formatShowTitle(lastSession);
+
+              return userData;
             }
-          }
+            return userData;
+          })
+          .catch(() => userData);
 
-          // Get the active item (either current session or history)
-          const activeItem = activeSession || historyItem;
+        historyPromises.push(historyPromise);
+        return userData;
+      }
 
-          // Determine current state and duration
-          const isWatching = !!activeSession;
-          const state = isWatching ? "watching" : "watched";
+      // No history needed, return as is
+      return userData;
+    });
 
-          // Format duration properly
-          let duration = "0m";
-          let durationMs = 0;
-
-          if (activeItem && activeItem.duration) {
-            durationMs = Number(activeItem.duration);
-            // Convert to milliseconds if needed
-            if (durationMs > 0 && durationMs < 10000) {
-              durationMs *= 1000;
-            }
-            // Format duration
-            duration = formatDuration(durationMs);
-          }
-
-          // Calculate progress information
-          let progressPercent = "";
-          let progressTime = "";
-          if (activeSession) {
-            const viewed = Number(activeSession.view_offset || 0);
-            const total = Number(activeSession.duration || 0);
-            if (total > 0) {
-              progressPercent = Math.round((viewed / total) * 100) + "%";
-
-              // Format time as HH:MM / HH:MM
-              const viewedMinutes = Math.floor(viewed / 60000);
-              const totalMinutes = Math.floor(total / 60000);
-              const viewedHours = Math.floor(viewedMinutes / 60);
-              const totalHours = Math.floor(totalMinutes / 60);
-              const viewedRemainingMinutes = viewedMinutes % 60;
-              const totalRemainingMinutes = totalMinutes % 60;
-
-              const viewedFormatted =
-                viewedHours > 0
-                  ? `${viewedHours}:${viewedRemainingMinutes
-                      .toString()
-                      .padStart(2, "0")}`
-                  : `0:${viewedMinutes.toString().padStart(2, "0")}`;
-
-              const totalFormatted =
-                totalHours > 0
-                  ? `${totalHours}:${totalRemainingMinutes
-                      .toString()
-                      .padStart(2, "0")}`
-                  : `0:${totalMinutes.toString().padStart(2, "0")}`;
-
-              progressTime = `${viewedFormatted} / ${totalFormatted}`;
-            }
-          }
-
-          // For last activity time formatting
-          const lastSeen = user.last_seen || "";
-          const lastSeenFormatted = isWatching
-            ? "🟢" // Green circle emoji for watching users
-            : lastSeen
-            ? formatTimeDiff(lastSeen)
-            : "Never";
-
-          // Construct base user object with all fields that could be referenced in templates
-          // All these fields come from either the user data, active session, or history
-          // No need for get_metadata calls!
-          const userData = {
-            friendly_name: user.friendly_name || "",
-            user_id: user.user_id,
-            email: user.email || "",
-            plays: parseInt(user.plays || "0", 10),
-            duration: user.duration || 0, // Total watch time from stats
-            formatted_duration: duration, // Current item duration
-            last_seen: lastSeen,
-            last_seen_formatted: lastSeenFormatted,
-            is_active: isWatching,
-            is_watching: isWatching ? "Watching" : "Watched",
-            state: state,
-            media_type: activeItem
-              ? activeItem.media_type
-                ? activeItem.media_type.charAt(0).toUpperCase() +
-                  activeItem.media_type.slice(1).toLowerCase()
-                : ""
-              : "",
-            progress_percent: progressPercent,
-            progress_time: progressTime,
-
-            // Media-specific fields - all available directly from activeItem
-            title: activeItem?.title || "",
-            original_title: activeItem?.original_title || "",
-            year: activeItem?.year || "",
-            full_title: activeItem?.full_title || "",
-            last_played: activeItem
-              ? activeItem.title || activeItem.full_title || ""
-              : "Nothing",
-            last_played_modified: activeItem ? activeItem.state || "" : "",
-
-            // Show-specific details - all available directly from activeItem
-            parent_title: activeItem?.parent_title || "",
-            grandparent_title: activeItem?.grandparent_title || "",
-            media_index: activeItem?.media_index || "",
-            parent_media_index: activeItem?.parent_media_index || "",
-          };
-
-          return userData;
-        } catch (error) {
-          console.error(
-            `Failed to fetch data for user ${user.user_id}:`,
-            error
-          );
-          return {
-            ...user,
-            state: "watched",
-            media_type: "",
-            last_seen: user.last_seen || null,
-          };
+    // Wait for all history promises and merge results with processed users
+    let userResults = [...processedUsers];
+    if (historyPromises.length > 0) {
+      const historyResults = await Promise.all(historyPromises);
+      // Update users with history data
+      historyResults.forEach((historyUser) => {
+        const index = userResults.findIndex(
+          (u) => u.user_id === historyUser.user_id && !u._is_watching
+        );
+        if (index !== -1) {
+          userResults[index] = historyUser;
         }
-      })
-    );
+      });
+    }
 
-    // Sort by last_seen (most recent first)
-    const sortedUsers = usersWithHistory.sort((a, b) => {
+    // Sort by watching status and last seen
+    userResults.sort((a, b) => {
       // Active users come first
-      if (a.state === "watching" && b.state !== "watching") return -1;
-      if (a.state !== "watching" && b.state === "watching") return 1;
+      if (a._is_watching && !b._is_watching) return -1;
+      if (!a._is_watching && b._is_watching) return 1;
 
       // Then sort by last_seen
-      if (!a.last_seen && !b.last_seen) return 0;
-      if (!a.last_seen) return 1;
-      if (!b.last_seen) return -1;
-      return b.last_seen - a.last_seen;
+      return (b._last_seen || 0) - (a._last_seen || 0);
     });
 
     // Limit the number of users based on count parameter
-    const limitedUsers = sortedUsers.slice(0, requestedCount);
+    const limitedUsers = userResults.slice(0, requestedCount);
 
-    // Apply formats to each user
-    const formattedUsers = limitedUsers.map((user) => {
+    // OPTIMIZATION 4: Apply formats more efficiently
+    const formattedUsers = limitedUsers.map((userData) => {
       const formattedOutput = {};
+      const mediaTypeStr = (userData.media_type || "").toLowerCase();
 
-      // Get media type in lowercase for matching
-      const mediaTypeStr = (user.media_type || "").toLowerCase();
-
-      // Find applicable formats for this user's media type
+      // Find applicable formats
       const applicableFormats = userFormats.filter((format) => {
         const formatType = (format.mediaType || "").toLowerCase();
-
-        // If no media type on user or format is empty, apply the format
         if (!mediaTypeStr || !formatType) return true;
-
-        // Match exact media types (normalize "episode" vs "show")
         if (formatType === mediaTypeStr) return true;
         if (mediaTypeStr === "episode" && formatType === "show") return true;
         if (mediaTypeStr === "show" && formatType === "episode") return true;
-
         return false;
       });
 
-      // Apply each format to the user data
+      // Handle specially formatted season/episode patterns
       applicableFormats.forEach((format) => {
         try {
-          // Process template with user data
-          const result = processTemplate(format.template, user);
+          let processedTemplate = format.template;
+
+          // Special handling for S01E01 pattern
+          if (
+            processedTemplate.includes("{parent_media_index}E{media_index}") &&
+            userData.parent_media_index &&
+            userData.media_index
+          ) {
+            const formattedEpisode = `S${userData.parent_media_index}E${userData.media_index}`;
+            processedTemplate = processedTemplate.replace(
+              "{parent_media_index}E{media_index}",
+              formattedEpisode
+            );
+          }
+
+          // Process the template
+          const result = processTemplate(processedTemplate, userData);
           formattedOutput[format.name] = result;
         } catch (err) {
           console.error(`Error applying format ${format.name}:`, err);
@@ -927,36 +917,12 @@ app.get("/api/users", async (req, res) => {
         }
       });
 
-      // Return differently formatted output - putting custom formats at the top level
-      // and raw data below as requested
+      // Clean up internal properties and return with raw data
+      const { _last_seen, _is_watching, _index, ...cleanData } = userData;
+
       return {
-        ...formattedOutput, // Custom formats at the top level
-        raw_data: {
-          friendly_name: user.friendly_name || "",
-          user_id: user.user_id,
-          email: user.email || "",
-          plays: parseInt(user.plays || "0", 10),
-          duration: user.duration || 0,
-          formatted_duration: user.formatted_duration,
-          last_seen: user.last_seen,
-          last_seen_formatted: user.last_seen_formatted,
-          is_active: user.is_active,
-          is_watching: user.is_watching,
-          state: user.state,
-          media_type: user.media_type,
-          progress_percent: user.progress_percent,
-          progress_time: user.progress_time,
-          title: user.title,
-          original_title: user.original_title,
-          year: user.year,
-          last_played: user.last_played,
-          last_played_modified: user.last_played_modified,
-          full_title: user.full_title,
-          parent_title: user.parent_title,
-          grandparent_title: user.grandparent_title,
-          media_index: user.media_index,
-          parent_media_index: user.parent_media_index,
-        },
+        ...formattedOutput,
+        raw_data: cleanData,
       };
     });
 
@@ -974,6 +940,92 @@ app.get("/api/users", async (req, res) => {
     });
   }
 });
+
+/**
+ * Get user history from Tautulli API with caching
+ *
+ * @async
+ * @param {string} baseUrl - Tautulli API base URL
+ * @param {string} apiKey - Tautulli API key
+ * @param {number|string} userId - User ID to get history for
+ * @returns {Object|null} User's last played item or null if error
+ */
+async function getUserHistory(baseUrl, apiKey, userId) {
+  try {
+    const response = await axios.get(`${baseUrl}/api/v2`, {
+      params: {
+        apikey: apiKey,
+        cmd: "get_history",
+        user_id: userId,
+        length: 1,
+      },
+      timeout: 5000,
+    });
+
+    return response.data?.response?.data?.data?.[0] || null;
+  } catch (error) {
+    console.error(`Error fetching history for user ${userId}:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Format show title for consistent display
+ * Removes year from title and formats with season/episode info if available
+ *
+ * @param {Object} session - Session object containing show information
+ * @returns {string} Formatted show title
+ */
+function formatShowTitle(session) {
+  if (!session) return "";
+  if (
+    session.grandparent_title &&
+    session.parent_media_index &&
+    session.media_index
+  ) {
+    // Remove year from grandparent_title (show name)
+    const showTitle = session.grandparent_title.replace(
+      /\s*\(\d{4}\)|\s+[-–]\s+\d{4}/,
+      ""
+    );
+    return `${showTitle} - S${String(session.parent_media_index).padStart(
+      2,
+      "0"
+    )}E${String(session.media_index).padStart(2, "0")}`;
+  }
+  const title = session.title || "";
+  return title.replace(/\s*\(\d{4}\)|\s+[-–]\s+\d{4}/, "");
+}
+
+/**
+ * Format time difference from now in a human-readable string
+ *
+ * @param {number} timestamp - Unix timestamp in seconds
+ * @returns {string} Formatted time difference (e.g. "5m ago")
+ */
+function formatTimeDiff(timestamp) {
+  if (!timestamp) return "Never";
+  const now = Date.now() / 1000;
+  const diff = Math.floor(now - timestamp);
+
+  if (diff < 60) return "Just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+/**
+ * Format seconds into hours and minutes display string
+ *
+ * @param {number} totalSeconds - Total seconds to format
+ * @returns {string} Formatted time string (e.g. "2h 30m" or "45m")
+ */
+function formatTimeHHMM(totalSeconds) {
+  if (!totalSeconds) return "0m";
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
 
 // Downloads endpoint with format processing
 
