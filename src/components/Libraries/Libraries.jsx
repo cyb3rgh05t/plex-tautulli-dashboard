@@ -162,6 +162,7 @@ const Libraries = () => {
     }
   };
 
+  // Fetch libraries from the API
   const fetchLibraries = async () => {
     try {
       const response = await fetch(`/api/libraries`);
@@ -169,7 +170,15 @@ const Libraries = () => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      return data.libraries;
+
+      // Sort libraries by name
+      const sortedLibraries = data.libraries.sort((a, b) => {
+        const nameA = (a.raw_data?.section_name || "").toLowerCase();
+        const nameB = (b.raw_data?.section_name || "").toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+
+      return sortedLibraries;
     } catch (error) {
       console.error("Fetch error:", error);
       throw error;

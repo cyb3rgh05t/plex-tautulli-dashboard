@@ -18,6 +18,7 @@ const MediaCard = ({ media }) => {
   const [imageLoading, setImageLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [resolution, setResolution] = useState(null);
+  const [imageCacheKey, setImageCacheKey] = useState(Date.now()); // Added cache key state
 
   // Fetch resolution metadata
   useEffect(() => {
@@ -33,7 +34,11 @@ const MediaCard = ({ media }) => {
 
         const mediaInfo = response.data?.response?.data?.media_info?.[0];
         if (mediaInfo) {
-          const videoResolution = mediaInfo.video_full_resolution;
+          let videoResolution = mediaInfo.video_full_resolution;
+          // Convert 4K to 2160p for consistent display
+          if (videoResolution === "4k") {
+            videoResolution = "2160p";
+          }
           setResolution(videoResolution);
         }
       } catch (error) {
@@ -145,7 +150,7 @@ const MediaCard = ({ media }) => {
 
     return `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
       thumbPath || ""
-    )}&apikey=${apiKey}`;
+    )}&apikey=${apiKey}&cacheKey=${imageCacheKey}`;
   };
 
   return (
@@ -156,9 +161,9 @@ const MediaCard = ({ media }) => {
       >
         <div
           className="relative aspect-[2/3] rounded-xl overflow-hidden 
-          bg-gray-800/50 border border-gray-700/50 
-          group-hover:border-accent group-hover:shadow-accent-lg
-          transition-all duration-200"
+            bg-gray-800/50 border border-gray-700/50 
+            group-hover:border-accent group-hover:shadow-accent-lg
+            transition-all duration-200"
         >
           {/* Loading State */}
           {imageLoading && (
@@ -175,9 +180,9 @@ const MediaCard = ({ media }) => {
               src={getThumbnailUrl(media, media.apiKey)}
               alt={media.title || "Media"}
               className={`w-full h-full object-cover transition-all duration-300 
-                group-hover:scale-105 ${
-                  imageLoading ? "opacity-0" : "opacity-100"
-                }`}
+                  group-hover:scale-105 ${
+                    imageLoading ? "opacity-0" : "opacity-100"
+                  }`}
               onLoad={() => setImageLoading(false)}
               onError={() => {
                 setImageError(true);
@@ -187,7 +192,22 @@ const MediaCard = ({ media }) => {
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-800/50">
               <Icons.Film size={32} className="text-gray-500 mb-2" />
-              <span className="text-theme-muted text-sm">No Preview</span>
+              <span className="text-theme-muted text-sm mb-3">No Preview</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation(); // Prevent the card click event
+                  // Generate a new cache key to force image reload
+                  setImageCacheKey(Date.now());
+                  setImageError(false);
+                  setImageLoading(true);
+                }}
+                className="px-3 py-1.5 bg-accent-base/20 backdrop-blur-sm rounded-lg 
+                  border border-accent/20 text-accent-base text-xs font-medium 
+                  hover:bg-accent-base/30 transition-colors flex items-center gap-1.5"
+              >
+                <Icons.RefreshCw size={14} className="animate-spin" />
+                Refresh
+              </button>
             </div>
           )}
 
@@ -206,8 +226,8 @@ const MediaCard = ({ media }) => {
             {/* Added Time Badge */}
             <div
               className="px-2 py-1 bg-gray-900/70 backdrop-blur-sm rounded-lg 
-              border border-gray-700/50 text-theme-muted text-xs font-medium 
-              flex items-center gap-1"
+                border border-gray-700/50 text-theme-muted text-xs font-medium 
+                flex items-center gap-1"
             >
               <Icons.Clock3 size={12} />
               {getRelativeAddedTime(media.added_at)}
@@ -217,7 +237,7 @@ const MediaCard = ({ media }) => {
             {resolution && (
               <div
                 className="px-2 py-1 bg-accent-base/20 backdrop-blur-sm rounded-lg 
-                border border-accent/20 text-accent-base text-xs font-medium"
+                  border border-accent/20 text-accent-base text-xs font-medium"
               >
                 {resolution}
               </div>
@@ -226,8 +246,8 @@ const MediaCard = ({ media }) => {
             {media.rating && (
               <div
                 className="px-2 py-1 bg-yellow-500/20 backdrop-blur-sm rounded-lg 
-                border border-yellow-500/20 text-yellow-400 text-xs font-medium 
-                flex items-center gap-1"
+                  border border-yellow-500/20 text-yellow-400 text-xs font-medium 
+                  flex items-center gap-1"
               >
                 <Icons.Star size={12} />
                 {media.rating}
@@ -457,7 +477,7 @@ const RecentlyAdded = () => {
   const fetchSectionRecentlyAdded = async (sectionId) => {
     try {
       const response = await fetch(
-        `/api/tautulli/api/v2?apikey=${config.tautulliApiKey}&cmd=get_recently_added&section_id=${sectionId}&count=10`
+        `/api/tautulli/api/v2?apikey=${config.tautulliApiKey}&cmd=get_recently_added&section_id=${sectionId}&count=5`
       );
       const data = await response.json();
 
@@ -573,11 +593,22 @@ const RecentlyAdded = () => {
       return sectionType === typeMap[activeMediaTypeFilter];
     });
 
-    // Sort as before
+    // First sort by media type, then by name alphabetically
     return filteredEntries.sort((a, b) => {
       const typeA = a[1]?.type || a[1]?.section_type || "unknown";
       const typeB = b[1]?.type || b[1]?.section_type || "unknown";
-      return getTypePriority(typeA) - getTypePriority(typeB);
+
+      // First sort by type priority
+      const typePriorityDiff = getTypePriority(typeA) - getTypePriority(typeB);
+
+      // If types are same, sort by name
+      if (typePriorityDiff === 0) {
+        const nameA = (a[1]?.name || a[1]?.section_name || "").toLowerCase();
+        const nameB = (b[1]?.name || b[1]?.section_name || "").toLowerCase();
+        return nameA.localeCompare(nameB);
+      }
+
+      return typePriorityDiff;
     });
   };
 
