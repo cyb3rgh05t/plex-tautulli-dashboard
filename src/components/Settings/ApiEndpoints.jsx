@@ -1127,37 +1127,33 @@ fetch('${baseUrl}/api/formats', {
   return (
     <div className="space-y-8">
       {/* Server Configuration Section */}
-      <ThemedCard
-        title="Server Configuration"
-        icon={FaServer}
-        useAccentBorder={true}
-      >
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <FaServer className="text-accent-base text-xl" />
-            <h2 className="text-xl font-semibold text-white">
-              Server Configuration
-            </h2>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-900/50 border border-gray-700/50">
-            <div
-              className={`w-2 h-2 rounded-full ${
-                serverStatus === "active"
-                  ? "bg-green-500"
-                  : serverStatus === "inactive"
-                  ? "bg-gray-500"
-                  : "bg-red-500"
-              }`}
-            />
-            <span className="text-sm font-medium text-theme-muted">
-              {serverStatus === "active"
-                ? "Server Active"
-                : serverStatus === "inactive"
-                ? "Server Inactive"
-                : "Server Error"}
-            </span>
-          </div>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <FaServer className="text-accent-base text-xl" />
+          <h2 className="text-xl font-semibold text-white">
+            Server Configuration
+          </h2>
         </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-900/50 border border-gray-700/50">
+          <div
+            className={`w-2 h-2 rounded-full ${
+              serverStatus === "active"
+                ? "bg-green-500"
+                : serverStatus === "inactive"
+                ? "bg-gray-500"
+                : "bg-red-500"
+            }`}
+          />
+          <span className="text-sm font-medium text-theme-muted">
+            {serverStatus === "active"
+              ? "Server Active"
+              : serverStatus === "inactive"
+              ? "Server Inactive"
+              : "Server Error"}
+          </span>
+        </div>
+      </div>
+      <ThemedCard>
         <div className="space-y-2">
           <label className="block text-theme font-medium">API Server URL</label>
           <div className="relative">
