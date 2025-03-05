@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
 import { useTheme } from "../../context/ThemeContext";
+import { useLocation } from "react-router-dom";
 import { logError } from "../../utils/logger";
 import * as Icons from "lucide-react";
 import ThemedCard from "../common/ThemedCard";
@@ -84,6 +85,12 @@ const UsersTable = ({ users }) => (
               Last Played Media
             </div>
           </th>
+          <th className="px-4 py-3 text-left bg-gray-800/50 border-b border-gray-700/50">
+            <div className="flex items-center gap-2 text-theme-muted font-medium">
+              <Icons.Clock size={14} />
+              Runtime Duration
+            </div>
+          </th>
           <th className="px-4 py-3 text-right bg-gray-800/50 border-b border-gray-700/50">
             <div className="flex items-center justify-end gap-2 text-theme-muted font-medium">
               <Icons.Play size={14} />
@@ -92,7 +99,7 @@ const UsersTable = ({ users }) => (
           </th>
           <th className="px-4 py-3 text-right bg-gray-800/50 rounded-tr-lg border-b border-gray-700/50">
             <div className="flex items-center justify-end gap-2 text-theme-muted font-medium">
-              <Icons.Type size={14} />
+              <Icons.Film size={14} />
               Type
             </div>
           </th>
@@ -130,6 +137,14 @@ const UsersTable = ({ users }) => (
                 {userData.last_played_modified ||
                   userData.last_played ||
                   "Nothing played yet"}
+              </td>
+              <td className="px-4 py-3 text-theme">
+                {userData.formatted_duration ||
+                  (userData.duration
+                    ? `${Math.floor(userData.duration / 3600)}h ${Math.floor(
+                        (userData.duration % 3600) / 60
+                      )}m`
+                    : "0m")}
               </td>
               <td className="px-4 py-3 text-right text-accent-base font-medium">
                 {userData.plays ? userData.plays.toLocaleString() : "0"}
@@ -173,10 +188,12 @@ const LoadingSkeleton = () => (
           key={i}
           className="h-16 px-4 flex items-center border-b border-gray-800/30"
         >
-          <div className="w-1/5 h-6 bg-gray-800/70 rounded-md mr-4"></div>
-          <div className="w-1/5 h-6 bg-gray-800/70 rounded-md mr-4"></div>
-          <div className="w-2/5 h-6 bg-gray-800/70 rounded-md mr-4"></div>
-          <div className="w-1/5 h-6 bg-gray-800/70 rounded-md"></div>
+          <div className="w-1/6 h-6 bg-gray-800/70 rounded-md mr-4"></div>
+          <div className="w-1/6 h-6 bg-gray-800/70 rounded-md mr-4"></div>
+          <div className="w-1/6 h-6 bg-gray-800/70 rounded-md mr-4"></div>
+          <div className="w-1/6 h-6 bg-gray-800/70 rounded-md mr-4"></div>
+          <div className="w-1/6 h-6 bg-gray-800/70 rounded-md mr-4"></div>
+          <div className="w-1/6 h-6 bg-gray-800/70 rounded-md"></div>
         </div>
       ))}
     </div>
@@ -237,9 +254,11 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
 const Users = () => {
   const { config } = useConfig();
   const { theme } = useTheme();
+  const location = useLocation();
   const [currentPage, setCurrentPage] = useState(1);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(Date.now());
+  const previousPath = useRef(null);
   const itemsPerPage = 10;
   const refreshInterval = useRef(null);
   const REFRESH_INTERVAL = 60000; // 60 seconds
@@ -276,6 +295,17 @@ const Users = () => {
       setIsRefreshing(false);
     }
   };
+
+  // Check if navigated to this tab and trigger refresh
+  useEffect(() => {
+    if (
+      previousPath.current !== location.pathname &&
+      location.pathname === "/users"
+    ) {
+      handleRefresh();
+    }
+    previousPath.current = location.pathname;
+  }, [location.pathname]);
 
   // Set up auto-refresh
   useEffect(() => {

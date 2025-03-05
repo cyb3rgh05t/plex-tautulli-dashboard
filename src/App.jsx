@@ -19,7 +19,8 @@ import RecentlyAdded from "./components/RecentlyAdded/RecentlyAdded";
 import Libraries from "./components/Libraries/Libraries";
 import Users from "./components/Users/Users";
 import FormatSettings from "./components/FormatSettings/FormatSettings";
-import ApiEndpoints from "./components/FormatSettings/ApiEndpoints";
+import ApiEndpoints from "./components/Settings/ApiEndpoints";
+import SettingsPage from "./components/Settings/Settings";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -198,6 +199,8 @@ const AppRoutes = () => {
           <Route path="users" element={<Users />} />
           <Route path="format" element={<FormatSettings />} />
           <Route path="api-endpoints" element={<ApiEndpoints />} />
+          {/* Add Settings as a child route inside the layout */}
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
 
         <Route

@@ -7,69 +7,86 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Read the current version from version.js
-function getCurrentVersion() {
+// Get environment (either from NODE_ENV or command-line args)
+const isDev =
+  process.env.NODE_ENV === "development" || process.argv.includes("--dev");
+console.log(`Running in ${isDev ? "development" : "production"} mode`);
+
+// Read the version from version.js (the source of truth)
+function getVersionFromFile() {
   try {
-    // Read the existing version.js file
     const versionFilePath = path.join(__dirname, "version.js");
-    if (fs.existsSync(versionFilePath)) {
-      const versionFileContent = fs.readFileSync(versionFilePath, "utf8");
-      // Extract the version using regex
-      const versionMatch = versionFileContent.match(/appVersion = "([^"]+)"/);
-      if (versionMatch && versionMatch[1]) {
-        console.log(`Found version in version.js: ${versionMatch[1]}`);
-        return versionMatch[1];
-      }
+
+    if (!fs.existsSync(versionFilePath)) {
+      console.error("Error: version.js file does not exist!");
+      process.exit(1);
     }
 
-    // If we couldn't find or parse the version.js file
-    console.error("Could not find or parse version from version.js");
-    process.exit(1); // Exit with error code
+    const versionFileContent = fs.readFileSync(versionFilePath, "utf8");
+    const versionMatch = versionFileContent.match(/appVersion = "([^"]+)"/);
+
+    if (!versionMatch || !versionMatch[1]) {
+      console.error("Error: Could not parse version from version.js!");
+      process.exit(1);
+    }
+
+    // Extract the base version from the file
+    const version = versionMatch[1];
+    console.log(`Found version in version.js: ${version}`);
+    return version;
   } catch (error) {
     console.error("Error reading version.js:", error);
-    process.exit(1); // Exit with error code
+    process.exit(1);
   }
 }
 
-// Get current version
-const currentVersion = getCurrentVersion();
-const isDev = process.env.NODE_ENV === "development";
+// Update package.json with the version from version.js
+function updatePackageJson(version) {
+  try {
+    const packageJsonPath = path.join(__dirname, "package.json");
 
-// Set version string based on environment
-const version = isDev ? `${currentVersion}-dev` : currentVersion;
+    if (!fs.existsSync(packageJsonPath)) {
+      console.error("Error: package.json file does not exist!");
+      process.exit(1);
+    }
 
-// Get the current date for the build date
-const buildDate = new Date().toISOString();
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
 
-// Update the package.json with the version from version.js
-try {
-  const packageJsonPath = path.join(__dirname, "package.json");
-  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+    // Set the version in package.json
+    packageJson.version = version;
 
-  // Set the version in package.json to the base version from version.js
-  packageJson.version = currentVersion;
+    // Write the updated package.json
+    fs.writeFileSync(
+      packageJsonPath,
+      JSON.stringify(packageJson, null, 2) + "\n"
+    );
+    console.log(`Updated package.json with version: ${version}`);
 
-  // Write the updated package.json
-  fs.writeFileSync(
-    packageJsonPath,
-    JSON.stringify(packageJson, null, 2) + "\n"
-  );
-  console.log(`Updated package.json with version: ${currentVersion}`);
-} catch (error) {
-  console.error("Error updating package.json:", error);
+    return true;
+  } catch (error) {
+    console.error("Error updating package.json:", error);
+    return false;
+  }
 }
 
-// Update version.js to include any dev suffix and build date
-// But preserve the original version number for future manual updates
-const versionContent = `// Auto-generated version file - Update version here for new releases
-export const appVersion = "${version}";
-export const buildDate = "${buildDate}";
-export const isDevelopment = ${isDev};
-`;
+// Main function
+function main() {
+  const version = getVersionFromFile();
 
-// Write the updated version.js file
-fs.writeFileSync(path.join(__dirname, "version.js"), versionContent);
+  if (!version) {
+    console.error("Failed to get version information.");
+    process.exit(1);
+  }
 
-console.log(
-  `Updated version.js with version: ${version}, build date: ${buildDate}, isDevelopment: ${isDev}`
-);
+  const success = updatePackageJson(version);
+
+  if (success) {
+    console.log("Version update completed successfully!");
+  } else {
+    console.error("Version update failed!");
+    process.exit(1);
+  }
+}
+
+// Execute the main function
+main();
