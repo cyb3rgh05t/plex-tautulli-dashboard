@@ -477,7 +477,7 @@ const RecentlyAdded = () => {
   const fetchSectionRecentlyAdded = async (sectionId) => {
     try {
       const response = await fetch(
-        `/api/tautulli/api/v2?apikey=${config.tautulliApiKey}&cmd=get_recently_added&section_id=${sectionId}&count=5`
+        `/api/tautulli/api/v2?apikey=${config.tautulliApiKey}&cmd=get_recently_added&section_id=${sectionId}&count=6`
       );
       const data = await response.json();
 

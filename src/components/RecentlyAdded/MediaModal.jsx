@@ -92,27 +92,27 @@ const MediaModal = ({ media, onClose, apiKey }) => {
     const resolution = media.stream_video_full_resolution?.toLowerCase() || "";
     if (resolution.includes("4k") || resolution.includes("2160")) {
       return {
-        label: "4K",
+        label: "2160p",
         icon: Icons.CircleDot,
         className: "bg-accent-light text-accent-base border-accent",
       };
     }
     if (resolution.includes("1080")) {
       return {
-        label: "HD",
+        label: "1080p",
         icon: Icons.Circle,
         className: "bg-green-500/20 text-green-400 border-green-500/30",
       };
     }
     if (resolution.includes("720")) {
       return {
-        label: "HD",
+        label: "720p",
         icon: Icons.Circle,
         className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
       };
     }
     return {
-      label: "SD",
+      label: "480p",
       icon: Icons.CircleDashed,
       className: "bg-gray-500/20 text-gray-400 border-gray-500/30",
     };
