@@ -69,6 +69,49 @@ function updatePackageJson(version) {
   }
 }
 
+// Update README.md version badge
+function updateReadmeBadge(version) {
+  try {
+    const readmePath = path.join(__dirname, "README.md");
+
+    if (!fs.existsSync(readmePath)) {
+      console.log("README.md file not found, skipping badge update");
+      return true;
+    }
+
+    let readmeContent = fs.readFileSync(readmePath, "utf8");
+
+    // Format version for the badge URL - convert hyphen to nothing
+    // Example: 2.2.1-dev becomes 2.2.1dev for shield.io compatibility
+    const badgeVersion = version.replace(/-/g, "");
+    console.log(`Using formatted version for badge: ${badgeVersion}`);
+
+    // Update the version badge
+    // This regex matches the version badge in your README.md with a more flexible pattern
+    const badgeRegex =
+      /<img src="https:\/\/img\.shields\.io\/badge\/version-[^"]+-blue\?style=for-the-badge" alt="Version" \/>/;
+
+    if (badgeRegex.test(readmeContent)) {
+      readmeContent = readmeContent.replace(
+        badgeRegex,
+        `<img src="https://img.shields.io/badge/version-${badgeVersion}-blue?style=for-the-badge" alt="Version" />`
+      );
+
+      fs.writeFileSync(readmePath, readmeContent);
+      console.log(`Updated README.md badge with version: ${badgeVersion}`);
+      return true;
+    } else {
+      console.log(
+        "Version badge not found in README.md, skipping badge update"
+      );
+      return true;
+    }
+  } catch (error) {
+    console.error("Error updating README.md badge:", error);
+    return false;
+  }
+}
+
 // Main function
 function main() {
   const version = getVersionFromFile();
@@ -78,9 +121,10 @@ function main() {
     process.exit(1);
   }
 
-  const success = updatePackageJson(version);
+  const packageSuccess = updatePackageJson(version);
+  const readmeSuccess = updateReadmeBadge(version);
 
-  if (success) {
+  if (packageSuccess && readmeSuccess) {
     console.log("Version update completed successfully!");
   } else {
     console.error("Version update failed!");
