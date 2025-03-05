@@ -1023,7 +1023,7 @@ app.get("/api/users", async (req, res) => {
     console.log(`[${requestId}] Starting /api/users request`);
 
     const config = getConfig();
-    const { count = 100 } = req.query; // Default to 100 if not specified
+    const { count = 50 } = req.query; // Default to 100 if not specified
     const requestedCount = Math.max(1, parseInt(count, 10) || 50);
     const forceRefresh = req.query.refresh === "true"; // Optional force refresh parameter
 
