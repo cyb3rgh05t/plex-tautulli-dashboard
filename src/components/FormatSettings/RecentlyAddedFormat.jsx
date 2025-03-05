@@ -167,7 +167,13 @@ const FormatCard = ({ format, onDelete, onEdit, previewValue, sections }) => {
   };
 
   return (
-    <ThemedCard className="p-4" isInteractive hasBorder useAccentBorder={true}>
+    <ThemedCard
+      id={`format-card-${format.name}`}
+      className="p-4"
+      isInteractive
+      hasBorder
+      useAccentBorder={true}
+    >
       <div className="flex justify-between items-center mb-3">
         <div>
           <h4 className="text-white font-medium">{format.name}</h4>
@@ -377,10 +383,27 @@ const RecentlyAddedFormat = () => {
   const [error, setError] = useState(null);
   const [validationErrors, setValidationErrors] = useState(null);
   const templateInputRef = useRef(null);
+  const formRef = useRef(null);
+  const scrollPositionRef = useRef(0);
 
   // New state for edit mode
   const [isEditing, setIsEditing] = useState(false);
   const [editingFormatId, setEditingFormatId] = useState(null);
+
+  // Save scroll position helper
+  const saveScrollPosition = () => {
+    scrollPositionRef.current = window.scrollY;
+  };
+
+  // Restore scroll position helper
+  const restoreScrollPosition = () => {
+    setTimeout(() => {
+      window.scrollTo({
+        top: scrollPositionRef.current,
+        behavior: "auto", // Use auto instead of smooth to prevent visible scrolling
+      });
+    }, 100);
+  };
 
   // Fetch sections
   const fetchSections = async () => {
@@ -616,6 +639,58 @@ const RecentlyAddedFormat = () => {
     }
   };
 
+  // Handle edit button click
+  const handleEditFormat = (format) => {
+    // Save current scroll position
+    saveScrollPosition();
+
+    // Set form values from the format
+    setNewFormat({
+      name: format.name,
+      template: format.template,
+      sectionId: format.sectionId || "all",
+      type: format.type,
+    });
+    setIsEditing(true);
+    setEditingFormatId({
+      name: format.name,
+      type: format.type,
+      sectionId: format.sectionId,
+    });
+
+    // Scroll to form and focus the template input
+    setTimeout(() => {
+      if (formRef.current) {
+        formRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+      if (templateInputRef.current) {
+        templateInputRef.current.focus();
+      }
+    }, 100);
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    // Save current scroll position
+    saveScrollPosition();
+
+    setNewFormat({
+      name: "",
+      template: "",
+      type: activeMediaType,
+      sectionId: "all",
+    });
+    setIsEditing(false);
+    setEditingFormatId(null);
+    setValidationErrors(null);
+
+    // Restore scroll position
+    restoreScrollPosition();
+  };
+
   // Validate a format to check for duplicates
   const validateFormat = (formatToCheck, currentFormats) => {
     // If editing, ignore the format with the same ID
@@ -650,6 +725,9 @@ const RecentlyAddedFormat = () => {
 
   const handleAddOrUpdateFormat = async () => {
     if (newFormat.name && newFormat.template && newFormat.type) {
+      // Save current scroll position
+      saveScrollPosition();
+
       const formatItem = {
         name: newFormat.name,
         template: newFormat.template,
@@ -725,6 +803,9 @@ const RecentlyAddedFormat = () => {
         });
         setIsEditing(false);
         setEditingFormatId(null);
+
+        // Restore scroll position
+        restoreScrollPosition();
       } catch (error) {
         console.error("Failed to save format:", error);
         toast.error("Failed to save format");
@@ -732,47 +813,10 @@ const RecentlyAddedFormat = () => {
     }
   };
 
-  // Handler for editing a format
-  const handleEditFormat = (format) => {
-    setNewFormat({
-      name: format.name,
-      template: format.template,
-      type: format.type,
-      sectionId: format.sectionId || "all",
-    });
-    setIsEditing(true);
-    setEditingFormatId({
-      name: format.name,
-      type: format.type,
-      sectionId: format.sectionId,
-    });
-
-    // Scroll to form and focus the template input
-    setTimeout(() => {
-      if (templateInputRef.current) {
-        templateInputRef.current.focus();
-        templateInputRef.current.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-      }
-    }, 100);
-  };
-
-  // Cancel editing
-  const handleCancelEdit = () => {
-    setNewFormat({
-      name: "",
-      template: "",
-      type: activeMediaType,
-      sectionId: "all",
-    });
-    setIsEditing(false);
-    setEditingFormatId(null);
-    setValidationErrors(null);
-  };
-
   const handleDeleteFormat = async (formatToDelete) => {
+    // Save current scroll position
+    saveScrollPosition();
+
     try {
       // Get current formats
       const response = await fetch(`/api/formats`);
@@ -819,6 +863,9 @@ const RecentlyAddedFormat = () => {
       }
 
       toast.success(`Format deleted successfully`);
+
+      // Restore scroll position
+      restoreScrollPosition();
     } catch (error) {
       console.error("Failed to delete format:", error);
       toast.error("Failed to delete format");
@@ -966,7 +1013,25 @@ const RecentlyAddedFormat = () => {
         className="p-6"
         useAccentBorder={true}
       >
-        <div className="space-y-4">
+        {isEditing && (
+          <div className="bg-accent-light/20 border border-accent-base/30 rounded-lg mb-4 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Icons.Info size={18} className="text-accent-base" />
+              <p className="text-sm text-white">
+                You are editing format{" "}
+                <span className="font-medium">"{editingFormatId?.name}"</span>
+              </p>
+            </div>
+          </div>
+        )}
+        <form
+          ref={formRef}
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleAddOrUpdateFormat();
+          }}
+          className="space-y-4"
+        >
           <div>
             <label className="block text-theme font-medium mb-2">
               Format Name
@@ -1043,54 +1108,71 @@ const RecentlyAddedFormat = () => {
 
           {/* Validation Error */}
           {validationErrors && (
-            <ThemedCard
-              className="bg-red-500/10 border-red-500/20 p-3"
-              hasBorder={false}
-            >
+            <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-3">
               <div className="flex items-center gap-2 text-red-400">
                 <AlertCircle size={16} />
                 <p className="text-sm">{validationErrors}</p>
               </div>
-            </ThemedCard>
+            </div>
           )}
 
           {/* Live Preview */}
           {newFormat.template && (
-            <ThemedCard className="p-4" hasBorder useAccentBorder={true}>
+            <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700/50">
               <label className="block text-theme font-medium mb-2">
                 Preview
               </label>
               <code className="text-accent-base font-mono block">
                 {templatePreview || "Invalid template"}
               </code>
-            </ThemedCard>
+            </div>
           )}
+
+          {/* Current Media Type Display */}
+          <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+            <div className="flex items-center gap-2">
+              <Icons.Film className="text-accent-base" size={16} />
+              <span className="text-theme-muted">Media Type:</span>
+              <span className="font-medium text-accent-base">
+                {activeMediaType.charAt(0).toUpperCase() +
+                  activeMediaType.slice(1)}
+              </span>
+            </div>
+          </div>
 
           <div className="flex gap-3">
             <ThemedButton
-              onClick={handleAddOrUpdateFormat}
-              disabled={!newFormat.name || !newFormat.template}
+              type="submit"
               variant="accent"
+              disabled={!newFormat.name || !newFormat.template}
               icon={isEditing ? Save : Plus}
             >
               {isEditing ? "Save Changes" : "Add Format"}
             </ThemedButton>
 
             {isEditing && (
-              <ThemedButton onClick={handleCancelEdit} variant="ghost" icon={X}>
+              <ThemedButton
+                type="button"
+                onClick={handleCancelEdit}
+                variant="ghost"
+                icon={X}
+              >
                 Cancel
               </ThemedButton>
             )}
           </div>
-        </div>
+        </form>
       </ThemedCard>
 
       {/* Existing Formats Section */}
       {formats.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">
-              Existing Formats
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Icons.List className="text-accent-base" size={18} />
+              {activeMediaType.charAt(0).toUpperCase() +
+                activeMediaType.slice(1)}{" "}
+              Formats
             </h3>
             <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-gray-700/50">
               <span className="text-sm font-medium text-theme-muted">
@@ -1098,26 +1180,28 @@ const RecentlyAddedFormat = () => {
               </span>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-4">
-            {formats.map((format, index) => {
-              const previewData = getPreviewData(format.sectionId || "all");
-              const previewValue = processTemplate(format.template, {
-                ...previewData,
-                mediaType: activeMediaType,
-              });
+          <ThemedCard hasBorder={false} className="p-0">
+            <div className="grid grid-cols-1 gap-4 p-4">
+              {formats.map((format, index) => {
+                const previewData = getPreviewData(format.sectionId || "all");
+                const previewValue = processTemplate(format.template, {
+                  ...previewData,
+                  mediaType: activeMediaType,
+                });
 
-              return (
-                <FormatCard
-                  key={`${format.name}-${format.sectionId}-${index}`}
-                  format={format}
-                  onDelete={handleDeleteFormat}
-                  onEdit={handleEditFormat}
-                  previewValue={previewValue}
-                  sections={sections}
-                />
-              );
-            })}
-          </div>
+                return (
+                  <FormatCard
+                    key={`${format.name}-${format.sectionId}-${index}`}
+                    format={format}
+                    onDelete={handleDeleteFormat}
+                    onEdit={handleEditFormat}
+                    previewValue={previewValue}
+                    sections={sections}
+                  />
+                );
+              })}
+            </div>
+          </ThemedCard>
         </div>
       )}
     </div>

@@ -416,7 +416,8 @@ const DownloadsFormat = () => {
       {formats.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Icons.List className="text-accent-base" size={18} />
               Existing Formats
             </h3>
             <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-gray-700/50">

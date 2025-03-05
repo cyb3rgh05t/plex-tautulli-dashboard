@@ -324,67 +324,86 @@ const VariableButton = ({ variable, onClick }) => (
   </button>
 );
 
-const FormatCard = ({ format, onDelete, onEdit, previewValue }) => (
-  <ThemedCard
-    id={`format-${format.name.replace(/\s+/g, "-")}`}
-    className="hover:bg-gray-800/70 transition-all duration-200"
-    isInteractive
-    hasBorder
-    useAccentBorder={true}
-  >
-    <div>
-      <div className="flex justify-between items-center mb-3">
-        <div>
-          <h4 className="text-white font-medium">{format.name}</h4>
-          <p className="text-sm text-theme-muted">
-            Applied to:{" "}
-            {format.sectionId === "all"
-              ? "All Sections"
-              : `Section ${format.sectionId}`}
-          </p>
+const FormatCard = ({ format, onDelete, onEdit, previewValue, sections }) => {
+  // Get section name if sectionId is not "all"
+  const getSectionName = () => {
+    if (format.sectionId === "all" || !format.sectionId) {
+      return "All Sections";
+    }
+
+    // Find matching section from the sections array
+    const matchingSection = sections.find(
+      (s) =>
+        s.section_id && s.section_id.toString() === format.sectionId.toString()
+    );
+
+    // Return the name if found, otherwise fallback to section ID
+    return matchingSection
+      ? matchingSection.name ||
+          matchingSection.section_name ||
+          `Section ${format.sectionId}`
+      : `Section ${format.sectionId}`;
+  };
+
+  return (
+    <ThemedCard
+      id={`format-${format.name.replace(/\s+/g, "-")}`}
+      className="hover:bg-gray-800/70 transition-all duration-200"
+      isInteractive
+      hasBorder
+      useAccentBorder={true}
+    >
+      <div>
+        <div className="flex justify-between items-center mb-3">
+          <div>
+            <h4 className="text-white font-medium">{format.name}</h4>
+            <p className="text-sm text-theme-muted">
+              Applied to: {getSectionName()}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <ThemedButton
+              variant="ghost"
+              size="sm"
+              icon={Icons.Edit2}
+              onClick={() => onEdit(format)}
+              className="text-accent-base hover:text-accent-hover hover:bg-accent-light/20"
+              title="Edit format"
+            />
+            <ThemedButton
+              variant="ghost"
+              size="sm"
+              icon={Icons.Trash2}
+              onClick={() => onDelete(format.name)}
+              className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
+              title="Delete format"
+            />
+          </div>
         </div>
-        <div className="flex gap-2">
-          <ThemedButton
-            variant="ghost"
-            size="sm"
-            icon={Icons.Edit2}
-            onClick={() => onEdit(format)}
-            className="text-accent-base hover:text-accent-hover hover:bg-accent-light/20"
-            title="Edit format"
-          />
-          <ThemedButton
-            variant="ghost"
-            size="sm"
-            icon={Icons.Trash2}
-            onClick={() => onDelete(format.name)}
-            className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
-            title="Delete format"
-          />
+        <div className="space-y-3">
+          <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+            <div className="flex items-center gap-2 text-theme-muted text-sm mb-2">
+              <Icons.Code size={14} className="text-accent-base" />
+              <span>Template</span>
+            </div>
+            <code className="text-sm text-gray-300 font-mono">
+              {format.template}
+            </code>
+          </div>
+          <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+            <div className="flex items-center gap-2 text-theme-muted text-sm mb-2">
+              <Icons.Variable size={14} className="text-accent-base" />
+              <span>Preview</span>
+            </div>
+            <code className="text-sm text-accent-base font-mono">
+              {previewValue}
+            </code>
+          </div>
         </div>
       </div>
-      <div className="space-y-3">
-        <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
-          <div className="flex items-center gap-2 text-theme-muted text-sm mb-2">
-            <Icons.Code size={14} className="text-accent-base" />
-            <span>Template</span>
-          </div>
-          <code className="text-sm text-gray-300 font-mono">
-            {format.template}
-          </code>
-        </div>
-        <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
-          <div className="flex items-center gap-2 text-theme-muted text-sm mb-2">
-            <Icons.Variable size={14} className="text-accent-base" />
-            <span>Preview</span>
-          </div>
-          <code className="text-sm text-accent-base font-mono">
-            {previewValue}
-          </code>
-        </div>
-      </div>
-    </div>
-  </ThemedCard>
-);
+    </ThemedCard>
+  );
+};
 
 // Main component
 const SectionsFormat = () => {
@@ -428,10 +447,25 @@ const SectionsFormat = () => {
   });
   const [error, setError] = useState(null);
   const templateInputRef = useRef(null);
+  const formRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editingFormat, setEditingFormat] = useState(null);
   const scrollPositionRef = useRef(0);
-  const formRef = useRef(null);
+
+  // Save scroll position helper
+  const saveScrollPosition = () => {
+    scrollPositionRef.current = window.scrollY;
+  };
+
+  // Restore scroll position helper
+  const restoreScrollPosition = () => {
+    setTimeout(() => {
+      window.scrollTo({
+        top: scrollPositionRef.current,
+        behavior: "auto", // Use auto instead of smooth to prevent visible scrolling
+      });
+    }, 100);
+  };
 
   // Fetch sections
   const fetchSections = async () => {
@@ -481,21 +515,6 @@ const SectionsFormat = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Save scroll position helper
-  const saveScrollPosition = () => {
-    scrollPositionRef.current = window.scrollY;
-  };
-
-  // Restore scroll position helper
-  const restoreScrollPosition = () => {
-    setTimeout(() => {
-      window.scrollTo({
-        top: scrollPositionRef.current,
-        behavior: "auto", // Use auto instead of smooth to prevent visible scrolling
-      });
-    }, 100);
   };
 
   // Load formats and sections when component mounts
@@ -794,7 +813,7 @@ const SectionsFormat = () => {
       <ThemedCard
         title={isEditing ? "Edit Format" : "Create New Format"}
         icon={isEditing ? Icons.Edit2 : Icons.PlusCircle}
-        className={isEditing ? "border-accent-base border-2" : "p-6"}
+        className="p-6"
         useAccentBorder={true}
       >
         {isEditing && (
@@ -888,7 +907,22 @@ const SectionsFormat = () => {
             </div>
           )}
 
-          <div className="flex items-center gap-3">
+          {/* Current Section Info Display */}
+          <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+            <div className="flex items-center gap-2">
+              <Icons.Database className="text-accent-base" size={16} />
+              <span className="text-theme-muted">Section:</span>
+              <span className="font-medium text-accent-base">
+                {newFormat.sectionId === "all"
+                  ? "All Sections"
+                  : sections.find(
+                      (s) => s.section_id?.toString() === newFormat.sectionId
+                    )?.name || `Section ${newFormat.sectionId}`}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
             <ThemedButton
               type="submit"
               variant="accent"
@@ -918,7 +952,7 @@ const SectionsFormat = () => {
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-white flex items-center gap-2">
               <Icons.List className="text-accent-base" size={18} />
-              Existing Formats
+              Section Metadata Formats
             </h3>
             <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-gray-700/50">
               <span className="text-sm font-medium text-theme-muted">
@@ -926,33 +960,38 @@ const SectionsFormat = () => {
               </span>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-4">
-            {formats.map((format, index) => (
-              <FormatCard
-                key={index}
-                format={format}
-                onDelete={handleDelete}
-                onEdit={handleEdit}
-                previewValue={processTemplate(
-                  format.template,
-                  format.sectionId === "all"
-                    ? previewData
-                    : {
-                        ...previewData,
-                        section_id: format.sectionId,
-                        section_name:
-                          sections.find(
-                            (s) => s.section_id?.toString() === format.sectionId
-                          )?.name || "Unknown Section",
-                        section_type:
-                          sections.find(
-                            (s) => s.section_id?.toString() === format.sectionId
-                          )?.type || "unknown",
-                      }
-                )}
-              />
-            ))}
-          </div>
+          <ThemedCard hasBorder={false} className="p-0">
+            <div className="grid grid-cols-1 gap-4 p-4">
+              {formats.map((format, index) => (
+                <FormatCard
+                  key={`format-${format.name}-${index}`}
+                  format={format}
+                  onDelete={handleDelete}
+                  onEdit={handleEdit}
+                  sections={sections}
+                  previewValue={processTemplate(
+                    format.template,
+                    format.sectionId === "all"
+                      ? previewData
+                      : {
+                          ...previewData,
+                          section_id: format.sectionId,
+                          section_name:
+                            sections.find(
+                              (s) =>
+                                s.section_id?.toString() === format.sectionId
+                            )?.name || "Unknown Section",
+                          section_type:
+                            sections.find(
+                              (s) =>
+                                s.section_id?.toString() === format.sectionId
+                            )?.type || "unknown",
+                        }
+                  )}
+                />
+              ))}
+            </div>
+          </ThemedCard>
         </div>
       )}
     </div>

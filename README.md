@@ -2,7 +2,7 @@
 
 # 🎬 Plex & Tautulli Dashboard 📊
 
-<img src="https://img.shields.io/badge/version-2.1.5dev-blue?style=for-the-badge" alt="Version" />
+<img src="https://img.shields.io/badge/version-2.1.6dev-blue?style=for-the-badge" alt="Version" />
 <img src="https://img.shields.io/badge/React-18.2.0-61DAFB?style=for-the-badge&logo=react" alt="React" />
 <img src="https://img.shields.io/badge/Tailwind-CSS-38B2AC?style=for-the-badge&logo=tailwind-css" alt="Tailwind" />
 <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License" />
