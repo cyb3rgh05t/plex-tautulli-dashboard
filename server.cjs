@@ -523,7 +523,13 @@ const getLibraryDetails = async (sectionId, config) => {
 };
 
 // Get user history from Tautulli API
-async function getUserHistory(baseUrl, apiKey, userId, requestId = "") {
+// Enhanced getUserHistory function that also fetches media metadata
+async function getUserHistoryWithMetadata(
+  baseUrl,
+  apiKey,
+  userId,
+  requestId = ""
+) {
   try {
     console.log(`[${requestId}] Fetching history for user ${userId}...`);
 
@@ -543,6 +549,42 @@ async function getUserHistory(baseUrl, apiKey, userId, requestId = "") {
       console.log(
         `[${requestId}] History fetch success for ${userId}: ${historyItem.media_type}: ${historyItem.title}`
       );
+
+      // If we have a history item with a rating key, fetch the media metadata to get duration
+      if (historyItem.rating_key) {
+        try {
+          console.log(
+            `[${requestId}] Fetching metadata for item ${historyItem.rating_key}...`
+          );
+
+          const metadataResponse = await axios.get(`${baseUrl}/api/v2`, {
+            params: {
+              apikey: apiKey,
+              cmd: "get_metadata",
+              rating_key: historyItem.rating_key,
+            },
+            timeout: 5000,
+          });
+
+          // Get the actual media duration from metadata
+          const mediaInfo = metadataResponse.data?.response?.data;
+          if (mediaInfo && mediaInfo.duration) {
+            historyItem.media_duration = mediaInfo.duration; // Add the media duration to history item
+            console.log(
+              `[${requestId}] Got media duration for ${historyItem.title}: ${mediaInfo.duration}ms`
+            );
+          } else {
+            console.log(
+              `[${requestId}] No duration found in metadata for ${historyItem.title}`
+            );
+          }
+        } catch (error) {
+          console.error(
+            `[${requestId}] Error fetching metadata for ${historyItem.rating_key}:`,
+            error.message
+          );
+        }
+      }
     } else {
       console.log(`[${requestId}] No history found for user ${userId}`);
     }
@@ -972,6 +1014,7 @@ app.get("/api/media/:type", async (req, res) => {
 });
 
 // Users API
+// Users API
 app.get("/api/users", async (req, res) => {
   try {
     // Generate unique request ID for logging
@@ -1045,7 +1088,8 @@ app.get("/api/users", async (req, res) => {
           media_type: session.media_type,
           progress_percent: session.progress_percent || "0",
           view_offset: Math.floor((session.view_offset || 0) / 1000),
-          duration: Math.floor((session.duration || 0) / 1000),
+          duration: Math.floor((session.duration || 0) / 1000), // Store in seconds for consistency
+          media_duration: session.duration || 0, // Actual media duration in milliseconds
           last_seen: Math.floor(Date.now() / 1000),
           parent_media_index: session.parent_media_index,
           media_index: session.media_index,
@@ -1110,18 +1154,14 @@ app.get("/api/users", async (req, res) => {
           historyCache.delete(`user_history:${user.user_id}`);
         }
 
-        // Calculate formatted duration (match your existing logic)
-        const rawDuration = user.duration || watching?.duration || 0;
-        const formattedDuration = formatDuration(rawDuration);
-
-        // Create base user data object
+        // Create base user data object with default values
         return {
           friendly_name: user.friendly_name || "",
           user_id: user.user_id,
           email: user.email || "",
           plays: parseInt(user.plays || "0", 10),
-          duration: rawDuration,
-          formatted_duration: formattedDuration, // Add formatted duration
+          duration: watching?.media_duration || 0, // Initialize with media duration if watching
+          formatted_duration: "", // Will be set after we have the actual media duration
           last_seen: lastSeen,
           last_seen_formatted: watching
             ? "🟢"
@@ -1132,7 +1172,7 @@ app.get("/api/users", async (req, res) => {
           is_watching: watching ? "Watching" : "Watched",
           state: watching ? "watching" : "watched",
 
-          // Existing properties...
+          // Existing properties
           media_type: watching
             ? watching.media_type.charAt(0).toUpperCase() +
               watching.media_type.slice(1)
@@ -1202,6 +1242,10 @@ app.get("/api/users", async (req, res) => {
             cachedHistory.parent_media_index || "";
           processedUsers[i].last_played_modified =
             cachedHistory.last_played_modified || processedUsers[i].last_played;
+          processedUsers[i].duration = cachedHistory.media_duration || 0; // Use cached media duration
+          processedUsers[i].formatted_duration = formatDuration(
+            processedUsers[i].duration
+          ); // Format it
           processedUsers[i]._cached = true;
         } else {
           // Queue up history fetch with index attached
@@ -1212,7 +1256,7 @@ app.get("/api/users", async (req, res) => {
           historyPromises.push({
             index: i,
             userId: userData.user_id,
-            promise: getUserHistory(
+            promise: getUserHistoryWithMetadata(
               config.tautulliUrl,
               config.tautulliApiKey,
               userData.user_id,
@@ -1220,10 +1264,19 @@ app.get("/api/users", async (req, res) => {
             ),
           });
         }
+      } else if (userData.is_active) {
+        // If user is active, use the media duration from watching
+        const watching = watchingUsers[userData.user_id];
+        if (watching && watching.media_duration) {
+          processedUsers[i].duration = watching.media_duration;
+          processedUsers[i].formatted_duration = formatDuration(
+            watching.media_duration
+          );
+        }
       }
     }
 
-    // STEP 7: Fetch history for users with no cache hit
+    // STEP 7: Fetch history and metadata for users with no cache hit
     if (historyPromises.length > 0) {
       console.log(
         `[${requestId}] Fetching history for ${historyPromises.length} users (cache miss or forced refresh)...`
@@ -1242,6 +1295,9 @@ app.get("/api/users", async (req, res) => {
         if (result.status === "fulfilled" && result.value) {
           const historyItem = result.value;
           const cacheKey = `user_history:${userId}`;
+
+          // Get the media duration from the history item
+          const mediaDuration = historyItem.media_duration || 0;
 
           // Prepare the cache object
           const cacheObj = {
@@ -1262,10 +1318,11 @@ app.get("/api/users", async (req, res) => {
               ? String(historyItem.parent_media_index).padStart(2, "0")
               : "",
             last_played_modified: formatShowTitle(historyItem),
+            media_duration: mediaDuration, // Store actual media duration
             timestamp: Date.now(),
           };
 
-          // Update user data with history
+          // Update user data with history and media duration
           processedUsers[index].media_type = cacheObj.media_type;
           processedUsers[index].title = cacheObj.title;
           processedUsers[index].original_title = cacheObj.original_title;
@@ -1278,15 +1335,21 @@ app.get("/api/users", async (req, res) => {
             cacheObj.parent_media_index;
           processedUsers[index].last_played_modified =
             cacheObj.last_played_modified;
+          processedUsers[index].duration = mediaDuration; // Use actual media duration
+          processedUsers[index].formatted_duration =
+            formatDuration(mediaDuration); // Format it
 
           // Store in cache
           historyCache.set(cacheKey, cacheObj);
 
           console.log(
-            `[${requestId}] Updated and cached history for user ${processedUsers[index].friendly_name}: ${processedUsers[index].media_type} - ${processedUsers[index].title}`
+            `[${requestId}] Updated and cached history for user ${processedUsers[index].friendly_name}: ${processedUsers[index].media_type} - ${processedUsers[index].title} - Duration: ${processedUsers[index].formatted_duration}`
           );
         } else {
-          // If history fetch failed, log the error
+          // If history fetch failed, set a default formatted duration
+          processedUsers[index].formatted_duration = "Unknown";
+
+          // Log the error
           console.log(
             `[${requestId}] Failed to fetch history for user ${
               processedUsers[index].friendly_name
@@ -1297,6 +1360,15 @@ app.get("/api/users", async (req, res) => {
         }
       });
     }
+
+    // Final formatting of any users that might not have a formatted_duration yet
+    processedUsers.forEach((user, i) => {
+      if (!user.formatted_duration && user.duration) {
+        processedUsers[i].formatted_duration = formatDuration(user.duration);
+      } else if (!user.formatted_duration) {
+        processedUsers[i].formatted_duration = "0m";
+      }
+    });
 
     const formattedUsers = processedUsers.map((userData) => {
       const rawData = userData.raw_data || userData;
