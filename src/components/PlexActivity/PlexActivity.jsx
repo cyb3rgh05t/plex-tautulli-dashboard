@@ -9,6 +9,9 @@ import * as Icons from "lucide-react";
 import ThemedCard from "../common/ThemedCard";
 import ThemedButton from "../common/ThemedButton";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
+
 const ActivityBadge = ({ type }) => {
   // Map activity types to their visual styles
   const styles = {

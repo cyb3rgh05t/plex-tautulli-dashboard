@@ -20,11 +20,13 @@ const ensureFormatsFileExists = () => {
 
   if (!fs.existsSync(FORMATS_FILE)) {
     try {
-      // Create default format structure
+      // Create default format structure - add libraries array
       const defaultFormats = {
         downloads: [],
         recentlyAdded: [],
         users: [],
+        sections: [],
+        libraries: [], // Add separate libraries array
       };
 
       fs.writeFileSync(FORMATS_FILE, JSON.stringify(defaultFormats, null, 2));
@@ -46,8 +48,9 @@ const getFormats = () => {
     return {
       downloads: formats.downloads || [],
       recentlyAdded: formats.recentlyAdded || [],
-      users: formats.users || [], // Add users array
-      sections: formats.sections || [], // Add sections array
+      users: formats.users || [],
+      sections: formats.sections || [],
+      libraries: formats.libraries || [], // Include libraries in the returned object
     };
   } catch (error) {
     console.error("Error reading formats:", error);
@@ -56,6 +59,7 @@ const getFormats = () => {
       recentlyAdded: [],
       users: [],
       sections: [],
+      libraries: [],
     };
   }
 };
@@ -68,6 +72,7 @@ const saveFormats = (formats) => {
       recentlyAdded: formats.recentlyAdded || [],
       users: formats.users || [],
       sections: formats.sections || [],
+      libraries: formats.libraries || [], // Include libraries in the saved object
     };
 
     fs.writeFileSync(FORMATS_FILE, JSON.stringify(updatedFormats, null, 2));
@@ -78,32 +83,7 @@ const saveFormats = (formats) => {
   }
 };
 
-const getSections = () => {
-  const formats = getFormats();
-  return {
-    total: formats.sections.length,
-    sections: formats.sections,
-  };
-};
-
-const saveSections = (sections) => {
-  try {
-    const formats = getFormats();
-    formats.sections = sections;
-    saveFormats(formats);
-    return {
-      total: sections.length,
-      sections: sections,
-    };
-  } catch (error) {
-    console.error("Error saving sections:", error);
-    throw new Error("Failed to save sections");
-  }
-};
-
 module.exports = {
   getFormats,
   saveFormats,
-  getSections,
-  saveSections,
 };

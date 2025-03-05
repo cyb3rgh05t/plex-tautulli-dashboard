@@ -16,6 +16,7 @@ const ThemedTabBar = () => {
   const settingsTabs = [
     { to: "/format", icon: Icons.SlidersHorizontal, label: "Format Settings" },
     { to: "/api-endpoints", icon: Icons.Code, label: "API Endpoints" },
+    { to: "/settings", icon: Icons.Settings, label: "Settings" }, // Added Settings tab
   ];
 
   // Render tab with consistent styling

@@ -1,7 +1,7 @@
 // with theme styling applied
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { Trash2, Code, Plus, Variable } from "lucide-react";
+import { Trash2, Code, Plus, Variable, Edit, Save, X } from "lucide-react";
 import * as Icons from "lucide-react";
 import toast from "react-hot-toast";
 import ThemedCard from "../common/ThemedCard";
@@ -49,7 +49,7 @@ const VariableButton = ({ variable, onClick }) => (
   </button>
 );
 
-const FormatCard = ({ format, onDelete, previewValue }) => (
+const FormatCard = ({ format, onDelete, onEdit, previewValue }) => (
   <ThemedCard
     isInteractive
     hasBorder
@@ -58,13 +58,22 @@ const FormatCard = ({ format, onDelete, previewValue }) => (
   >
     <div className="flex justify-between items-center mb-3">
       <h4 className="text-white font-medium">{format.name}</h4>
-      <ThemedButton
-        onClick={() => onDelete(format.name)}
-        variant="ghost"
-        size="sm"
-        icon={Trash2}
-        className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
-      />
+      <div className="flex gap-2">
+        <ThemedButton
+          onClick={() => onEdit(format)}
+          variant="ghost"
+          size="sm"
+          icon={Edit}
+          className="text-accent-base hover:text-accent-hover hover:bg-accent-light/20"
+        />
+        <ThemedButton
+          onClick={() => onDelete(format.name)}
+          variant="ghost"
+          size="sm"
+          icon={Trash2}
+          className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
+        />
+      </div>
     </div>
     <div className="space-y-3">
       <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
@@ -95,6 +104,8 @@ const DownloadsFormat = () => {
     name: "",
     template: "",
   });
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingFormatName, setEditingFormatName] = useState(null);
   const templateInputRef = useRef(null);
 
   // Template preview using memoization
@@ -114,18 +125,12 @@ const DownloadsFormat = () => {
     const fetchFormats = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/api/formats`);
+        const response = await fetch(`/api/formats`);
         const data = await response.json();
         setFormats(data.downloads || []);
       } catch (error) {
         console.error("Failed to load activity formats:", error);
-        toast.error("Failed to load formats", {
-          style: {
-            border: "1px solid #DC2626",
-            padding: "16px",
-            background: "#7F1D1D",
-          },
-        });
+        toast.error("Failed to load formats");
       } finally {
         setIsLoading(false);
       }
@@ -155,37 +160,44 @@ const DownloadsFormat = () => {
     }
   };
 
-  const handleAddFormat = async () => {
+  const handleAddOrUpdateFormat = async () => {
     if (newFormat.name && newFormat.template) {
-      const newFormatItem = {
+      const formatItem = {
         name: newFormat.name,
         template: newFormat.template,
       };
 
       try {
-        // Check for duplicate names
-        const getResponse = await fetch(`${API_BASE_URL}/api/formats`);
+        // Get current formats
+        const getResponse = await fetch(`/api/formats`);
         const currentData = await getResponse.json();
         const currentFormats = currentData.downloads || [];
 
-        if (
-          currentFormats.some((format) => format.name === newFormatItem.name)
-        ) {
-          toast.error("A format with this name already exists", {
-            style: {
-              border: "1px solid #DC2626",
-              padding: "16px",
-              background: "#7F1D1D",
-            },
-          });
-          return;
+        let updatedFormats;
+        let successMessage;
+
+        if (isEditing) {
+          // Update existing format
+          updatedFormats = currentFormats.map((format) =>
+            format.name === editingFormatName ? formatItem : format
+          );
+          successMessage = `Format "${formatItem.name}" updated successfully`;
+        } else {
+          // Check for duplicate names when adding new format
+          if (
+            currentFormats.some((format) => format.name === formatItem.name)
+          ) {
+            toast.error("A format with this name already exists");
+            return;
+          }
+
+          // Add new format
+          updatedFormats = [...currentFormats, formatItem];
+          successMessage = `Format "${formatItem.name}" created successfully`;
         }
 
-        // Add new format
-        const updatedFormats = [...currentFormats, newFormatItem];
-
         // Save the updated formats
-        const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
+        const saveResponse = await fetch(`/api/formats`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -202,30 +214,51 @@ const DownloadsFormat = () => {
 
         // Update local state
         setFormats(updatedFormats);
-        toast.success(`Format "${newFormat.name}" created successfully`, {
-          style: {
-            border: "1px solid #059669",
-            padding: "16px",
-            background: "#064E3B",
-          },
-        });
+        toast.success(successMessage);
 
-        // Reset form
+        // Reset form and editing state
         setNewFormat({
           name: "",
           template: "",
         });
+        setIsEditing(false);
+        setEditingFormatName(null);
       } catch (error) {
         console.error("Failed to save format:", error);
-        toast.error("Failed to create format", {
-          style: {
-            border: "1px solid #DC2626",
-            padding: "16px",
-            background: "#7F1D1D",
-          },
-        });
+        toast.error(
+          isEditing ? "Failed to update format" : "Failed to create format"
+        );
       }
     }
+  };
+
+  const handleEditFormat = (format) => {
+    setNewFormat({
+      name: format.name,
+      template: format.template,
+    });
+    setIsEditing(true);
+    setEditingFormatName(format.name);
+
+    // Scroll to form and focus the template input
+    setTimeout(() => {
+      if (templateInputRef.current) {
+        templateInputRef.current.focus();
+        templateInputRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+    }, 100);
+  };
+
+  const handleCancelEdit = () => {
+    setNewFormat({
+      name: "",
+      template: "",
+    });
+    setIsEditing(false);
+    setEditingFormatName(null);
   };
 
   const handleDeleteFormat = async (formatName) => {
@@ -234,7 +267,7 @@ const DownloadsFormat = () => {
     );
 
     try {
-      const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
+      const saveResponse = await fetch(`/api/formats`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -250,27 +283,19 @@ const DownloadsFormat = () => {
       }
 
       setFormats(updatedFormats);
-      toast.success(`Format "${formatName}" deleted successfully`, {
-        style: {
-          border: "1px solid #059669",
-          padding: "16px",
-          background: "#064E3B",
-        },
-      });
+      toast.success(`Format "${formatName}" deleted successfully`);
+
+      // If we're editing the format that was just deleted, reset the form
+      if (isEditing && editingFormatName === formatName) {
+        handleCancelEdit();
+      }
     } catch (error) {
       console.error("Failed to delete format:", error);
-      toast.error("Failed to delete format", {
-        style: {
-          border: "1px solid #DC2626",
-          padding: "16px",
-          background: "#7F1D1D",
-        },
-      });
+      toast.error("Failed to delete format");
     }
   };
-  {
-    /* Loading Indicator */
-  }
+
+  // Loading Indicator
   if (isLoading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -281,6 +306,7 @@ const DownloadsFormat = () => {
       </div>
     );
   }
+
   return (
     <div className="space-y-8">
       {/* Error message */}
@@ -310,10 +336,10 @@ const DownloadsFormat = () => {
         </div>
       </ThemedCard>
 
-      {/* Create New Format Section */}
+      {/* Create/Edit Format Section */}
       <ThemedCard
-        title="Create New Format"
-        icon={Plus}
+        title={isEditing ? "Edit Format" : "Create New Format"}
+        icon={isEditing ? Icons.Edit2 : Icons.PlusCircle}
         className="shadow-lg p-6"
         useAccentBorder={true}
       >
@@ -367,14 +393,22 @@ const DownloadsFormat = () => {
             </div>
           )}
 
-          <ThemedButton
-            onClick={handleAddFormat}
-            disabled={!newFormat.name || !newFormat.template}
-            variant="accent"
-            icon={Plus}
-          >
-            Add Format
-          </ThemedButton>
+          <div className="flex gap-3">
+            <ThemedButton
+              onClick={handleAddOrUpdateFormat}
+              disabled={!newFormat.name || !newFormat.template}
+              variant="accent"
+              icon={isEditing ? Save : Plus}
+            >
+              {isEditing ? "Save Changes" : "Add Format"}
+            </ThemedButton>
+
+            {isEditing && (
+              <ThemedButton onClick={handleCancelEdit} variant="ghost" icon={X}>
+                Cancel
+              </ThemedButton>
+            )}
+          </div>
         </div>
       </ThemedCard>
 
@@ -382,7 +416,8 @@ const DownloadsFormat = () => {
       {formats.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Icons.List className="text-accent-base" size={18} />
               Existing Formats
             </h3>
             <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-gray-700/50">
@@ -405,6 +440,7 @@ const DownloadsFormat = () => {
                   key={index}
                   format={format}
                   onDelete={handleDeleteFormat}
+                  onEdit={handleEditFormat}
                   previewValue={previewValue}
                 />
               );

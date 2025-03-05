@@ -19,7 +19,8 @@ import RecentlyAdded from "./components/RecentlyAdded/RecentlyAdded";
 import Libraries from "./components/Libraries/Libraries";
 import Users from "./components/Users/Users";
 import FormatSettings from "./components/FormatSettings/FormatSettings";
-import ApiEndpoints from "./components/FormatSettings/ApiEndpoints";
+import ApiEndpoints from "./components/Settings/ApiEndpoints";
+import SettingsPage from "./components/Settings/Settings";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,9 +74,7 @@ const SetupCompletionHandler = ({ onComplete }) => {
         try {
           await Promise.all([
             queryClient.prefetchQuery(["plexActivities"], async () => {
-              const response = await fetch(
-                `${import.meta.env.VITE_API_BASE_URL || ""}/api/downloads`
-              );
+              const response = await fetch(`/api/downloads`);
               if (!response.ok)
                 throw new Error("Failed to fetch Plex activities");
               const data = await response.json();
@@ -83,18 +82,14 @@ const SetupCompletionHandler = ({ onComplete }) => {
             }),
 
             queryClient.prefetchQuery(["recentlyAdded"], async () => {
-              const response = await fetch(
-                `${import.meta.env.VITE_API_BASE_URL || ""}/api/recent/movies`
-              );
+              const response = await fetch(`/api/downloads`);
               if (!response.ok)
                 throw new Error("Failed to fetch recently added");
               return await response.json();
             }),
 
             queryClient.prefetchQuery(["libraries"], async () => {
-              const response = await fetch(
-                `${import.meta.env.VITE_API_BASE_URL || ""}/api/libraries`
-              );
+              const response = await fetch(`/api/downloads`);
               if (!response.ok) throw new Error("Failed to fetch libraries");
               return await response.json();
             }),
@@ -135,9 +130,7 @@ const ProtectedRoute = ({ children }) => {
         try {
           await Promise.all([
             queryClient.prefetchQuery(["plexActivities"], async () => {
-              const response = await fetch(
-                `${import.meta.env.VITE_API_BASE_URL || ""}/api/downloads`
-              );
+              const response = await fetch(`/api/downloads`);
               if (!response.ok)
                 throw new Error("Failed to fetch Plex activities");
               const data = await response.json();
@@ -145,18 +138,14 @@ const ProtectedRoute = ({ children }) => {
             }),
 
             queryClient.prefetchQuery(["recentlyAdded"], async () => {
-              const response = await fetch(
-                `${import.meta.env.VITE_API_BASE_URL || ""}/api/recent/movies`
-              );
+              const response = await fetch(`/api/downloads`);
               if (!response.ok)
                 throw new Error("Failed to fetch recently added");
               return await response.json();
             }),
 
             queryClient.prefetchQuery(["libraries"], async () => {
-              const response = await fetch(
-                `${import.meta.env.VITE_API_BASE_URL || ""}/api/libraries`
-              );
+              const response = await fetch(`/api/downloads`);
               if (!response.ok) throw new Error("Failed to fetch libraries");
               return await response.json();
             }),
@@ -210,6 +199,8 @@ const AppRoutes = () => {
           <Route path="users" element={<Users />} />
           <Route path="format" element={<FormatSettings />} />
           <Route path="api-endpoints" element={<ApiEndpoints />} />
+          {/* Add Settings as a child route inside the layout */}
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
 
         <Route
@@ -311,14 +302,22 @@ const App = () => {
                 toastOptions={{
                   duration: 3000,
                   style: {
-                    background: "#1F2937",
+                    background: `rgba(var(--accent-color), 0.55)`,
                     color: "#fff",
+                    border: `1px solid rgba(var(--accent-color), 0.5)`,
+                    backdropFilter: "blur(10px)",
+                    boxShadow: `0 0 10px rgba(var(--accent-color), 0.5), 0 0 20px rgba(var(--accent-color), 0.3)`,
+                    textShadow:
+                      "1px 1px 2px rgba(0,0,0,0.5), 0 0 5px rgba(0,0,0,0.3)",
                   },
                   success: {
                     style: {
-                      border: "1px solid #059669",
-                      padding: "16px",
-                      background: "#064E3B",
+                      background: `rgba(var(--accent-color), 0.55)`,
+                      border: `1px solid rgba(var(--accent-color), 0.7)`,
+                      backdropFilter: "blur(10px)",
+                      boxShadow: `0 0 10px rgba(var(--accent-color), 0.5), 0 0 20px rgba(var(--accent-color), 0.3)`,
+                      textShadow:
+                        "1px 1px 2px rgba(0,0,0,0.5), 0 0 5px rgba(0,0,0,0.3)",
                     },
                     iconTheme: {
                       primary: "#10B981",
@@ -327,9 +326,13 @@ const App = () => {
                   },
                   error: {
                     style: {
-                      border: "1px solid #DC2626",
-                      padding: "16px",
-                      background: "#7F1D1D",
+                      background: "rgba(232, 12, 11, 0.85)",
+                      border: "1px solid rgba(232, 12, 11, 0.7)",
+                      backdropFilter: "blur(10px)",
+                      boxShadow:
+                        "0 0 10px rgba(232, 12, 11, 0.5), 0 0 20px rgba(232, 12, 11, 0.3)",
+                      textShadow:
+                        "1px 1px 2px rgba(0,0,0,0.5), 0 0 5px rgba(0,0,0,0.3)",
                     },
                     iconTheme: {
                       primary: "#EF4444",

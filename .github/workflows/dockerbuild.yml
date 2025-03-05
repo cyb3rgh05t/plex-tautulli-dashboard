@@ -6,16 +6,21 @@ on:
       - "main"
       - "dev"
     tags:
-      - "v*" # Triggers on version tags like v1.1.5, v2.0.0
+      - "v*" # Automatically triggers on new version tags (v1.2.0, etc.)
     paths-ignore:
       - ".github/**"
       - "LICENSE"
       - "**.md"
+
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to build (for manual trigger)"
+        description: "Tag to build (e.g., v1.2.0)"
         required: false
+      branch:
+        description: "Branch to build (main or dev)"
+        required: false
+        default: "main"
 
 env:
   REGISTRY: ghcr.io
@@ -28,7 +33,7 @@ jobs:
       packages: write
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - uses: FranzDiebold/github-env-vars-action@v2.8.0
@@ -41,18 +46,25 @@ jobs:
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.tag }}" ]]; then
             VERSION="${{ github.event.inputs.tag }}"
+            TAGS="${DOCKER_IMAGE}:${VERSION},${DOCKER_IMAGE}:latest"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.branch }}" ]]; then
+            VERSION="${{ github.event.inputs.branch }}"
+            TAGS="${DOCKER_IMAGE}:${VERSION}"
           elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
             VERSION="latest"
+            TAGS="${DOCKER_IMAGE}:latest"
           elif [[ "$GITHUB_REF" == refs/heads/dev ]]; then
             VERSION="dev"
+            TAGS="${DOCKER_IMAGE}:dev"
           elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
+            TAGS="${DOCKER_IMAGE}:${VERSION},${DOCKER_IMAGE}:latest"
           else
             VERSION="unknown"
+            TAGS="${DOCKER_IMAGE}:unknown"
           fi
 
           CREATED=$(date +'%Y-%m-%dT%H:%M:%SZ')
-          TAGS="${DOCKER_IMAGE}:${VERSION}"
 
           echo "::set-output name=tags::${TAGS}"
           echo "::set-output name=title::${GITHUB_REPOSITORY}"

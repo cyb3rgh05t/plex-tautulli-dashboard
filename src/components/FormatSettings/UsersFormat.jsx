@@ -1,5 +1,3 @@
-// with theme styling applied
-
 import React, { useState, useEffect, useRef } from "react";
 import { useConfig } from "../../context/ConfigContext";
 import { logError } from "../../utils/logger";
@@ -34,13 +32,10 @@ const BASE_VARIABLES = [
   },
   {
     name: "last_seen_formatted",
-    description: "Pre-formatted last seen time (e.g., '2 hrs ago')",
-  },
-  {
-    name: "is_online",
     description:
-      "Shows a green dot (🟢) if user is currently watching something",
+      "Pre-formatted last seen time (e.g., '2 hrs ago') / Shows a green dot (🟢) if user is currently watching something",
   },
+
   { name: "is_active", description: "User's active status (true/false)" },
   {
     name: "is_watching",
@@ -103,20 +98,32 @@ const VariableButton = ({ variable, onClick }) => (
   </button>
 );
 
-const FormatCard = ({ format, onDelete, previewValue }) => (
+const FormatCard = ({ format, onDelete, onEdit, previewValue, id }) => (
   <ThemedCard
+    id={id}
     isInteractive
     hasBorder
     useAccentBorder={false}
     title={format.name}
     action={
-      <ThemedButton
-        variant="ghost"
-        size="sm"
-        icon={Trash2}
-        onClick={() => onDelete(format)}
-        className="text-red-400 hover:bg-red-500/10"
-      />
+      <div className="flex items-center gap-2">
+        <ThemedButton
+          variant="ghost"
+          size="sm"
+          icon={Icons.Edit2}
+          onClick={() => onEdit(format)}
+          className="text-accent-base hover:bg-accent-light/20"
+          title="Edit format"
+        />
+        <ThemedButton
+          variant="ghost"
+          size="sm"
+          icon={Icons.Trash2}
+          onClick={() => onDelete(format)}
+          className="text-red-400 hover:bg-red-500/10"
+          title="Delete format"
+        />
+      </div>
     }
   >
     <div className="space-y-3">
@@ -290,11 +297,6 @@ const processTemplate = (template, data) => {
           }
           break;
 
-        case "is_online":
-          // Simply use the is_online value which will be the green dot emoji if watching
-          value = combinedData.is_online || "";
-          break;
-
         case "is_active":
           value = combinedData[key] ? "Active" : "Inactive";
           break;
@@ -336,7 +338,13 @@ const UsersFormat = () => {
   const [previewData, setPreviewData] = useState(null);
   const [error, setError] = useState(null);
   const [activeMediaType, setActiveMediaType] = useState("movies");
+  const [editMode, setEditMode] = useState(false);
+  const [editFormatId, setEditFormatId] = useState(null);
   const templateInputRef = useRef(null);
+  // Reference to store the current scroll position
+  const scrollPositionRef = useRef(0);
+  // Reference for the form element
+  const formRef = useRef(null);
 
   // Get current variables based on media type
   const getCurrentVariables = () => {
@@ -349,11 +357,26 @@ const UsersFormat = () => {
     return variables;
   };
 
+  // Helper to save scroll position
+  const saveScrollPosition = () => {
+    scrollPositionRef.current = window.scrollY;
+  };
+
+  // Helper to restore scroll position
+  const restoreScrollPosition = () => {
+    setTimeout(() => {
+      window.scrollTo({
+        top: scrollPositionRef.current,
+        behavior: "auto", // Use auto instead of smooth to prevent visible scrolling
+      });
+    }, 100);
+  };
+
   // Fetch formats from the API
   const fetchFormats = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/formats`);
+      const response = await fetch(`/api/formats`);
       const data = await response.json();
 
       // Filter formats by specific media type
@@ -382,7 +405,7 @@ const UsersFormat = () => {
 
   const fetchPreviewData = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/users`);
+      const response = await fetch(`/api/users`);
       const data = await response.json();
 
       if (data.users && data.users.length > 0) {
@@ -425,20 +448,6 @@ const UsersFormat = () => {
           return;
         }
 
-        console.log("Preview Data:", selectedUser);
-
-        // Extract formatted fields (anything outside raw_data)
-        const formattedFields = Object.keys(selectedUser).filter(
-          (key) => key !== "raw_data"
-        );
-        console.log(
-          "Available formatted fields:",
-          formattedFields.reduce((obj, key) => {
-            obj[key] = selectedUser[key];
-            return obj;
-          }, {})
-        );
-
         // Use the entire structure for preview data
         setPreviewData(selectedUser);
       }
@@ -451,6 +460,13 @@ const UsersFormat = () => {
   useEffect(() => {
     fetchFormats();
     fetchPreviewData();
+
+    // Reset edit mode when switching media types
+    if (editMode) {
+      setEditMode(false);
+      setEditFormatId(null);
+      setNewFormat({ name: "", template: "" });
+    }
   }, [activeMediaType]);
 
   // Insert variable into template
@@ -483,14 +499,51 @@ const UsersFormat = () => {
     }
   };
 
-  // Handle form submission for new format
+  // Handle editing a format
+  const handleEdit = (format) => {
+    saveScrollPosition();
+
+    setNewFormat({
+      name: format.name,
+      template: format.template,
+    });
+    setEditMode(true);
+    setEditFormatId(format.name);
+
+    // Scroll to the edit form and focus on the template input
+    setTimeout(() => {
+      if (templateInputRef.current) {
+        templateInputRef.current.focus();
+        // Scroll the form into view
+        if (formRef.current) {
+          formRef.current.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        }
+      }
+    }, 100);
+  };
+
+  // Cancel editing and return to create mode
+  const cancelEdit = () => {
+    saveScrollPosition();
+    setNewFormat({ name: "", template: "" });
+    setEditMode(false);
+    setEditFormatId(null);
+    restoreScrollPosition();
+  };
+
+  // Handle form submission for new or edited format
   const handleSubmit = async (e) => {
     e.preventDefault();
+    saveScrollPosition();
+
     if (!newFormat.name || !newFormat.template) return;
 
     try {
       // Get current formats
-      const response = await fetch(`${API_BASE_URL}/api/formats`);
+      const response = await fetch(`/api/formats`);
       const data = await response.json();
       const currentFormats = data.users || [];
 
@@ -501,34 +554,44 @@ const UsersFormat = () => {
       };
       const currentMediaType = mediaTypeMap[activeMediaType];
 
-      // Check for duplicate names for this media type
-      if (
-        currentFormats.some(
-          (f) => f.name === newFormat.name && f.mediaType === currentMediaType
-        )
-      ) {
-        toast.error(
-          "A format with this name already exists for this media type",
-          {
-            style: {
-              border: "1px solid #DC2626",
-              padding: "16px",
-              background: "#7F1D1D",
-            },
+      let updatedFormats;
+
+      if (editMode) {
+        // Update existing format
+        updatedFormats = currentFormats.map((f) => {
+          if (f.name === editFormatId && f.mediaType === currentMediaType) {
+            return {
+              ...f,
+              name: newFormat.name,
+              template: newFormat.template,
+            };
           }
-        );
-        return;
+          return f;
+        });
+      } else {
+        // Check for duplicate names for this media type when creating new
+        if (
+          currentFormats.some(
+            (f) => f.name === newFormat.name && f.mediaType === currentMediaType
+          )
+        ) {
+          toast.error(
+            "A format with this name already exists for this media type"
+          );
+          return;
+        }
+
+        // Add new format
+        const newFormatWithType = {
+          name: newFormat.name,
+          template: newFormat.template,
+          mediaType: currentMediaType,
+        };
+        updatedFormats = [...currentFormats, newFormatWithType];
       }
 
-      const newFormatWithType = {
-        name: newFormat.name,
-        template: newFormat.template,
-        mediaType: currentMediaType,
-      };
-
-      // Add new format and save
-      const updatedFormats = [...currentFormats, newFormatWithType];
-      const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
+      // Save formats
+      const saveResponse = await fetch(`/api/formats`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -540,35 +603,49 @@ const UsersFormat = () => {
       });
 
       if (!saveResponse.ok) {
-        throw new Error("Failed to save format");
+        throw new Error(
+          editMode ? "Failed to update format" : "Failed to save format"
+        );
       }
 
-      // Refresh formats and reset form
-      fetchFormats();
+      // Update local formats state without refetching
+      // Filter formats by specific media type
+      const updatedLocalFormats = updatedFormats.filter(
+        (format) => format.mediaType === currentMediaType
+      );
+      setFormats(updatedLocalFormats);
+
+      // Reset form
       setNewFormat({ name: "", template: "" });
-      toast.success("Format created successfully", {
-        style: {
-          border: "1px solid #059669",
-          padding: "16px",
-          background: "#064E3B",
-        },
-      });
+      setEditMode(false);
+      setEditFormatId(null);
+
+      toast.success(
+        editMode ? "Format updated successfully" : "Format created successfully"
+      );
+
+      // Restore scroll position
+      restoreScrollPosition();
     } catch (err) {
-      logError("Failed to save user format", err);
-      toast.error("Failed to save format", {
-        style: {
-          border: "1px solid #DC2626",
-          padding: "16px",
-          background: "#7F1D1D",
-        },
-      });
+      logError(
+        editMode
+          ? "Failed to update user format"
+          : "Failed to save user format",
+        err
+      );
+      toast.error(
+        editMode ? "Failed to update format" : "Failed to save format"
+      );
     }
   };
 
   // Handle format deletion
-  const handleDelete = async (formatName) => {
+  const handleDelete = async (format) => {
+    // Save current scroll position
+    saveScrollPosition();
+
     try {
-      const response = await fetch(`${API_BASE_URL}/api/formats`);
+      const response = await fetch(`/api/formats`);
       const data = await response.json();
       const currentFormats = data.users || [];
 
@@ -578,13 +655,23 @@ const UsersFormat = () => {
       };
       const currentMediaType = mediaTypeMap[activeMediaType];
 
-      // Remove specific format for current media type
+      // Create unique identifier for the format we're deleting
+      const formatToDelete = {
+        name: format.name,
+        mediaType: format.mediaType || currentMediaType,
+      };
+
+      // Remove specific format for current media type by matching both name and mediaType
       const updatedFormats = currentFormats.filter(
-        (f) => !(f.name === formatName && f.mediaType === currentMediaType)
+        (f) =>
+          !(
+            f.name === formatToDelete.name &&
+            f.mediaType === formatToDelete.mediaType
+          )
       );
 
       // Save updated formats
-      const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
+      const saveResponse = await fetch(`/api/formats`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -599,24 +686,31 @@ const UsersFormat = () => {
         throw new Error("Failed to delete format");
       }
 
-      // Refresh formats
-      fetchFormats();
-      toast.success("Format deleted successfully", {
-        style: {
-          border: "1px solid #059669",
-          padding: "16px",
-          background: "#064E3B",
-        },
-      });
+      // Update local state without refetching
+      setFormats(
+        formats.filter(
+          (f) =>
+            !(
+              f.name === formatToDelete.name &&
+              f.mediaType === formatToDelete.mediaType
+            )
+        )
+      );
+
+      toast.success("Format deleted successfully");
+
+      // If we were editing the deleted format, exit edit mode
+      if (editMode && editFormatId === formatToDelete.name) {
+        setEditMode(false);
+        setEditFormatId(null);
+        setNewFormat({ name: "", template: "" });
+      }
+
+      // Restore scroll position
+      restoreScrollPosition();
     } catch (err) {
       logError("Failed to delete user format", err);
-      toast.error("Failed to delete format", {
-        style: {
-          border: "1px solid #DC2626",
-          padding: "16px",
-          background: "#7F1D1D",
-        },
-      });
+      toast.error("Failed to delete format");
     }
   };
 
@@ -677,9 +771,25 @@ const UsersFormat = () => {
         </div>
       </ThemedCard>
 
-      {/* Create New Format Section */}
-      <ThemedCard title="Create New Format" icon={Icons.PlusCircle}>
-        <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Create/Edit Format Section */}
+      <ThemedCard
+        title={editMode ? "Edit Format" : "Create New Format"}
+        icon={editMode ? Icons.Edit2 : Icons.PlusCircle}
+        className={editMode ? "border-accent-base border-2" : ""}
+      >
+        {editMode && (
+          <div className="bg-accent-light/20 border border-accent-base/30 rounded-lg mb-4 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Icons.Info size={18} className="text-accent-base" />
+              <p className="text-sm text-white">
+                You are editing the format "
+                <span className="font-medium">{editFormatId}</span>"
+              </p>
+            </div>
+          </div>
+        )}
+
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-theme font-medium mb-2">
               Format Name
@@ -697,10 +807,12 @@ const UsersFormat = () => {
                 activeMediaType === "shows" ? "Show" : "Movie"
               } Format`}
             />
-            <p className="text-green-700 text-xs mt-2">
-              For best results, you should name the Custom Format fields the
-              same in both categories
-            </p>
+            {!editMode && (
+              <p className="text-green-400 text-xs mt-2">
+                For best results, you should name the Custom Format fields the
+                same in both categories
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-theme font-medium mb-2">
@@ -743,14 +855,27 @@ const UsersFormat = () => {
             </div>
           )}
 
-          <ThemedButton
-            type="submit"
-            variant="accent"
-            disabled={!newFormat.name || !newFormat.template}
-            icon={Icons.Plus}
-          >
-            Add Format
-          </ThemedButton>
+          <div className="flex items-center gap-3">
+            <ThemedButton
+              type="submit"
+              variant="accent"
+              disabled={!newFormat.name || !newFormat.template}
+              icon={editMode ? Icons.Save : Icons.Plus}
+            >
+              {editMode ? "Update Format" : "Add Format"}
+            </ThemedButton>
+
+            {editMode && (
+              <ThemedButton
+                type="button"
+                variant="ghost"
+                onClick={cancelEdit}
+                icon={Icons.X}
+              >
+                Cancel
+              </ThemedButton>
+            )}
+          </div>
         </form>
       </ThemedCard>
 
@@ -772,8 +897,10 @@ const UsersFormat = () => {
             {formats.map((format, index) => (
               <FormatCard
                 key={index}
+                id={`format-card-${format.name}`}
                 format={format}
                 onDelete={handleDelete}
+                onEdit={handleEdit}
                 previewValue={
                   previewData
                     ? processTemplate(format.template, previewData)

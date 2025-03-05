@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConfig } from "../../context/ConfigContext";
 import { useTheme } from "../../context/ThemeContext";
@@ -7,23 +7,26 @@ import { testTautulliConnection } from "../../services/tautulliService";
 import * as Icons from "lucide-react";
 import toast from "react-hot-toast";
 import ThemedButton from "../common/ThemedButton";
+import ThemedCard from "../common/ThemedCard";
+import BackupSettings from "./BackupSettings";
+import CacheManager from "./CacheManager";
 
-// Sidebar Item Component
-const SidebarItem = ({ icon: Icon, label, active, onClick }) => (
+// Styled tab component for settings
+const SettingsTab = ({ active, onClick, icon: Icon, label }) => (
   <button
     onClick={onClick}
-    className={`flex items-center gap-3 px-4 py-3 w-full text-left transition-colors ${
+    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
       active
-        ? "bg-accent-light text-accent-base border-l-2 border-accent-base"
-        : "text-gray-400 hover:text-white hover:bg-gray-800/50"
+        ? "bg-accent-light text-accent-base"
+        : "text-gray-400 hover:text-white hover:bg-gray-700/50"
     }`}
   >
-    <Icon size={18} />
-    <span className="font-medium">{label}</span>
+    {Icon && <Icon size={16} className={active ? "text-accent-base" : ""} />}
+    <span>{label}</span>
   </button>
 );
 
-// Color option button for accent color selection
+// Color option component for accent selection
 const ColorOption = ({ color, current, onChange, displayName, rgb }) => {
   return (
     <button
@@ -52,10 +55,10 @@ const ColorOption = ({ color, current, onChange, displayName, rgb }) => {
   );
 };
 
-const Settings = ({ onClose }) => {
+const SettingsPage = () => {
   const navigate = useNavigate();
   const { config, updateConfig, clearConfig } = useConfig();
-  const { accentColor, setAccentColor } = useTheme();
+  const { theme, setTheme, accentColor, setAccentColor } = useTheme();
   const [formData, setFormData] = useState({
     plexUrl: config?.plexUrl || "",
     plexToken: config?.plexToken || "",
@@ -72,17 +75,9 @@ const Settings = ({ onClose }) => {
     tautulliApiKey: false,
   });
   const [resetConfirm, setResetConfirm] = useState(false);
-  const [activeSection, setActiveSection] = useState("servers");
+  const [activeTab, setActiveTab] = useState("servers");
 
-  // Handle ESC key to close modal
-  useEffect(() => {
-    const handleEsc = (e) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleEsc);
-    return () => window.removeEventListener("keydown", handleEsc);
-  }, [onClose]);
-
+  // Handle connection testing and config updates
   const handleSubmit = async (e) => {
     e.preventDefault();
     setTesting(true);
@@ -114,7 +109,6 @@ const Settings = ({ onClose }) => {
       ) {
         await updateConfig(formData);
         toast.success("Settings updated successfully");
-        onClose();
       } else {
         const error = [];
         if (plexResult.status === "rejected")
@@ -156,7 +150,6 @@ const Settings = ({ onClose }) => {
     try {
       await clearConfig();
       toast.success("All settings have been reset");
-      onClose();
       navigate("/setup");
     } catch (err) {
       toast.error(err.message || "Failed to reset settings");
@@ -164,39 +157,41 @@ const Settings = ({ onClose }) => {
   };
 
   const handleApiEndpoints = () => {
-    onClose();
-    // Correctly navigate to the API endpoints page with HashRouter
     navigate("/api-endpoints");
   };
 
   // Map of available accent colors
   const accentColors = [
-    { id: "purple", name: "Purple", rgb: "167, 139, 250" }, // Renamed from default
-    { id: "grey", name: "Grey", rgb: "220, 220, 220" }, // Renamed from light
+    { id: "purple", name: "Purple", rgb: "167, 139, 250" },
+    { id: "grey", name: "Grey", rgb: "220, 220, 220" },
     { id: "green", name: "Green", rgb: "109, 247, 81" },
-    { id: "maroon", name: "Maroon", rgb: "166, 40, 140" }, // Renamed from purple
+    { id: "maroon", name: "Maroon", rgb: "166, 40, 140" },
     { id: "orange", name: "Orange", rgb: "255, 153, 0" },
     { id: "blue", name: "Blue", rgb: "0, 98, 255" },
     { id: "red", name: "Red", rgb: "232, 12, 11" },
   ];
 
-  // Sidebar menu items
-  const menuItems = [
+  // Tabs definition
+  const tabs = [
     { id: "servers", label: "Server Configuration", icon: Icons.Server },
     { id: "theme", label: "Theme Settings", icon: Icons.Palette },
+    { id: "cache", label: "Cache Management", icon: Icons.Database },
+    { id: "backup", label: "Backup & Restore", icon: Icons.Save },
     { id: "api", label: "API Documentation", icon: Icons.FileCode },
     { id: "reset", label: "Reset Application", icon: Icons.AlertTriangle },
   ];
 
-  // Render content based on active section
-  const renderContent = () => {
-    switch (activeSection) {
+  // Render content based on active tab
+  const renderTabContent = () => {
+    switch (activeTab) {
       case "servers":
         return (
-          <div className="space-y-6">
-            <h3 className="text-xl font-medium text-white">
-              Server Configuration
-            </h3>
+          <ThemedCard
+            title="Server Configuration"
+            icon={Icons.Server}
+            useAccentBorder={true}
+            className="p-6"
+          >
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 gap-4">
                 {/* Plex URL */}
@@ -297,116 +292,182 @@ const Settings = ({ onClose }) => {
               <div>
                 <ThemedButton
                   type="submit"
-                  variant="primary"
+                  variant="accent"
                   icon={testing ? Icons.Loader2 : Icons.Save}
                   disabled={testing}
                 >
                   {testing ? "Testing Connection..." : "Save Settings"}
                 </ThemedButton>
               </div>
+
+              {/* Connection Status */}
+              {testResults.plex !== null && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div
+                    className={`p-4 rounded-lg border ${
+                      testResults.plex
+                        ? "bg-green-900/20 border-green-500/30 text-green-400"
+                        : "bg-red-900/20 border-red-500/30 text-red-400"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {testResults.plex ? (
+                        <Icons.CheckCircle size={16} />
+                      ) : (
+                        <Icons.XCircle size={16} />
+                      )}
+                      <span>
+                        Plex Connection:{" "}
+                        {testResults.plex ? "Success" : "Failed"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    className={`p-4 rounded-lg border ${
+                      testResults.tautulli
+                        ? "bg-green-900/20 border-green-500/30 text-green-400"
+                        : "bg-red-900/20 border-red-500/30 text-red-400"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {testResults.tautulli ? (
+                        <Icons.CheckCircle size={16} />
+                      ) : (
+                        <Icons.XCircle size={16} />
+                      )}
+                      <span>
+                        Tautulli Connection:{" "}
+                        {testResults.tautulli ? "Success" : "Failed"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </form>
-          </div>
+          </ThemedCard>
         );
 
       case "theme":
         return (
-          <div className="space-y-6">
-            <h3 className="text-xl font-medium text-white">Theme Settings</h3>
-            <p className="text-theme-muted mb-6">
-              Customize the appearance of the dashboard by choosing an accent
-              color.
-            </p>
+          <ThemedCard
+            title="Theme Settings"
+            icon={Icons.Palette}
+            useAccentBorder={true}
+            className="p-6"
+          >
+            <div className="space-y-6">
+              <p className="text-theme-muted">
+                Customize the appearance of the dashboard by choosing an accent
+                color.
+              </p>
 
-            {/* Accent Color Selection */}
-            <div className="space-y-4">
-              <h4 className="text-lg font-medium text-white">Accent Color</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                {accentColors.map((color) => (
-                  <ColorOption
-                    key={color.id}
-                    color={color.id}
-                    displayName={color.name}
-                    rgb={color.rgb}
-                    current={accentColor}
-                    onChange={setAccentColor}
-                  />
-                ))}
-              </div>
-
-              {/* Current theme information */}
-              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50 mt-6">
-                <div className="flex items-center gap-2 mb-2">
-                  <Icons.Info size={16} className="text-accent-base" />
-                  <h4 className="text-white font-medium">Theme Information</h4>
+              {/* Accent Color Selection */}
+              <div className="space-y-4">
+                <h4 className="text-lg font-medium text-white">Accent Color</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {accentColors.map((color) => (
+                    <ColorOption
+                      key={color.id}
+                      color={color.id}
+                      displayName={color.name}
+                      rgb={color.rgb}
+                      current={accentColor}
+                      onChange={setAccentColor}
+                    />
+                  ))}
                 </div>
-                <p className="text-theme-muted mb-4">
-                  The dashboard uses a dark theme with customizable accent
-                  colors. Your accent color selection will be remembered across
-                  sessions.
-                </p>
 
-                <div className="flex items-center gap-3">
-                  <div className="px-3 py-2 bg-gray-900/70 rounded-lg border border-gray-700/50">
-                    <span className="text-accent-base font-medium">
-                      Current accent: {accentColor}
-                    </span>
+                {/* Current theme information */}
+                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50 mt-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Icons.Info size={16} className="text-accent-base" />
+                    <h4 className="text-white font-medium">
+                      Theme Information
+                    </h4>
+                  </div>
+                  <p className="text-theme-muted mb-4">
+                    The dashboard uses a dark theme with customizable accent
+                    colors. Your accent color selection will be remembered
+                    across sessions.
+                  </p>
+
+                  <div className="flex items-center gap-3">
+                    <div className="px-3 py-2 bg-gray-900/70 rounded-lg border border-gray-700/50">
+                      <span className="text-accent-base font-medium">
+                        Current accent: {accentColor}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          </ThemedCard>
         );
+
+      case "cache":
+        return <CacheManager />;
+
+      case "backup":
+        return <BackupSettings />;
 
       case "api":
         return (
-          <div className="space-y-6">
-            <h3 className="text-xl font-medium text-white">
-              API Documentation
-            </h3>
-            <p className="text-theme-muted mb-6">
-              View all available API endpoints and how to use them with your
-              applications.
-            </p>
-            <ThemedButton
-              onClick={handleApiEndpoints}
-              variant="primary"
-              icon={Icons.ExternalLink}
-            >
-              View API Endpoints
-            </ThemedButton>
-          </div>
+          <ThemedCard
+            title="API Documentation"
+            icon={Icons.FileCode}
+            useAccentBorder={true}
+            className="p-6"
+          >
+            <div className="space-y-6">
+              <p className="text-theme-muted mb-6">
+                View all available API endpoints and how to use them with your
+                applications.
+              </p>
+              <ThemedButton
+                onClick={handleApiEndpoints}
+                variant="accent"
+                icon={Icons.ExternalLink}
+              >
+                View API Endpoints
+              </ThemedButton>
+            </div>
+          </ThemedCard>
         );
 
       case "reset":
         return (
-          <div className="space-y-6">
-            <h3 className="text-xl font-medium text-red-400 flex items-center gap-2">
-              <Icons.AlertTriangle size={20} />
-              Reset Application
-            </h3>
-            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-              <p className="text-yellow-400 mb-4">
-                Warning: This will reset all settings and configurations. You
-                will need to set up the application again.
-              </p>
-              <p className="text-theme-muted mb-4">This action will:</p>
-              <ul className="list-disc list-inside text-theme-muted mb-4 space-y-1">
-                <li>Clear all saved server configurations</li>
-                <li>Reset all format templates</li>
-                <li>Clear saved library sections</li>
-                <li>Return to the initial setup screen</li>
-              </ul>
-              <ThemedButton
-                onClick={handleReset}
-                variant="danger"
-                icon={resetConfirm ? Icons.AlertOctagon : Icons.RefreshCw}
-              >
-                {resetConfirm
-                  ? "Confirm Reset (This cannot be undone)"
-                  : "Reset All Settings"}
-              </ThemedButton>
+          <ThemedCard
+            title="Reset Application"
+            icon={Icons.AlertTriangle}
+            useAccentBorder={true}
+            className="p-6"
+          >
+            <div className="space-y-6">
+              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+                <p className="text-yellow-400 mb-4">
+                  Warning: This will reset all settings and configurations. You
+                  will need to set up the application again.
+                </p>
+                <p className="text-theme-muted mb-4">This action will:</p>
+                <ul className="list-disc list-inside text-theme-muted mb-4 space-y-1">
+                  <li>Clear all saved server configurations</li>
+                  <li>Reset all format templates</li>
+                  <li>Clear saved library sections</li>
+                  <li>Return to the initial setup screen</li>
+                </ul>
+                <ThemedButton
+                  onClick={handleReset}
+                  variant="danger"
+                  icon={resetConfirm ? Icons.AlertOctagon : Icons.RefreshCw}
+                >
+                  {resetConfirm
+                    ? "Confirm Reset (This cannot be undone)"
+                    : "Reset All Settings"}
+                </ThemedButton>
+              </div>
             </div>
-          </div>
+          </ThemedCard>
         );
 
       default:
@@ -415,49 +476,33 @@ const Settings = ({ onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-4xl h-[600px] bg-modal border border-gray-700/50 rounded-xl shadow-xl shadow-accent/10 overflow-hidden flex flex-col">
-        {/* Header - black with transparency */}
-        <div className="bg-black/80 backdrop-blur-sm border-b border-gray-700/50 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-2xl font-semibold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-            Settings
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white rounded-full p-2 hover:bg-gray-700/50 transition-colors"
-          >
-            <Icons.X size={20} />
-          </button>
-        </div>
-
-        {/* Content with Sidebar */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar */}
-          <div className="w-64 bg-gray-900/50 border-r border-gray-700/50 overflow-y-auto">
-            <div className="py-2">
-              {menuItems.map((item) => (
-                <SidebarItem
-                  key={item.id}
-                  icon={item.icon}
-                  label={item.label}
-                  active={activeSection === item.id}
-                  onClick={() => setActiveSection(item.id)}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Main Content - fixed height with scrolling */}
-          <div
-            className="flex-1 p-6 overflow-y-auto"
-            style={{ height: "525px" }}
-          >
-            {renderContent()}
-          </div>
-        </div>
+    <div className="container mx-auto px-4 py-6">
+      <div className="mb-6">
+        <h2 className="text-2xl font-semibold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+          Settings
+        </h2>
+        <p className="text-theme-muted">
+          Configure your dashboard preferences and server connections
+        </p>
       </div>
+
+      {/* Tabs Navigation */}
+      <div className="flex gap-2 overflow-x-auto pb-2 mb-6 scrollbar-hide">
+        {tabs.map((tab) => (
+          <SettingsTab
+            key={tab.id}
+            icon={tab.icon}
+            label={tab.label}
+            active={activeTab === tab.id}
+            onClick={() => setActiveTab(tab.id)}
+          />
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      {renderTabContent()}
     </div>
   );
 };
 
-export default Settings;
+export default SettingsPage;

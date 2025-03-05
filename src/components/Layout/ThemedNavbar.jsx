@@ -1,18 +1,21 @@
-import React, { useState } from "react";
+import React from "react";
+import { useNavigate } from "react-router-dom";
 import { useTheme } from "../../context/ThemeContext";
-import UpdatedThemeToggle from "../common/UpdatedThemeToggle";
-import Settings from "../Settings/Settings";
+import { useConfig } from "../../context/ConfigContext";
+import ThemeToggle from "../common/ThemeToggle";
+import ServiceStatusBadge from "./ServiceStatusBadge";
 import * as Icons from "lucide-react";
-import { appVersion } from "../../../version";
+import { appVersion } from "../../../version.js";
 
 /**
  * A navbar component that changes color based on the current accent theme
  */
 const ThemedNavbar = () => {
+  const navigate = useNavigate();
   const { accentColor } = useTheme();
-  const [showSettings, setShowSettings] = useState(false);
+  const { config } = useConfig();
 
-  // Map accent colors to their RGB values for background gradient - UPDATED NAMES
+  // Map accent colors to their RGB values for background gradient
   const accentColorMap = {
     purple: "167, 139, 250", // Renamed from default
     grey: "220, 220, 220", // Renamed from light
@@ -25,71 +28,57 @@ const ThemedNavbar = () => {
 
   const accentRgb = accentColorMap[accentColor] || accentColorMap.purple;
 
+  // Navigate to settings page
+  const handleSettingsClick = () => {
+    navigate("/settings");
+  };
+
   return (
-    <>
-      <header
-        className={`sticky top-0 z-50 w-full border-b border-gray-800/50 
-          bg-gradient-to-r from-[rgba(${accentRgb},0.1)] to-[rgba(${accentRgb},0.05)]
-          backdrop-blur-sm transition-colors duration-300`}
-      >
-        <div className="flex h-16 items-center justify-between px-4 md:px-6">
-          {/* Logo and Title */}
-          <div className="flex items-center gap-2">
-            <div
-              className="flex h-10 w-10 items-center justify-center rounded-lg"
-              style={{
-                background: `linear-gradient(135deg, rgba(${accentRgb}, 0.2) 0%, rgba(${accentRgb}, 0.1) 100%)`,
-                border: `1px solid rgba(${accentRgb}, 0.3)`,
-              }}
-            >
-              <Icons.LayoutGrid className="text-accent-base" size={22} />
-            </div>
-            <span className="hidden text-xl font-semibold text-white md:inline-block">
-              Plex &amp; Tautulli Dashboard
-            </span>
-            <span className="text-xs bg-accent-light/30 text-accent-base px-2 py-1 rounded-md">
-              {appVersion}
-            </span>
+    <header
+      className={`sticky top-0 z-50 w-full border-b border-gray-800/50 
+        bg-gradient-to-r from-[rgba(${accentRgb},0.1)] to-[rgba(${accentRgb},0.05)]
+        backdrop-blur-sm transition-colors duration-300`}
+    >
+      <div className="flex h-16 items-center justify-between px-4 md:px-6">
+        {/* Logo and Title */}
+        <div className="flex items-center gap-2">
+          <div
+            className="flex h-10 w-10 items-center justify-center rounded-lg"
+            style={{
+              background: `linear-gradient(135deg, rgba(${accentRgb}, 0.2) 0%, rgba(${accentRgb}, 0.1) 100%)`,
+              border: `1px solid rgba(${accentRgb}, 0.3)`,
+            }}
+          >
+            <Icons.LayoutGrid className="text-accent-base" size={22} />
           </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2">
-            <button
-              className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-sm font-medium 
-                text-white bg-accent-light/20 hover:bg-accent-light/30 
-                border border-accent/20 transition-colors"
-            >
-              <Icons.Server className="mr-1.5" size={16} />
-              Plex
-            </button>
-            <button
-              className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-sm font-medium 
-                text-white bg-accent-light/20 hover:bg-accent-light/30 
-                border border-accent/20 transition-colors"
-            >
-              <Icons.Database className="mr-1.5" size={16} />
-              Tautulli
-            </button>
-            {/* Settings Icon Button */}
-            <button
-              onClick={() => setShowSettings(true)}
-              className="text-gray-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-gray-700/50"
-              title="Settings"
-            >
-              <Icons.Settings size={20} />
-            </button>
-            <UpdatedThemeToggle variant="full" showAccent={true} />
-          </div>
+          <span className="hidden text-xl font-semibold text-white md:inline-block">
+            Plex &amp; Tautulli Dashboard
+          </span>
+          <span className="text-xs bg-accent-light/30 text-accent-base px-2 py-1 rounded-md">
+            {appVersion}
+          </span>
         </div>
-      </header>
 
-      {/* Settings Modal */}
-      {showSettings && (
-        <div className="fixed inset-0 z-50">
-          <Settings onClose={() => setShowSettings(false)} />
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2">
+          {/* Plex Status Badge */}
+          <ServiceStatusBadge
+            type="plex"
+            url={config?.plexUrl}
+            token={config?.plexToken}
+          />
+
+          {/* Tautulli Status Badge */}
+          <ServiceStatusBadge
+            type="tautulli"
+            url={config?.tautulliUrl}
+            apiKey={config?.tautulliApiKey}
+          />
+
+          <ThemeToggle variant="full" showAccent={true} />
         </div>
-      )}
-    </>
+      </div>
+    </header>
   );
 };
 

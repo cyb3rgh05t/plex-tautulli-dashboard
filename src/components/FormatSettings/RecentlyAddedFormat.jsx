@@ -5,7 +5,16 @@ import { useQuery } from "react-query";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { useConfig } from "../../context/ConfigContext";
-import { Trash2, Code, Plus, Variable, AlertCircle } from "lucide-react";
+import {
+  Trash2,
+  Code,
+  Plus,
+  Variable,
+  AlertCircle,
+  Edit,
+  Save,
+  X,
+} from "lucide-react";
 import { formatDuration } from "./duration-formatter";
 import ThemedButton from "../common/ThemedButton";
 import ThemedCard from "../common/ThemedCard";
@@ -133,7 +142,7 @@ const VariableButton = ({ variable, onClick }) => (
   </button>
 );
 
-const FormatCard = ({ format, onDelete, previewValue, sections }) => {
+const FormatCard = ({ format, onDelete, onEdit, previewValue, sections }) => {
   // Get section name if sectionId is not "all"
   const getSectionName = () => {
     if (format.sectionId === "all" || !format.sectionId) {
@@ -158,7 +167,13 @@ const FormatCard = ({ format, onDelete, previewValue, sections }) => {
   };
 
   return (
-    <ThemedCard className="p-4" isInteractive hasBorder useAccentBorder={true}>
+    <ThemedCard
+      id={`format-card-${format.name}`}
+      className="p-4"
+      isInteractive
+      hasBorder
+      useAccentBorder={true}
+    >
       <div className="flex justify-between items-center mb-3">
         <div>
           <h4 className="text-white font-medium">{format.name}</h4>
@@ -166,13 +181,22 @@ const FormatCard = ({ format, onDelete, previewValue, sections }) => {
             Applied to: {getSectionName()}
           </p>
         </div>
-        <ThemedButton
-          variant="ghost"
-          size="sm"
-          icon={Icons.Trash2}
-          onClick={() => onDelete(format)}
-          className="text-red-400 hover:bg-red-500/10"
-        />
+        <div className="flex gap-2">
+          <ThemedButton
+            onClick={() => onEdit(format)}
+            variant="ghost"
+            size="sm"
+            icon={Edit}
+            className="text-accent-base hover:text-accent-hover hover:bg-accent-light/20"
+          />
+          <ThemedButton
+            variant="ghost"
+            size="sm"
+            icon={Trash2}
+            onClick={() => onDelete(format)}
+            className="text-red-400 hover:bg-red-500/10"
+          />
+        </div>
       </div>
       <div className="space-y-3">
         <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
@@ -359,11 +383,32 @@ const RecentlyAddedFormat = () => {
   const [error, setError] = useState(null);
   const [validationErrors, setValidationErrors] = useState(null);
   const templateInputRef = useRef(null);
+  const formRef = useRef(null);
+  const scrollPositionRef = useRef(0);
+
+  // New state for edit mode
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingFormatId, setEditingFormatId] = useState(null);
+
+  // Save scroll position helper
+  const saveScrollPosition = () => {
+    scrollPositionRef.current = window.scrollY;
+  };
+
+  // Restore scroll position helper
+  const restoreScrollPosition = () => {
+    setTimeout(() => {
+      window.scrollTo({
+        top: scrollPositionRef.current,
+        behavior: "auto", // Use auto instead of smooth to prevent visible scrolling
+      });
+    }, 100);
+  };
 
   // Fetch sections
   const fetchSections = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/sections`);
+      const response = await axios.get(`/api/sections`);
       const fetchedSections = response.data.sections || [];
 
       // Map sections to ensure they have the required properties
@@ -392,7 +437,7 @@ const RecentlyAddedFormat = () => {
   const fetchRecentMedia = async (sections) => {
     setIsLoading(true);
     try {
-      const configResponse = await fetch(`${API_BASE_URL}/api/config`);
+      const configResponse = await fetch(`/api/config`);
       const config = await configResponse.json();
 
       const typeMap = {
@@ -425,17 +470,14 @@ const RecentlyAddedFormat = () => {
 
       const mediaPromises = filteredSections.map(async (section) => {
         try {
-          const response = await axios.get(
-            `${API_BASE_URL}/api/tautulli/api/v2`,
-            {
-              params: {
-                apikey: config.tautulliApiKey,
-                cmd: "get_recently_added",
-                section_id: section.section_id,
-                count: 10,
-              },
-            }
-          );
+          const response = await axios.get(`/api/tautulli/api/v2`, {
+            params: {
+              apikey: config.tautulliApiKey,
+              cmd: "get_recently_added",
+              section_id: section.section_id,
+              count: 10,
+            },
+          });
 
           const mediaItems =
             response.data?.response?.data?.recently_added || [];
@@ -477,16 +519,13 @@ const RecentlyAddedFormat = () => {
 
       const metadataPromises = media.map(async (item) => {
         try {
-          const response = await axios.get(
-            `${API_BASE_URL}/api/tautulli/api/v2`,
-            {
-              params: {
-                apikey: config.tautulliApiKey,
-                cmd: "get_metadata",
-                rating_key: item.rating_key,
-              },
-            }
-          );
+          const response = await axios.get(`/api/tautulli/api/v2`, {
+            params: {
+              apikey: config.tautulliApiKey,
+              cmd: "get_metadata",
+              rating_key: item.rating_key,
+            },
+          });
 
           return {
             rating_key: item.rating_key,
@@ -600,10 +639,74 @@ const RecentlyAddedFormat = () => {
     }
   };
 
+  // Handle edit button click
+  const handleEditFormat = (format) => {
+    // Save current scroll position
+    saveScrollPosition();
+
+    // Set form values from the format
+    setNewFormat({
+      name: format.name,
+      template: format.template,
+      sectionId: format.sectionId || "all",
+      type: format.type,
+    });
+    setIsEditing(true);
+    setEditingFormatId({
+      name: format.name,
+      type: format.type,
+      sectionId: format.sectionId,
+    });
+
+    // Scroll to form and focus the template input
+    setTimeout(() => {
+      if (formRef.current) {
+        formRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+      if (templateInputRef.current) {
+        templateInputRef.current.focus();
+      }
+    }, 100);
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    // Save current scroll position
+    saveScrollPosition();
+
+    setNewFormat({
+      name: "",
+      template: "",
+      type: activeMediaType,
+      sectionId: "all",
+    });
+    setIsEditing(false);
+    setEditingFormatId(null);
+    setValidationErrors(null);
+
+    // Restore scroll position
+    restoreScrollPosition();
+  };
+
   // Validate a format to check for duplicates
   const validateFormat = (formatToCheck, currentFormats) => {
+    // If editing, ignore the format with the same ID
+    const formatsToCheck = isEditing
+      ? currentFormats.filter(
+          (f) =>
+            !(
+              f.name === editingFormatId.name &&
+              f.type === editingFormatId.type &&
+              f.sectionId === editingFormatId.sectionId
+            )
+        )
+      : currentFormats;
+
     // Allow duplicate names for different sections - only check within same sectionId
-    const duplicateFormat = currentFormats.find(
+    const duplicateFormat = formatsToCheck.find(
       (f) =>
         f.name === formatToCheck.name &&
         f.type === formatToCheck.type &&
@@ -620,9 +723,12 @@ const RecentlyAddedFormat = () => {
     return { valid: true };
   };
 
-  const handleAddFormat = async () => {
+  const handleAddOrUpdateFormat = async () => {
     if (newFormat.name && newFormat.template && newFormat.type) {
-      const newFormatItem = {
+      // Save current scroll position
+      saveScrollPosition();
+
+      const formatItem = {
         name: newFormat.name,
         template: newFormat.template,
         type: activeMediaType,
@@ -633,22 +739,42 @@ const RecentlyAddedFormat = () => {
         setValidationErrors(null);
 
         // Get current formats
-        const response = await fetch(`${API_BASE_URL}/api/formats`);
+        const response = await fetch(`/api/formats`);
         const data = await response.json();
         const currentFormats = data.recentlyAdded || [];
 
-        // Validate the new format
-        const validation = validateFormat(newFormatItem, currentFormats);
+        // Validate the format
+        const validation = validateFormat(formatItem, currentFormats);
         if (!validation.valid) {
           setValidationErrors(validation.error);
           return;
         }
 
-        // Create a new array of formats
-        const updatedFormats = [...currentFormats, newFormatItem];
+        // Create a new array of formats - either update existing or add new
+        let updatedFormats;
+        let successMessage;
+
+        if (isEditing) {
+          // Update existing format
+          updatedFormats = currentFormats.map((format) => {
+            if (
+              format.name === editingFormatId.name &&
+              format.type === editingFormatId.type &&
+              format.sectionId === editingFormatId.sectionId
+            ) {
+              return formatItem;
+            }
+            return format;
+          });
+          successMessage = `Format updated successfully`;
+        } else {
+          // Add new format
+          updatedFormats = [...currentFormats, formatItem];
+          successMessage = `New format created successfully`;
+        }
 
         // Save formats
-        const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
+        const saveResponse = await fetch(`/api/formats`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -666,15 +792,20 @@ const RecentlyAddedFormat = () => {
         // Update local state with formats of the current media type
         setFormats(updatedFormats.filter((f) => f.type === activeMediaType));
 
-        toast.success(`Format created successfully`);
+        toast.success(successMessage);
 
-        // Reset form
+        // Reset form and editing state
         setNewFormat({
           name: "",
           template: "",
           type: activeMediaType,
           sectionId: "all",
         });
+        setIsEditing(false);
+        setEditingFormatId(null);
+
+        // Restore scroll position
+        restoreScrollPosition();
       } catch (error) {
         console.error("Failed to save format:", error);
         toast.error("Failed to save format");
@@ -683,9 +814,12 @@ const RecentlyAddedFormat = () => {
   };
 
   const handleDeleteFormat = async (formatToDelete) => {
+    // Save current scroll position
+    saveScrollPosition();
+
     try {
       // Get current formats
-      const response = await fetch(`${API_BASE_URL}/api/formats`);
+      const response = await fetch(`/api/formats`);
       const data = await response.json();
       const currentFormats = data.recentlyAdded || [];
 
@@ -700,7 +834,7 @@ const RecentlyAddedFormat = () => {
       );
 
       // Save updated formats
-      const saveResponse = await fetch(`${API_BASE_URL}/api/formats`, {
+      const saveResponse = await fetch(`/api/formats`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -718,7 +852,20 @@ const RecentlyAddedFormat = () => {
       // Update local state
       setFormats(updatedFormats.filter((f) => f.type === activeMediaType));
 
+      // If currently editing this format, reset the form
+      if (
+        isEditing &&
+        editingFormatId.name === formatToDelete.name &&
+        editingFormatId.type === formatToDelete.type &&
+        editingFormatId.sectionId === formatToDelete.sectionId
+      ) {
+        handleCancelEdit();
+      }
+
       toast.success(`Format deleted successfully`);
+
+      // Restore scroll position
+      restoreScrollPosition();
     } catch (error) {
       console.error("Failed to delete format:", error);
       toast.error("Failed to delete format");
@@ -729,7 +876,7 @@ const RecentlyAddedFormat = () => {
   useEffect(() => {
     const fetchFormats = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/formats`);
+        const response = await fetch(`/api/formats`);
         const data = await response.json();
 
         // Filter formats to only show current media type
@@ -792,6 +939,10 @@ const RecentlyAddedFormat = () => {
         setActiveMediaType(type);
         setNewFormat((prev) => ({ ...prev, type }));
         setValidationErrors(null);
+        // Reset edit mode when changing media type
+        if (isEditing) {
+          handleCancelEdit();
+        }
       }}
       className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
         activeMediaType === type
@@ -855,14 +1006,32 @@ const RecentlyAddedFormat = () => {
         </div>
       </ThemedCard>
 
-      {/* Create New Format Section */}
+      {/* Create/Edit Format Section */}
       <ThemedCard
-        title="Create New Format"
-        icon={Icons.PlusCircle}
+        title={isEditing ? "Edit Format" : "Create New Format"}
+        icon={isEditing ? Icons.Edit2 : Icons.PlusCircle}
         className="p-6"
         useAccentBorder={true}
       >
-        <div className="space-y-4">
+        {isEditing && (
+          <div className="bg-accent-light/20 border border-accent-base/30 rounded-lg mb-4 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Icons.Info size={18} className="text-accent-base" />
+              <p className="text-sm text-white">
+                You are editing format{" "}
+                <span className="font-medium">"{editingFormatId?.name}"</span>
+              </p>
+            </div>
+          </div>
+        )}
+        <form
+          ref={formRef}
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleAddOrUpdateFormat();
+          }}
+          className="space-y-4"
+        >
           <div>
             <label className="block text-theme font-medium mb-2">
               Format Name
@@ -939,46 +1108,71 @@ const RecentlyAddedFormat = () => {
 
           {/* Validation Error */}
           {validationErrors && (
-            <ThemedCard
-              className="bg-red-500/10 border-red-500/20 p-3"
-              hasBorder={false}
-            >
+            <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-3">
               <div className="flex items-center gap-2 text-red-400">
                 <AlertCircle size={16} />
                 <p className="text-sm">{validationErrors}</p>
               </div>
-            </ThemedCard>
+            </div>
           )}
 
           {/* Live Preview */}
           {newFormat.template && (
-            <ThemedCard className="p-4" hasBorder useAccentBorder={true}>
+            <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700/50">
               <label className="block text-theme font-medium mb-2">
                 Preview
               </label>
               <code className="text-accent-base font-mono block">
                 {templatePreview || "Invalid template"}
               </code>
-            </ThemedCard>
+            </div>
           )}
 
-          <ThemedButton
-            onClick={handleAddFormat}
-            disabled={!newFormat.name || !newFormat.template}
-            variant="accent"
-            icon={Plus}
-          >
-            Add Format
-          </ThemedButton>
-        </div>
+          {/* Current Media Type Display */}
+          <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+            <div className="flex items-center gap-2">
+              <Icons.Film className="text-accent-base" size={16} />
+              <span className="text-theme-muted">Media Type:</span>
+              <span className="font-medium text-accent-base">
+                {activeMediaType.charAt(0).toUpperCase() +
+                  activeMediaType.slice(1)}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <ThemedButton
+              type="submit"
+              variant="accent"
+              disabled={!newFormat.name || !newFormat.template}
+              icon={isEditing ? Save : Plus}
+            >
+              {isEditing ? "Save Changes" : "Add Format"}
+            </ThemedButton>
+
+            {isEditing && (
+              <ThemedButton
+                type="button"
+                onClick={handleCancelEdit}
+                variant="ghost"
+                icon={X}
+              >
+                Cancel
+              </ThemedButton>
+            )}
+          </div>
+        </form>
       </ThemedCard>
 
       {/* Existing Formats Section */}
       {formats.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">
-              Existing Formats
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Icons.List className="text-accent-base" size={18} />
+              {activeMediaType.charAt(0).toUpperCase() +
+                activeMediaType.slice(1)}{" "}
+              Formats
             </h3>
             <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-gray-700/50">
               <span className="text-sm font-medium text-theme-muted">
@@ -986,25 +1180,28 @@ const RecentlyAddedFormat = () => {
               </span>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-4">
-            {formats.map((format, index) => {
-              const previewData = getPreviewData(format.sectionId || "all");
-              const previewValue = processTemplate(format.template, {
-                ...previewData,
-                mediaType: activeMediaType,
-              });
+          <ThemedCard hasBorder={false} className="p-0">
+            <div className="grid grid-cols-1 gap-4 p-4">
+              {formats.map((format, index) => {
+                const previewData = getPreviewData(format.sectionId || "all");
+                const previewValue = processTemplate(format.template, {
+                  ...previewData,
+                  mediaType: activeMediaType,
+                });
 
-              return (
-                <FormatCard
-                  key={`${format.name}-${format.sectionId}-${index}`}
-                  format={format}
-                  onDelete={handleDeleteFormat}
-                  previewValue={previewValue}
-                  sections={sections}
-                />
-              );
-            })}
-          </div>
+                return (
+                  <FormatCard
+                    key={`${format.name}-${format.sectionId}-${index}`}
+                    format={format}
+                    onDelete={handleDeleteFormat}
+                    onEdit={handleEditFormat}
+                    previewValue={previewValue}
+                    sections={sections}
+                  />
+                );
+              })}
+            </div>
+          </ThemedCard>
         </div>
       )}
     </div>
