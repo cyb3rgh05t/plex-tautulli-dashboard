@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import axios from "axios";
 import ThemedButton from "../common/ThemedButton";
 import ThemedCard from "../common/ThemedCard";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
 // Tab component for cache type selection
 const CacheTypeTab = ({ active, onClick, label, icon: Icon, count }) => (
@@ -57,7 +58,7 @@ const CacheManager = () => {
         const usersResponse = await axios.get(`/api/users?count=1`);
         historyCacheSize = usersResponse.data?.cache?.total || 0;
       } catch (error) {
-        console.error("Failed to fetch user history cache stats:", error);
+        logError("Failed to fetch user history cache stats:", error);
       }
 
       // 2. For media cache, try different media types (movies, shows, music)
@@ -87,7 +88,7 @@ const CacheManager = () => {
               recentResponse.data?._cache;
 
             if (cacheInfo) {
-              console.log(`Cache info for ${type}:`, cacheInfo);
+              logInfo(`Cache info for ${type}:`, cacheInfo);
             }
           } catch (err) {
             // Ignore errors on individual media type fetches
@@ -101,7 +102,7 @@ const CacheManager = () => {
           mediaCacheSize = 3;
         }
       } catch (error) {
-        console.error("Failed to fetch media cache stats:", error);
+        logError("Failed to fetch media cache stats:", error);
       }
 
       // 3. For metadata cache, we can estimate based on typical usage patterns
@@ -120,7 +121,7 @@ const CacheManager = () => {
           metadataCacheSize = Math.max(5, historyCacheSize * 2);
         }
       } catch (error) {
-        console.error("Failed to fetch metadata cache stats:", error);
+        logError("Failed to fetch metadata cache stats:", error);
         // Fallback to a reasonable estimate
         metadataCacheSize = 10;
       }
@@ -153,7 +154,7 @@ const CacheManager = () => {
         toast.success("Cache statistics refreshed");
       }
     } catch (error) {
-      console.error("Failed to fetch cache statistics:", error);
+      logError("Failed to fetch cache statistics:", error);
       toast.error("Failed to fetch cache statistics");
     } finally {
       setRefreshing(false);
@@ -211,7 +212,7 @@ const CacheManager = () => {
         throw new Error("Failed to clear cache");
       }
     } catch (error) {
-      console.error("Failed to clear cache:", error);
+      logError("Failed to clear cache:", error);
       toast.error(error.response?.data?.error || "Failed to clear cache");
     } finally {
       setLoading(false);

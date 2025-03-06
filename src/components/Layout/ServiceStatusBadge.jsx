@@ -7,6 +7,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import axios from "axios";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
 /**
  * A badge component that displays the connection status of a service
@@ -75,7 +76,7 @@ const ServiceStatusBadge = ({ type, url, apiKey, token }) => {
         setErrorMessage("Unknown response from server");
       }
     } catch (error) {
-      console.error(`Failed to check ${type} status:`, error);
+      logError(`Failed to check ${type} status:`, error);
       setStatus("offline");
       setErrorMessage(error.message || "Connection error");
     } finally {

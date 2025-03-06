@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import * as Icons from "lucide-react";
 import ThemedButton from "../common/ThemedButton";
 import ThemedCard from "../common/ThemedCard";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
 const BackupSettings = () => {
   const { config } = useConfig();
@@ -62,7 +63,7 @@ const BackupSettings = () => {
         },
       });
     } catch (error) {
-      console.error("Backup failed:", error);
+      logError("Backup failed:", error);
       toast.error("Failed to create backup", {
         style: {
           border: "1px solid #DC2626",
@@ -133,7 +134,7 @@ const BackupSettings = () => {
       // Optional: Refresh the page to apply restored settings
       window.location.reload();
     } catch (error) {
-      console.error("Restore failed:", error);
+      logError("Restore failed:", error);
       toast.error("Failed to restore settings", {
         style: {
           border: "1px solid #DC2626",

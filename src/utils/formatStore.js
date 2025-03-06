@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { logError, logInfo, logDebug } from "./logger.js";
 
 // Get directory name in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -17,9 +18,9 @@ const ensureFormatsFileExists = () => {
   if (!fs.existsSync(configDir)) {
     try {
       fs.mkdirSync(configDir, { recursive: true });
-      console.log(`Created configs directory at: ${configDir}`);
+      logInfo(`Created configs directory at: ${configDir}`);
     } catch (error) {
-      console.error("Failed to create configs directory:", error);
+      logError("Failed to create configs directory:", error);
     }
   }
 
@@ -35,9 +36,9 @@ const ensureFormatsFileExists = () => {
       };
 
       fs.writeFileSync(FORMATS_FILE, JSON.stringify(defaultFormats, null, 2));
-      console.log(`Created formats file at: ${FORMATS_FILE}`);
+      logInfo(`Created formats file at: ${FORMATS_FILE}`);
     } catch (error) {
-      console.error("Failed to create formats file:", error);
+      logError("Failed to create formats file:", error);
     }
   }
 };
@@ -58,7 +59,7 @@ const getFormats = () => {
       libraries: formats.libraries || [], // Include libraries in the returned object
     };
   } catch (error) {
-    console.error("Error reading formats:", error);
+    logError("Error reading formats:", error);
     return {
       downloads: [],
       recentlyAdded: [],
@@ -81,9 +82,16 @@ const saveFormats = (formats) => {
     };
 
     fs.writeFileSync(FORMATS_FILE, JSON.stringify(updatedFormats, null, 2));
+    logInfo("Format settings saved successfully", {
+      downloads: updatedFormats.downloads.length,
+      recentlyAdded: updatedFormats.recentlyAdded.length,
+      users: updatedFormats.users.length,
+      sections: updatedFormats.sections.length,
+      libraries: updatedFormats.libraries.length,
+    });
     return true;
   } catch (error) {
-    console.error("Error saving formats:", error);
+    logError("Error saving formats:", error);
     return false;
   }
 };

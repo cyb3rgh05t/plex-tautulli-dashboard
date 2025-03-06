@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { logError, logInfo, logDebug, logWarn } from "./utils/logger";
 import {
   HashRouter as Router,
   Routes,
@@ -103,7 +104,7 @@ const SetupCompletionHandler = ({ onComplete }) => {
 
           if (onComplete) onComplete();
         } catch (error) {
-          console.error("Error prefetching data:", error);
+          logError("Error prefetching data:", error);
           if (onComplete) onComplete();
         }
       };
@@ -151,7 +152,7 @@ const ProtectedRoute = ({ children }) => {
             }),
           ]);
         } catch (error) {
-          console.error("Error preloading data:", error);
+          logError("Error preloading data:", error);
         } finally {
           setIsPreloading(false);
         }
@@ -237,7 +238,7 @@ const App = () => {
   // Add error handler
   React.useEffect(() => {
     const handleError = (event) => {
-      console.error("Global error caught:", event.error);
+      logError("Global error caught:", event.error);
       setError(event.error?.message || "An unexpected error occurred");
     };
 

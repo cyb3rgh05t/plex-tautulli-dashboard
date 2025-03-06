@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import * as Icons from "lucide-react";
 import ThemedButton from "../common/ThemedButton";
 import axios from "axios";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
@@ -44,7 +45,7 @@ const MediaModal = ({ media, onClose, apiKey }) => {
           setMediaDetails(media); // Use original media data as fallback
         }
       } catch (error) {
-        console.error("Error fetching media details:", error);
+        logError("Error fetching media details:", error);
         setMediaDetails(media); // Use original media data as fallback
       } finally {
         setIsLoading(false);

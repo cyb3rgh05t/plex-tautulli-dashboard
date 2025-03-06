@@ -1,5 +1,3 @@
-// with theme styling applied
-
 import React, { useState } from "react";
 import DownloadsFormat from "./DownloadsFormat";
 import RecentlyAddedFormat from "./RecentlyAddedFormat";
@@ -8,6 +6,7 @@ import SectionsFormat from "./SectionsFormat";
 import LibrariesFormat from "./LibrariesFormat";
 import ThemedCard from "../common/ThemedCard";
 import * as Icons from "lucide-react";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
 const SubTabButton = ({ active, onClick, children }) => (
   <button

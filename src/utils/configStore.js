@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { logError, logInfo, logDebug } from "./logger.js";
 
 // Get directory name in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -25,9 +26,9 @@ const ensureConfigFileExists = () => {
   if (!fs.existsSync(configDir)) {
     try {
       fs.mkdirSync(configDir, { recursive: true });
-      console.log(`Created configs directory at: ${configDir}`);
+      logInfo(`Created configs directory at: ${configDir}`);
     } catch (error) {
-      console.error("Failed to create configs directory:", error);
+      logError("Failed to create configs directory:", error);
     }
   }
 
@@ -35,9 +36,9 @@ const ensureConfigFileExists = () => {
   if (!fs.existsSync(CONFIG_FILE)) {
     try {
       fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
-      console.log(`Created config file at: ${CONFIG_FILE}`);
+      logInfo(`Created config file at: ${CONFIG_FILE}`);
     } catch (error) {
-      console.error("Failed to create config file:", error);
+      logError("Failed to create config file:", error);
     }
   }
 };
@@ -61,19 +62,19 @@ const loadConfig = () => {
         tautulliApiKey: loadedConfig.tautulliApiKey || null,
       };
 
-      console.log("Configuration loaded:", {
+      logInfo("Configuration loaded:", {
         plexUrl: config.plexUrl ? "[REDACTED]" : "Not set",
         tautulliUrl: config.tautulliUrl ? "[REDACTED]" : "Not set",
         hasPlexToken: !!config.plexToken,
         hasTautulliKey: !!config.tautulliApiKey,
       });
     } else {
-      console.log("No existing configuration found. Using default.");
+      logInfo("No existing configuration found. Using default.");
       // Create an empty config file if it doesn't exist
       saveConfig();
     }
   } catch (error) {
-    console.error("Error loading configuration:", error);
+    logError("Error loading configuration:", error);
     // Fallback to default config
     config = {
       plexUrl: null,
@@ -101,14 +102,14 @@ const saveConfig = () => {
       flag: "w", // overwrite
     });
 
-    console.log("Configuration saved:", {
+    logInfo("Configuration saved:", {
       plexUrl: configToSave.plexUrl ? "[REDACTED]" : "Not set",
       tautulliUrl: configToSave.tautulliUrl ? "[REDACTED]" : "Not set",
       hasPlexToken: !!configToSave.plexToken,
       hasTautulliKey: !!configToSave.tautulliApiKey,
     });
   } catch (error) {
-    console.error("Error saving configuration:", error);
+    logError("Error saving configuration:", error);
     throw error; // Rethrow to allow caller to handle
   }
 };
@@ -127,7 +128,7 @@ const setConfig = (newConfig) => {
     // Save the updated configuration
     saveConfig();
   } catch (error) {
-    console.error("Error updating configuration:", error);
+    logError("Error updating configuration:", error);
     throw error;
   }
 };

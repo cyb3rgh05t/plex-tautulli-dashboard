@@ -8,6 +8,7 @@ import ThemeToggleFooter from "./ThemedToggleFooter";
 import * as Icons from "lucide-react";
 import { appVersion } from "../../../version.js";
 import axios from "axios";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
 /**
  * Status indicator component for the footer
@@ -107,7 +108,7 @@ const ThemedDashboardLayout = () => {
         return response.data?.status || "unknown";
       }
     } catch (error) {
-      console.error(`Error checking ${service} status:`, error);
+      logError(`Error checking ${service} status:`, error);
       return "offline";
     }
 
@@ -130,7 +131,7 @@ const ThemedDashboardLayout = () => {
       setTautulli(tautulliStatus);
       setLastChecked(new Date());
     } catch (error) {
-      console.error("Error checking services:", error);
+      logError("Error checking services:", error);
     } finally {
       setIsChecking(false);
     }

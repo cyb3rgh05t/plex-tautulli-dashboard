@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
 import { useTheme } from "../../context/ThemeContext";
-import { logError } from "../../utils/logger";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 import * as Icons from "lucide-react";
 import ThemedCard from "../common/ThemedCard";
 import ThemedButton from "../common/ThemedButton";
@@ -205,7 +205,7 @@ const PlexActivity = () => {
 
       return processedActivities;
     } catch (error) {
-      console.error("Error fetching Plex activities:", error);
+      logError("Error fetching Plex activities:", error);
       throw error;
     }
   };

@@ -5,7 +5,6 @@ import { useConfig } from "../../context/ConfigContext";
 import { useTheme } from "../../context/ThemeContext";
 import { testPlexConnection } from "../../services/plexService";
 import { testTautulliConnection } from "../../services/tautulliService";
-import { logInfo, logError } from "../../utils/logger";
 import { FaExternalLinkAlt, FaGithub } from "react-icons/fa";
 import * as Icons from "lucide-react";
 import toast from "react-hot-toast";
@@ -13,6 +12,7 @@ import BackdropSlideshow from "./BackdropSlideshow";
 import LoadingScreen from "../common/LoadingScreen";
 import ThemedButton from "../common/ThemedButton";
 import ThemeToggle from "../common/ThemeToggle";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
 const API_BASE_URL = "";
 
@@ -103,7 +103,7 @@ const SetupWizard = () => {
           queryClient.prefetchQuery("libraries"),
         ]);
       } catch (error) {
-        console.error("Error preloading data:", error);
+        logError("Error preloading data:", error);
       }
 
       // Navigate to the main dashboard
@@ -202,7 +202,7 @@ const SetupWizard = () => {
       // Exit restore mode
       setIsRestoreMode(false);
     } catch (error) {
-      console.error("Restore failed:", error);
+      logError("Restore failed:", error);
       toast.error("Failed to restore from backup: " + error.message, {
         style: {
           border: "1px solid #DC2626",

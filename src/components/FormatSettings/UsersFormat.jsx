@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useConfig } from "../../context/ConfigContext";
-import { logError } from "../../utils/logger";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 import * as Icons from "lucide-react";
 import toast from "react-hot-toast";
 import { formatDuration } from "./duration-formatter";
@@ -318,7 +318,7 @@ const processTemplate = (template, data) => {
           value = combinedData[key] !== undefined ? combinedData[key] : "";
       }
     } catch (error) {
-      console.error(`Error processing variable ${key}:`, error);
+      logError(`Error processing variable ${key}:`, error);
       value = "";
     }
 

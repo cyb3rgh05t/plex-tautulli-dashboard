@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { logError } from "../../utils/logger";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 import toast from "react-hot-toast";
 import ThemedButton from "../common/ThemedButton";
 import ThemedCard from "../common/ThemedCard";
@@ -31,7 +31,7 @@ const formatDate = (timestamp, format = "default") => {
       date = new Date(timestamp);
     }
   } catch (e) {
-    console.error(`Error parsing date: ${timestamp}`, e);
+    logError(`Error parsing date: ${timestamp}`, e);
     return "Invalid Date";
   }
 
@@ -210,7 +210,7 @@ const processTemplate = (template, data) => {
         value = data[key] !== undefined ? data[key] : "";
       }
     } catch (error) {
-      console.error(`Error processing template variable ${key}:`, error);
+      logError(`Error processing template variable ${key}:`, error);
       value = "";
     }
 
@@ -495,9 +495,9 @@ const SectionsFormat = () => {
       });
 
       setSections(processedSections);
-      console.log("Processed sections:", processedSections);
+      logInfo("Processed sections:", processedSections);
     } catch (error) {
-      console.error("Failed to fetch sections:", error);
+      logError("Failed to fetch sections:", error);
     }
   };
 

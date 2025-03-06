@@ -3,6 +3,7 @@ import { useQuery } from "react-query";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { useConfig } from "../../context/ConfigContext";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 import {
   Trash2,
   Code,
@@ -253,7 +254,7 @@ const formatDate = (timestamp, format = "default") => {
       date = new Date(timestamp);
     }
   } catch (e) {
-    console.error(`Error parsing date from timestamp: ${timestamp}`, e);
+    logError(`Error parsing date from timestamp: ${timestamp}`, e);
     return "Invalid Date";
   }
 
@@ -478,7 +479,7 @@ const RecentlyAddedFormat = () => {
       setSections(processedSections);
       return processedSections;
     } catch (error) {
-      console.error("Failed to fetch sections:", error);
+      logError("Failed to fetch sections:", error);
       return [];
     }
   };
@@ -536,7 +537,7 @@ const RecentlyAddedFormat = () => {
             section_id: section.section_id,
           }));
         } catch (error) {
-          console.error(
+          logError(
             `Failed to fetch media for section ${section.section_id}:`,
             error
           );
@@ -549,7 +550,7 @@ const RecentlyAddedFormat = () => {
       setRecentMedia(flattenedMedia);
       return flattenedMedia;
     } catch (error) {
-      console.error("Failed to fetch recent media:", error);
+      logError("Failed to fetch recent media:", error);
       return [];
     } finally {
       setIsLoading(false);
@@ -584,10 +585,7 @@ const RecentlyAddedFormat = () => {
                 ?.video_full_resolution || "Unknown",
           };
         } catch (error) {
-          console.error(
-            `Failed to fetch metadata for ${item.rating_key}:`,
-            error
-          );
+          logError(`Failed to fetch metadata for ${item.rating_key}:`, error);
           return {
             rating_key: item.rating_key,
             video_full_resolution: "Unknown",
@@ -605,7 +603,7 @@ const RecentlyAddedFormat = () => {
 
       setMediaMetadata(metadataMap);
     } catch (error) {
-      console.error("Failed to fetch media metadata:", error);
+      logError("Failed to fetch media metadata:", error);
     } finally {
       setIsLoading(false);
     }
@@ -727,7 +725,7 @@ const RecentlyAddedFormat = () => {
     // Save current scroll position
     saveScrollPosition();
 
-    console.log("Editing format:", format);
+    logInfo("Editing format:", format);
 
     // Normalize the format data to prevent type mismatches
     const normalizedFormat = {
@@ -795,8 +793,8 @@ const RecentlyAddedFormat = () => {
 
   // Validate a format to check for duplicates
   const validateFormat = (formatToCheck, currentFormats) => {
-    console.log("Validating format:", formatToCheck);
-    console.log("Against formats:", currentFormats);
+    logInfo("Validating format:", formatToCheck);
+    logInfo("Against formats:", currentFormats);
 
     // Normalize values for comparison
     const normalizedFormatToCheck = {
@@ -832,7 +830,7 @@ const RecentlyAddedFormat = () => {
             normalizedFormat.sectionId === normalizedEditingId.sectionId;
 
           if (isCurrentlyEditing) {
-            console.log("Excluding current format from validation:", f);
+            logInfo("Excluding current format from validation:", f);
           }
 
           return !isCurrentlyEditing;
@@ -854,7 +852,7 @@ const RecentlyAddedFormat = () => {
         normalizedF.sectionId === normalizedFormatToCheck.sectionId;
 
       if (isDuplicate) {
-        console.log("Found duplicate:", f);
+        logInfo("Found duplicate:", f);
       }
 
       return isDuplicate;
@@ -938,15 +936,13 @@ const RecentlyAddedFormat = () => {
 
         // Clear media cache so that new formats are immediately applied
         try {
-          console.log(
-            "Automatically clearing media cache after format change..."
-          );
+          logInfo("Automatically clearing media cache after format change...");
           await fetch(`/api/clear-cache/media`, {
             method: "POST",
           });
-          console.log("Media cache cleared successfully");
+          logInfo("Media cache cleared successfully");
         } catch (cacheError) {
-          console.error("Failed to clear media cache:", cacheError);
+          logError("Failed to clear media cache:", cacheError);
           // Continue with success flow even if cache clear fails
         }
 
@@ -968,7 +964,7 @@ const RecentlyAddedFormat = () => {
         // Restore scroll position
         restoreScrollPosition();
       } catch (error) {
-        console.error("Failed to save format:", error);
+        logError("Failed to save format:", error);
         toast.error("Failed to save format");
       }
     }
@@ -1012,15 +1008,13 @@ const RecentlyAddedFormat = () => {
 
       // Clear media cache so that format changes are immediately applied
       try {
-        console.log(
-          "Automatically clearing media cache after format deletion..."
-        );
+        logInfo("Automatically clearing media cache after format deletion...");
         await fetch(`/api/clear-cache/media`, {
           method: "POST",
         });
-        console.log("Media cache cleared successfully");
+        logInfo("Media cache cleared successfully");
       } catch (cacheError) {
-        console.error("Failed to clear media cache:", cacheError);
+        logError("Failed to clear media cache:", cacheError);
         // Continue with success flow even if cache clear fails
       }
 
@@ -1042,7 +1036,7 @@ const RecentlyAddedFormat = () => {
       // Restore scroll position
       restoreScrollPosition();
     } catch (error) {
-      console.error("Failed to delete format:", error);
+      logError("Failed to delete format:", error);
       toast.error("Failed to delete format");
     }
   };
@@ -1061,7 +1055,7 @@ const RecentlyAddedFormat = () => {
 
         setFormats(formatsForCurrentType);
       } catch (error) {
-        console.error("Failed to load formats:", error);
+        logError("Failed to load formats:", error);
         toast.error("Failed to load formats");
       }
     };
@@ -1079,7 +1073,7 @@ const RecentlyAddedFormat = () => {
           await fetchMediaMetadata(recentMedia);
         }
       } catch (error) {
-        console.error("Failed to load media data:", error);
+        logError("Failed to load media data:", error);
       }
     };
 

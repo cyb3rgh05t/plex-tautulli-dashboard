@@ -11,7 +11,7 @@ const API_BASE_URL =
  */
 export const safePrefetch = async (queryClient, queryKey, queryFn) => {
   if (!queryFn) {
-    console.error(`Missing queryFn for ${queryKey}`);
+    logError(`Missing queryFn for ${queryKey}`);
     return null;
   }
 

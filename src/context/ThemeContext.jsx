@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
-import { logInfo } from "../utils/logger";
+import { logInfo, logError, logDebug } from "../utils/logger";
 
 // Create context
 const ThemeContext = createContext(null);
@@ -83,7 +83,7 @@ const getStoredTheme = () => {
     const stored = localStorage.getItem(STORAGE_KEYS.THEME);
     return VALID_THEMES.includes(stored) ? stored : DEFAULT_VALUES.THEME;
   } catch (error) {
-    console.error("Error reading theme from localStorage:", error);
+    logError("Error reading theme from localStorage:", error);
     return DEFAULT_VALUES.THEME;
   }
 };
@@ -95,7 +95,7 @@ const getStoredAccent = () => {
       ? stored
       : DEFAULT_VALUES.ACCENT_COLOR;
   } catch (error) {
-    console.error("Error reading accent from localStorage:", error);
+    logError("Error reading accent from localStorage:", error);
     return DEFAULT_VALUES.ACCENT_COLOR;
   }
 };
@@ -105,7 +105,7 @@ const saveToStorage = (key, value) => {
     localStorage.setItem(key, value);
     return true;
   } catch (error) {
-    console.error(`Error saving ${key} to localStorage:`, error);
+    logError(`Error saving ${key} to localStorage:`, error);
     return false;
   }
 };
@@ -130,6 +130,7 @@ export const ThemeProvider = ({ children }) => {
     try {
       // Ensure we're in a browser environment
       if (typeof localStorage === "undefined") {
+        logDebug("localStorage not available, using default theme settings");
         setIsLoading(false);
         return;
       }
@@ -147,7 +148,7 @@ export const ThemeProvider = ({ children }) => {
         accent: storedAccent,
       });
     } catch (error) {
-      console.error("Failed to load theme preferences:", error);
+      logError("Failed to load theme preferences:", error);
     } finally {
       setIsLoading(false);
     }
@@ -158,7 +159,10 @@ export const ThemeProvider = ({ children }) => {
     if (isLoading) return;
 
     // Safety check for browser environment
-    if (typeof document === "undefined") return;
+    if (typeof document === "undefined") {
+      logDebug("Document not available, skipping theme application");
+      return;
+    }
 
     try {
       // Get document HTML and body elements with safety checks
@@ -166,7 +170,7 @@ export const ThemeProvider = ({ children }) => {
       const bodyElement = document.body;
 
       if (!htmlElement || !bodyElement) {
-        console.warn("HTML or Body element not found for theme application");
+        logError("HTML or Body element not found for theme application");
         return;
       }
 
@@ -217,7 +221,7 @@ export const ThemeProvider = ({ children }) => {
 
       logInfo("Applied theme directly", { theme, accentColor });
     } catch (error) {
-      console.error("Failed to apply theme:", error);
+      logError("Failed to apply theme:", error);
     }
   }, [accentColor, isLoading]);
 

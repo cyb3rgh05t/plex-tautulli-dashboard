@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useConfig } from "../../context/ConfigContext";
-import { logError } from "../../utils/logger";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 import * as Icons from "lucide-react";
 import axios from "axios";
 import toast from "react-hot-toast";
@@ -351,9 +351,9 @@ const LibrariesFormat = () => {
       );
 
       setSections(processedSections);
-      console.log("Processed sections:", processedSections);
+      logInfo("Processed sections:", processedSections);
     } catch (error) {
-      console.error("Failed to fetch sections:", error);
+      logError("Failed to fetch sections:", error);
     }
   };
 

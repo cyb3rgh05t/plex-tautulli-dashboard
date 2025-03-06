@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useConfig } from "../../context/ConfigContext";
-import { logError } from "../../utils/logger";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 import * as Icons from "lucide-react";
 import MediaModal from "./MediaModal";
 import ThemedButton from "../common/ThemedButton";
@@ -43,7 +43,7 @@ const MediaCard = ({ media }) => {
           setResolution(videoResolution);
         }
       } catch (error) {
-        console.error("Failed to fetch resolution:", error);
+        logError("Failed to fetch resolution:", error);
       }
     };
 

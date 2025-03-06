@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
-import { logError } from "../../utils/logger";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 import * as Icons from "lucide-react";
 import toast from "react-hot-toast";
 import ThemedCard from "../common/ThemedCard";
@@ -131,7 +131,7 @@ const Libraries = () => {
           setSelectedLibraries(savedIds);
         }
       } catch (error) {
-        console.error("Failed to fetch saved sections:", error);
+        logError("Failed to fetch saved sections:", error);
       }
     };
 
@@ -180,7 +180,7 @@ const Libraries = () => {
 
       return sortedLibraries;
     } catch (error) {
-      console.error("Fetch error:", error);
+      logError("Fetch error:", error);
       throw error;
     }
   };
@@ -201,34 +201,34 @@ const Libraries = () => {
   const handleRefresh = async () => {
     // Prevent multiple refreshes happening at once
     if (isRefreshing) {
-      console.log("Skipping refresh - already in progress");
+      logInfo("Skipping refresh - already in progress");
       return;
     }
 
-    console.log("Starting libraries refresh");
+    logInfo("Starting libraries refresh");
     setIsRefreshing(true);
     try {
       const result = await refetch();
-      console.log("Libraries refresh completed:", {
+      logInfo("Libraries refresh completed:", {
         success: !!result,
         libraryCount: result?.length || 0,
       });
     } catch (err) {
-      console.error("Error refreshing libraries:", err);
+      logError("Error refreshing libraries:", err);
       // Try a direct fetch as fallback if refetch fails
       try {
-        console.log("Attempting direct fetch as fallback");
+        logInfo("Attempting direct fetch as fallback");
         const response = await fetch(`/api/libraries`);
         const data = await response.json();
         if (data && data.libraries) {
-          console.log(
+          logInfo(
             "Direct fetch succeeded with",
             data.libraries.length,
             "libraries"
           );
         }
       } catch (fallbackErr) {
-        console.error("Fallback fetch also failed:", fallbackErr);
+        logError("Fallback fetch also failed:", fallbackErr);
       }
     } finally {
       setIsRefreshing(false);
@@ -251,7 +251,7 @@ const Libraries = () => {
         isFirstRender.current; // First render after navigation/reload
 
       if (shouldFetch) {
-        console.log("Libraries - triggering data fetch on mount");
+        logInfo("Libraries - triggering data fetch on mount");
         // Small timeout to ensure component is fully mounted and React Query is ready
         setTimeout(() => {
           handleRefresh();
@@ -271,9 +271,9 @@ const Libraries = () => {
     // Add event listener for page visibility changes (handles page reload)
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        console.log("Page became visible - checking if libraries need refresh");
+        logInfo("Page became visible - checking if libraries need refresh");
         if (!libraries?.length) {
-          console.log("No libraries data after visibility change - refreshing");
+          logInfo("No libraries data after visibility change - refreshing");
           handleRefresh();
         }
       }
@@ -283,7 +283,7 @@ const Libraries = () => {
 
     // Also handle focus events, which can occur on page reload
     window.addEventListener("focus", () => {
-      console.log("Window focus event - checking library data");
+      logInfo("Window focus event - checking library data");
       if (!libraries?.length) {
         handleRefresh();
       }
@@ -352,7 +352,7 @@ const Libraries = () => {
       toast.success(`Successfully saved ${selectedData.length} sections`);
     } catch (error) {
       toast.error(`Failed to save sections: ${error.message}`);
-      console.error("Detailed save error:", error);
+      logError("Detailed save error:", error);
     } finally {
       setIsSaving(false);
     }

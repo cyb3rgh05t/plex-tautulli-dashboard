@@ -4,10 +4,26 @@ import cors from "cors";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { getConfig, setConfig } from "./src/utils/configStore.js";
 import { getFormats, saveFormats } from "./src/utils/formatStore.js";
+import {
+  logError,
+  logWarn,
+  logInfo,
+  logDebug,
+  setLogLevel,
+  getLogLevel,
+  getLogLevels,
+  getLogs,
+  clearLogs,
+  exportLogs,
+} from "./src/utils/logger.js";
 import axios from "axios";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import chalk from "chalk"; // Adding chalk for colored output in server banner
+
+// Set log level from environment variable or config
+setLogLevel(process.env.LOG_LEVEL || "INFO");
 
 // Get directory name in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -62,7 +78,7 @@ function getAppVersion() {
     const versionMatch = versionFileContent.match(/appVersion = "([^"]+)"/);
     return versionMatch && versionMatch[1] ? versionMatch[1] : "unknown";
   } catch (error) {
-    console.error("Error reading version:", error);
+    logError("Error reading version", error);
     return "unknown";
   }
 }
@@ -73,7 +89,7 @@ const ensureDirectories = () => {
   dirs.forEach((dir) => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
-      console.log(`Created directory: ${dir}`);
+      logInfo(`Created directory: ${dir}`);
     }
   });
 };
@@ -104,13 +120,13 @@ const formatDate = (timestamp, format = "default") => {
       date = new Date(timestamp);
     }
   } catch (e) {
-    console.error(`Error parsing date: ${timestamp}`, e);
+    logError(`Error parsing date: ${timestamp}`, e);
     return "Invalid Date";
   }
 
   // Ensure we have a valid date
   if (isNaN(date.getTime())) {
-    console.warn(`Invalid date from timestamp: ${timestamp}`);
+    logWarn(`Invalid date from timestamp: ${timestamp}`);
     return "Invalid Date";
   }
 
@@ -326,7 +342,7 @@ const processTemplate = (template, data) => {
         value = data[key];
       }
     } catch (error) {
-      console.error(`Error processing template variable ${key}:`, error);
+      logError(`Error processing template variable ${key}:`, error);
       value = ""; // Default to empty string on error
     }
 
@@ -511,10 +527,7 @@ const getLibraryDetails = async (sectionId, config) => {
       last_played: watchStats.last_played || null,
     };
   } catch (error) {
-    console.error(
-      `Error fetching library details for section ${sectionId}:`,
-      error
-    );
+    logError(`Error fetching library details for section ${sectionId}:`, error);
     return {
       count: 0,
       parent_count: 0,
@@ -535,7 +548,7 @@ async function getUserHistoryWithMetadata(
   requestId = ""
 ) {
   try {
-    console.log(`[${requestId}] Fetching history for user ${userId}...`);
+    logDebug(`[${requestId}] Fetching history for user ${userId}...`);
 
     const response = await axios.get(`${baseUrl}/api/v2`, {
       params: {
@@ -550,14 +563,14 @@ async function getUserHistoryWithMetadata(
     const historyItem = response.data?.response?.data?.data?.[0] || null;
 
     if (historyItem) {
-      console.log(
+      logDebug(
         `[${requestId}] History fetch success for ${userId}: ${historyItem.media_type}: ${historyItem.title}`
       );
 
       // If we have a history item with a rating key, fetch the media metadata to get duration
       if (historyItem.rating_key) {
         try {
-          console.log(
+          logDebug(
             `[${requestId}] Fetching metadata for item ${historyItem.rating_key}...`
           );
 
@@ -574,30 +587,30 @@ async function getUserHistoryWithMetadata(
           const mediaInfo = metadataResponse.data?.response?.data;
           if (mediaInfo && mediaInfo.duration) {
             historyItem.media_duration = mediaInfo.duration; // Add the media duration to history item
-            console.log(
+            logDebug(
               `[${requestId}] Got media duration for ${historyItem.title}: ${mediaInfo.duration}ms`
             );
           } else {
-            console.log(
+            logDebug(
               `[${requestId}] No duration found in metadata for ${historyItem.title}`
             );
           }
         } catch (error) {
-          console.error(
+          logError(
             `[${requestId}] Error fetching metadata for ${historyItem.rating_key}:`,
-            error.message
+            error
           );
         }
       }
     } else {
-      console.log(`[${requestId}] No history found for user ${userId}`);
+      logDebug(`[${requestId}] No history found for user ${userId}`);
     }
 
     return historyItem;
   } catch (error) {
-    console.error(
+    logError(
       `[${requestId}] Error fetching history for user ${userId}:`,
-      error.message
+      error
     );
     return null;
   }
@@ -687,7 +700,7 @@ const createDynamicProxy = (serviceName, options = {}) => {
           new RegExp(`^/api/${serviceName.toLowerCase()}`),
           ""
         );
-        console.log(`${serviceName} path rewrite:`, {
+        logDebug(`${serviceName} path rewrite:`, {
           from: path,
           to: newPath,
         });
@@ -709,7 +722,7 @@ const createDynamicProxy = (serviceName, options = {}) => {
         }
 
         // Log the proxied request (with sensitive data redacted)
-        console.log(`${serviceName} proxy request:`, {
+        logDebug(`${serviceName} proxy request:`, {
           path: proxyReq.path,
           headers: {
             ...proxyReq.getHeaders(),
@@ -731,7 +744,7 @@ const createDynamicProxy = (serviceName, options = {}) => {
         ].join(", ");
 
         // Log the response (without sensitive data)
-        console.log(`${serviceName} proxy response:`, {
+        logDebug(`${serviceName} proxy response:`, {
           status: proxyRes.statusCode,
           url: req.url,
           headers: {
@@ -743,7 +756,7 @@ const createDynamicProxy = (serviceName, options = {}) => {
         });
       },
       onError: (err, req, res) => {
-        console.error(`${serviceName} proxy error:`, {
+        logError(`${serviceName} proxy error:`, {
           message: err.message,
           code: err.code,
           stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
@@ -800,7 +813,7 @@ app.options("*", cors(corsOptions)); // Handle OPTIONS preflight explicitly
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(
+  logDebug(
     `${req.method} ${req.url} - Origin: ${req.headers.origin || "none"}`
   );
   next();
@@ -810,7 +823,7 @@ app.use(express.json());
 
 // Detailed logging middleware
 app.use((req, res, next) => {
-  console.log("Request:", {
+  logDebug("Request:", {
     method: req.method,
     url: req.url,
     origin: req.headers.origin,
@@ -821,6 +834,124 @@ app.use((req, res, next) => {
     },
   });
   next();
+});
+
+// ======================================================================
+// Logging API Routes
+// ======================================================================
+
+// Get current log level
+app.get("/api/logs/level", (req, res) => {
+  try {
+    const level = getLogLevel();
+    res.json({
+      success: true,
+      level: level,
+    });
+    logDebug(`Log level requested: ${level}`);
+  } catch (error) {
+    logError("Error getting log level", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get log level",
+      error: error.message,
+    });
+  }
+});
+
+// Set log level
+app.post("/api/logs/level", (req, res) => {
+  try {
+    const { level } = req.body;
+
+    if (!level || typeof level !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or missing level parameter",
+      });
+    }
+
+    const success = setLogLevel(level.toUpperCase());
+
+    if (success) {
+      logInfo(`Log level changed to ${level}`, { source: "api" });
+      res.json({
+        success: true,
+        level: getLogLevel(),
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: "Invalid log level",
+        validLevels: getLogLevels(),
+      });
+    }
+  } catch (error) {
+    logError("Error setting log level", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to set log level",
+      error: error.message,
+    });
+  }
+});
+
+// Get server logs
+app.get("/api/logs", (req, res) => {
+  try {
+    const logs = getLogs();
+    logDebug(`Retrieved ${logs.length} logs`);
+    res.json({
+      success: true,
+      logs: logs,
+    });
+  } catch (error) {
+    logError("Error getting logs", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get logs",
+      error: error.message,
+    });
+  }
+});
+
+// Clear server logs
+app.post("/api/logs/clear", (req, res) => {
+  try {
+    clearLogs();
+    logInfo("Logs cleared via API");
+    res.json({ success: true });
+  } catch (error) {
+    logError("Error clearing logs", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to clear logs",
+      error: error.message,
+    });
+  }
+});
+
+// Download logs as text file
+app.get("/api/logs/download", (req, res) => {
+  try {
+    const logText = exportLogs();
+    const filename = `plex-tautulli-dashboard-logs-${
+      new Date().toISOString().split("T")[0]
+    }.txt`;
+
+    res.setHeader("Content-Type", "text/plain");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(logText);
+
+    logInfo(`Logs downloaded (${logText.length} bytes)`);
+  } catch (error) {
+    logError("Error downloading logs", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to download logs",
+      error: error.message,
+    });
+  }
 });
 
 // ======================================================================
@@ -842,7 +973,7 @@ app.get("/api/formats", (req, res) => {
       users: formats.users || [],
     });
   } catch (error) {
-    console.error("Error reading formats:", error);
+    logError("Error reading formats:", error);
     res.status(500).json({ error: "Failed to read formats" });
   }
 });
@@ -888,7 +1019,7 @@ app.post("/api/formats", (req, res) => {
       throw new Error("Failed to save formats");
     }
   } catch (error) {
-    console.error("Error saving formats:", error);
+    logError("Error saving formats:", error);
     res.status(500).json({
       error: "Failed to save formats",
       message: error.message,
@@ -1009,7 +1140,7 @@ app.get("/api/media/:type", async (req, res) => {
       media: formattedMedia,
     });
   } catch (error) {
-    console.error(`Error fetching ${req.params.type}:`, error);
+    logError(`Error fetching ${req.params.type}:`, error);
     res.status(500).json({
       error: `Failed to fetch ${req.params.type}`,
       message: error.message,
@@ -1023,7 +1154,7 @@ app.get("/api/users", async (req, res) => {
     // Generate unique request ID for logging
     const requestId =
       Date.now().toString(36) + Math.random().toString(36).substring(2);
-    console.log(`[${requestId}] Starting /api/users request`);
+    logInfo(`[${requestId}] Starting /api/users request`);
 
     const config = getConfig();
     const { count = 50 } = req.query; // Default to 100 if not specified
@@ -1039,7 +1170,7 @@ app.get("/api/users", async (req, res) => {
     const formatsData = getFormats();
     const userFormats = formatsData.users || [];
 
-    console.log(`[${requestId}] Fetching active sessions and users...`);
+    logInfo(`[${requestId}] Fetching active sessions and users...`);
 
     // STEP 1: Fetch both active sessions and users in parallel
     let activeSessions = [];
@@ -1068,14 +1199,11 @@ app.get("/api/users", async (req, res) => {
         activeSessionsResponse.data?.response?.data?.sessions || [];
       allUsers = usersResponse.data?.response?.data?.data || [];
 
-      console.log(
+      logInfo(
         `[${requestId}] Successfully fetched ${activeSessions.length} active sessions and ${allUsers.length} users`
       );
     } catch (error) {
-      console.error(
-        `[${requestId}] Error fetching initial data:`,
-        error.message
-      );
+      logError(`[${requestId}] Error fetching initial data:`, error);
       throw new Error(`Failed to fetch initial user data: ${error.message}`);
     }
 
@@ -1133,14 +1261,14 @@ app.get("/api/users", async (req, res) => {
         return bLastSeen - aLastSeen;
       });
 
-    console.log(
+    logInfo(
       `[${requestId}] Sorted ${filteredUsers.length} users by active status and last seen time`
     );
 
     // STEP 4: Limit users to those we'll actually return
     const limitedUsers = filteredUsers.slice(0, requestedCount);
 
-    console.log(
+    logInfo(
       `[${requestId}] Processing ${limitedUsers.length} users (top ${requestedCount} active users)`
     );
 
@@ -1227,7 +1355,7 @@ app.get("/api/users", async (req, res) => {
 
         if (cachedHistory) {
           // Use cached history data
-          console.log(
+          logDebug(
             `[${requestId}] Using cached history for user ${userData.friendly_name} (${userData.user_id})`
           );
 
@@ -1252,7 +1380,7 @@ app.get("/api/users", async (req, res) => {
           processedUsers[i]._cached = true;
         } else {
           // Queue up history fetch with index attached
-          console.log(
+          logDebug(
             `[${requestId}] Queueing history fetch for user ${userData.friendly_name} (${userData.user_id})`
           );
 
@@ -1281,7 +1409,7 @@ app.get("/api/users", async (req, res) => {
 
     // STEP 7: Fetch history and metadata for users with no cache hit
     if (historyPromises.length > 0) {
-      console.log(
+      logInfo(
         `[${requestId}] Fetching history for ${historyPromises.length} users (cache miss or forced refresh)...`
       );
 
@@ -1345,7 +1473,7 @@ app.get("/api/users", async (req, res) => {
           // Store in cache
           historyCache.set(cacheKey, cacheObj);
 
-          console.log(
+          logDebug(
             `[${requestId}] Updated and cached history for user ${processedUsers[index].friendly_name}: ${processedUsers[index].media_type} - ${processedUsers[index].title} - Duration: ${processedUsers[index].formatted_duration}`
           );
         } else {
@@ -1353,7 +1481,7 @@ app.get("/api/users", async (req, res) => {
           processedUsers[index].formatted_duration = "Unknown";
 
           // Log the error
-          console.log(
+          logWarn(
             `[${requestId}] Failed to fetch history for user ${
               processedUsers[index].friendly_name
             }: ${
@@ -1398,9 +1526,9 @@ app.get("/api/users", async (req, res) => {
           const result = processTemplate(format.template, userData);
           formattedOutput[format.name] = result;
         } catch (err) {
-          console.error(
+          logError(
             `[${requestId}] Error applying format to user ${rawData.friendly_name}:`,
-            err.message
+            err
           );
           formattedOutput[format.name] = "";
         }
@@ -1416,7 +1544,7 @@ app.get("/api/users", async (req, res) => {
     });
 
     // STEP 9: Send response
-    console.log(
+    logInfo(
       `[${requestId}] Sending response with ${formattedUsers.length} users`
     );
 
@@ -1432,9 +1560,9 @@ app.get("/api/users", async (req, res) => {
       },
     });
 
-    console.log(`[${requestId}] Request completed successfully`);
+    logInfo(`[${requestId}] Request completed successfully`);
   } catch (error) {
-    console.error("Error processing users:", error.message);
+    logError("Error processing users:", error);
     res.status(500).json({
       error: "Failed to process users",
       message: error.message,
@@ -1466,6 +1594,7 @@ app.post("/api/clear-cache", (req, res) => {
       details: previousSizes,
     });
   } catch (error) {
+    logError("Failed to clear cache", error);
     res.status(500).json({
       error: "Failed to clear cache",
       message: error.message,
@@ -1484,6 +1613,7 @@ app.post("/api/users/clear-cache", (req, res) => {
       message: `Successfully cleared user history cache with ${previousSize} entries`,
     });
   } catch (error) {
+    logError("Failed to clear cache", error);
     res.status(500).json({
       error: "Failed to clear cache",
       message: error.message,
@@ -1526,6 +1656,7 @@ app.post("/api/clear-cache/:type", (req, res) => {
       details,
     });
   } catch (error) {
+    logError("Failed to clear cache", error);
     res.status(500).json({
       error: "Failed to clear cache",
       message: error.message,
@@ -1581,7 +1712,7 @@ app.get("/api/downloads", async (req, res) => {
 
     res.json(processedData);
   } catch (error) {
-    console.error("Error processing downloads:", error);
+    logError("Error processing downloads:", error);
     res.status(500).json({
       error: "Failed to process downloads",
       message: error.message,
@@ -1682,7 +1813,7 @@ app.get("/api/libraries", async (req, res) => {
       libraries: filteredLibraries,
     });
   } catch (error) {
-    console.error("Error fetching libraries:", error);
+    logError("Error fetching libraries:", error);
     res.status(500).json({
       error: "Failed to fetch libraries",
       message: error.message,
@@ -1754,7 +1885,7 @@ app.get("/api/sections", async (req, res) => {
       sections: formattedSections,
     });
   } catch (error) {
-    console.error("Error reading saved sections:", error);
+    logError("Error reading saved sections:", error);
     res.status(500).json({
       error: "Failed to read saved sections",
       message: error.message,
@@ -1792,7 +1923,7 @@ app.post("/api/sections", async (req, res) => {
     const sectionsWithDetails = await Promise.all(
       sections.map(async (section) => {
         try {
-          console.log(`Fetching details for section ${section.section_id}`);
+          logDebug(`Fetching details for section ${section.section_id}`);
 
           // Get library details from libraries table
           const libraryResponse = await axios.get(
@@ -1806,7 +1937,7 @@ app.post("/api/sections", async (req, res) => {
           );
 
           if (libraryResponse.data?.response?.result !== "success") {
-            console.error("Library response error:", libraryResponse.data);
+            logError("Library response error:", libraryResponse.data);
             throw new Error("Failed to fetch library details");
           }
 
@@ -1815,7 +1946,7 @@ app.post("/api/sections", async (req, res) => {
             libraryData.find((lib) => lib.section_id === section.section_id) ||
             {};
 
-          console.log(
+          logDebug(
             "Library details found:",
             JSON.stringify(libraryDetails, null, 2)
           );
@@ -1832,7 +1963,7 @@ app.post("/api/sections", async (req, res) => {
             section_name: libraryDetails.section_name || section.name,
           };
         } catch (error) {
-          console.error(
+          logError(
             `Error fetching details for section ${section.section_id}:`,
             error
           );
@@ -1854,7 +1985,7 @@ app.post("/api/sections", async (req, res) => {
       message: `Successfully saved ${sectionsWithDetails.length} sections`,
     });
   } catch (error) {
-    console.error("Error saving sections:", error);
+    logError("Error saving sections:", error);
     res.status(500).json({
       error: "Failed to save sections",
       message: error.message,
@@ -1874,7 +2005,7 @@ app.get("/api/recent/:type", async (req, res) => {
     // Generate request ID for logging and cache key
     const requestId =
       Date.now().toString(36) + Math.random().toString(36).substring(2);
-    console.log(`[${requestId}] Processing /api/recent/${type} request`);
+    logDebug(`[${requestId}] Processing /api/recent/${type} request`);
 
     // Validate type
     const validTypes = {
@@ -1894,7 +2025,7 @@ app.get("/api/recent/:type", async (req, res) => {
     if (!forceRefresh) {
       const cachedMedia = mediaCache.get(cacheKey);
       if (cachedMedia) {
-        console.log(`[${requestId}] Cache hit for ${cacheKey}`);
+        logDebug(`[${requestId}] Cache hit for ${cacheKey}`);
 
         // Add cache metadata to response
         return res.json({
@@ -1906,9 +2037,9 @@ app.get("/api/recent/:type", async (req, res) => {
           },
         });
       }
-      console.log(`[${requestId}] Cache miss for ${cacheKey}`);
+      logDebug(`[${requestId}] Cache miss for ${cacheKey}`);
     } else {
-      console.log(`[${requestId}] Forced refresh, bypassing cache`);
+      logDebug(`[${requestId}] Forced refresh, bypassing cache`);
     }
 
     // Get formats
@@ -1927,7 +2058,7 @@ app.get("/api/recent/:type", async (req, res) => {
 
       allSections = sectionsResponse.data?.response?.data?.data || [];
     } catch (sectionsError) {
-      console.error("Error fetching sections:", sectionsError);
+      logError("Error fetching sections:", sectionsError);
       return res.status(500).json({
         error: "Failed to fetch library sections",
         message: sectionsError.message,
@@ -1973,7 +2104,7 @@ app.get("/api/recent/:type", async (req, res) => {
         if (!forceRefresh) {
           sectionMedia = mediaCache.get(sectionCacheKey);
           if (sectionMedia) {
-            console.log(
+            logDebug(
               `[${requestId}] Using cached media for section ${section.section_id}`
             );
             return sectionMedia;
@@ -1981,7 +2112,7 @@ app.get("/api/recent/:type", async (req, res) => {
         }
 
         // If not in cache, fetch from API
-        console.log(
+        logDebug(
           `[${requestId}] Fetching media for section ${section.section_id}`
         );
         const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
@@ -2007,7 +2138,7 @@ app.get("/api/recent/:type", async (req, res) => {
 
         return sectionMedia;
       } catch (error) {
-        console.error(
+        logError(
           `Error fetching recently added for section ${section.section_id}:`,
           error
         );
@@ -2053,7 +2184,7 @@ app.get("/api/recent/:type", async (req, res) => {
           if (metadata) {
             videoResolution = metadata.video_full_resolution || "Unknown";
             cachedMetadata = true;
-            console.log(
+            logDebug(
               `[${requestId}] Using cached metadata for ${media.rating_key}`
             );
 
@@ -2077,7 +2208,7 @@ app.get("/api/recent/:type", async (req, res) => {
         // Fetch metadata if not cached
         if (!cachedMetadata && media.rating_key) {
           try {
-            console.log(
+            logDebug(
               `[${requestId}] Fetching metadata for ${media.rating_key}`
             );
             const metadataResponse = await axios.get(
@@ -2119,7 +2250,7 @@ app.get("/api/recent/:type", async (req, res) => {
               media.rating = responseData.rating || null;
             }
           } catch (error) {
-            console.error(
+            logError(
               `Failed to fetch metadata for ${media.rating_key}:`,
               error
             );
@@ -2219,7 +2350,7 @@ app.get("/api/recent/:type", async (req, res) => {
 
     // Cache the entire response
     mediaCache.set(cacheKey, responseData);
-    console.log(`[${requestId}] Cached response with key ${cacheKey}`);
+    logDebug(`[${requestId}] Cached response with key ${cacheKey}`);
 
     // Send response
     res.json({
@@ -2231,7 +2362,7 @@ app.get("/api/recent/:type", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error processing recently added media:", error);
+    logError("Error processing recently added media:", error);
     res.status(500).json({
       error: "Failed to process recently added media",
       message: error.message,
@@ -2244,7 +2375,7 @@ app.get("/api/recent/:type", async (req, res) => {
 app.post("/api/config", (req, res) => {
   const { plexUrl, plexToken, tautulliUrl, tautulliApiKey } = req.body;
 
-  console.log("Received config update:", {
+  logInfo("Received config update:", {
     plexUrl,
     plexToken: plexToken ? "[REDACTED]" : undefined,
     tautulliUrl,
@@ -2327,7 +2458,7 @@ app.post("/api/reset-all", (req, res) => {
     fs.writeFileSync(savedSectionsPath, JSON.stringify([], null, 2));
 
     // Log the reset action
-    console.log("All configurations have been reset:", {
+    logInfo("All configurations have been reset:", {
       configPath,
       formatsPath,
       savedSectionsPath,
@@ -2338,7 +2469,7 @@ app.post("/api/reset-all", (req, res) => {
       message: "All configurations reset successfully",
     });
   } catch (error) {
-    console.error("Failed to reset configurations:", error);
+    logError("Failed to reset configurations:", error);
     res.status(500).json({
       status: "error",
       message: "Failed to reset configurations",
@@ -2392,7 +2523,7 @@ app.get("/api/health", async (req, res) => {
           healthData.services.plex.serverName =
             response.data?.MediaContainer?.friendlyName || null;
         } catch (error) {
-          console.error("Plex health check failed:", error.message);
+          logError("Plex health check failed:", error.message);
           healthData.services.plex.error = error.message;
         }
       }
@@ -2420,7 +2551,7 @@ app.get("/api/health", async (req, res) => {
             healthData.services.tautulli.data = response.data.response.data;
           }
         } catch (error) {
-          console.error("Tautulli health check failed:", error.message);
+          logError("Tautulli health check failed:", error.message);
           healthData.services.tautulli.error = error.message;
         }
       }
@@ -2430,7 +2561,7 @@ app.get("/api/health", async (req, res) => {
     res.setHeader("Content-Type", "application/json");
     return res.json(healthData);
   } catch (error) {
-    console.error("Health API error:", error);
+    logError("Health API error:", error);
     return res.status(500).json({
       status: "error",
       error: "Server error during health check",
@@ -2475,7 +2606,7 @@ app.post("/api/health/check-service", async (req, res) => {
           serverName: response.data?.MediaContainer?.friendlyName || null,
         });
       } catch (error) {
-        console.error("Plex service check failed:", error.message);
+        logError("Plex service check failed:", error.message);
         return res.json({
           status: "offline",
           message: "Failed to connect to Plex",
@@ -2518,7 +2649,7 @@ app.post("/api/health/check-service", async (req, res) => {
           });
         }
       } catch (error) {
-        console.error("Tautulli service check failed:", error.message);
+        logError("Tautulli service check failed:", error.message);
         return res.json({
           status: "offline",
           message: "Failed to connect to Tautulli",
@@ -2527,7 +2658,7 @@ app.post("/api/health/check-service", async (req, res) => {
       }
     }
   } catch (error) {
-    console.error("Service check error:", error);
+    logError("Service check error:", error);
     return res.status(500).json({
       status: "error",
       message: "Server error during service check",
@@ -2540,29 +2671,101 @@ app.use("/api/plex", createDynamicProxy("Plex"));
 app.use("/api/tautulli", createDynamicProxy("Tautulli"));
 
 // ======================================================================
-// Server Startup
+// Server Startup with Environment-Specific Banners
 // ======================================================================
 
-const serverBanner = `
+// Production banner - more professional, with red highlights for caution
+const productionBanner = (version) => {
+  return (
+    chalk.white("╔════════════════════════════════════════════════════╗\n") +
+    chalk.white("║") +
+    "                                                    " +
+    chalk.white("║\n") +
+    chalk.white("║") +
+    "            " +
+    chalk.red.bold("Plex & Tautulli Dashboard") +
+    "               " +
+    chalk.white("║\n") +
+    chalk.white("║") +
+    "                " +
+    chalk.red.bold("*** PRODUCTION ***") +
+    "                  " +
+    chalk.white("║\n") +
+    chalk.white("╚════════════════════════════════════════════════════╝")
+  );
+};
+
+// Development banner - more colorful and playful
+const developmentBanner = (version) => {
+  return (
+    chalk.cyan("╔════════════════════════════════════════════════════╗\n") +
+    chalk.cyan("║") +
+    "                                                    " +
+    chalk.cyan("║\n") +
+    chalk.cyan("║") +
+    "            " +
+    chalk.yellow.bold("Plex & Tautulli Dashboard") +
+    "               " +
+    chalk.cyan("║\n") +
+    chalk.cyan("║") +
+    "                " +
+    chalk.magenta.bold("~~ DEVELOPMENT ~~") +
+    "                   " +
+    chalk.cyan("║\n") +
+    chalk.cyan("║") +
+    "                                                    " +
+    chalk.cyan("║\n") +
+    chalk.cyan("╚════════════════════════════════════════════════════╝")
+  );
+};
+
+// Fallback banner in case environment detection fails
+const fallbackBanner = (version) => {
+  return `
 ╔════════════════════════════════════════════════════╗
 ║                                                    ║
 ║            Plex & Tautulli Dashboard               ║
-║                  Version: ${appVersion}                    ║
 ║                                                    ║
 ╚════════════════════════════════════════════════════╝`;
+};
+
+// Select banner based on environment
+const selectBanner = (version) => {
+  const environment = process.env.NODE_ENV || "development";
+
+  if (environment === "production") {
+    return productionBanner(version);
+  } else if (environment === "development") {
+    return developmentBanner(version);
+  } else {
+    // Fallback for unknown environments
+    return fallbackBanner(version);
+  }
+};
 
 const PORT = process.env.PORT || 3006;
 app.listen(PORT, "0.0.0.0", () => {
   console.clear();
-  console.log(serverBanner);
+
+  // Display the appropriate banner based on environment
+  console.log(selectBanner(appVersion));
+
+  // Environment indicator for log clarity
+  const environment = process.env.NODE_ENV || "development";
+  const envColor =
+    environment === "production" ? chalk.red.bold : chalk.green.bold;
+
   console.log("\nServer Information:");
   console.log("==================================");
-  console.log("Status: Running");
-  console.log(`Version: ${appVersion}`);
-  console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
-  console.log("Time:", new Date().toLocaleString());
-  console.log(`\nListening on: ${process.env.VITE_API_BASE_URL}`);
-  console.log(`Allowed CORS: ${ALLOWED_ORIGINS}`);
+  console.log(chalk.white.bold("Status:"), "Running");
+  console.log(chalk.white.bold("Version:"), appVersion);
+  console.log(chalk.white.bold("Environment:"), envColor(environment));
+  console.log(chalk.white.bold("Time:"), new Date().toLocaleString());
+  console.log(
+    chalk.white.bold("\nListening on:"),
+    chalk.blue(process.env.VITE_API_BASE_URL || `http://localhost:${PORT}`)
+  );
+  console.log(chalk.white.bold("Allowed CORS:"), ALLOWED_ORIGINS.join(", "));
   console.log("==================================\n");
   console.log("Current Service Configuration:");
   console.log("==================================\n");

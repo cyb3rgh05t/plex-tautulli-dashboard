@@ -1,11 +1,10 @@
-// with theme styling applied
-
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Trash2, Code, Plus, Variable, Edit, Save, X } from "lucide-react";
 import * as Icons from "lucide-react";
 import toast from "react-hot-toast";
 import ThemedCard from "../common/ThemedCard";
 import ThemedButton from "../common/ThemedButton";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
@@ -129,7 +128,7 @@ const DownloadsFormat = () => {
         const data = await response.json();
         setFormats(data.downloads || []);
       } catch (error) {
-        console.error("Failed to load activity formats:", error);
+        logError("Failed to load activity formats:", error);
         toast.error("Failed to load formats");
       } finally {
         setIsLoading(false);
@@ -224,7 +223,7 @@ const DownloadsFormat = () => {
         setIsEditing(false);
         setEditingFormatName(null);
       } catch (error) {
-        console.error("Failed to save format:", error);
+        logError("Failed to save format:", error);
         toast.error(
           isEditing ? "Failed to update format" : "Failed to create format"
         );
@@ -290,7 +289,7 @@ const DownloadsFormat = () => {
         handleCancelEdit();
       }
     } catch (error) {
-      console.error("Failed to delete format:", error);
+      logError("Failed to delete format:", error);
       toast.error("Failed to delete format");
     }
   };

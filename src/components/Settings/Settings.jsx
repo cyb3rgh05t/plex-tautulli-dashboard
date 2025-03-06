@@ -10,6 +10,8 @@ import ThemedButton from "../common/ThemedButton";
 import ThemedCard from "../common/ThemedCard";
 import BackupSettings from "./BackupSettings";
 import CacheManager from "./CacheManager";
+import LoggingSettings from "./LoggingSettings";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
 // Styled tab component for settings
 const SettingsTab = ({ active, onClick, icon: Icon, label }) => (
@@ -109,6 +111,7 @@ const SettingsPage = () => {
       ) {
         await updateConfig(formData);
         toast.success("Settings updated successfully");
+        logInfo("Server settings updated successfully");
       } else {
         const error = [];
         if (plexResult.status === "rejected")
@@ -123,7 +126,7 @@ const SettingsPage = () => {
       }
     } catch (err) {
       toast.error(err.message || "Failed to update settings");
-      console.error("Settings update error:", err);
+      logError("Settings update error:", err);
     } finally {
       setTesting(false);
     }
@@ -150,6 +153,7 @@ const SettingsPage = () => {
     try {
       await clearConfig();
       toast.success("All settings have been reset");
+      logInfo("Application settings have been reset");
       navigate("/setup");
     } catch (err) {
       toast.error(err.message || "Failed to reset settings");
@@ -175,6 +179,7 @@ const SettingsPage = () => {
   const tabs = [
     { id: "servers", label: "Server Configuration", icon: Icons.Server },
     { id: "theme", label: "Theme Settings", icon: Icons.Palette },
+    { id: "logging", label: "Logging", icon: Icons.FileText },
     { id: "cache", label: "Cache Management", icon: Icons.Database },
     { id: "backup", label: "Backup & Restore", icon: Icons.Save },
     { id: "api", label: "API Documentation", icon: Icons.FileCode },
@@ -405,6 +410,9 @@ const SettingsPage = () => {
           </ThemedCard>
         );
 
+      case "logging":
+        return <LoggingSettings />;
+
       case "cache":
         return <CacheManager />;
 
@@ -487,7 +495,7 @@ const SettingsPage = () => {
       </div>
 
       {/* Tabs Navigation */}
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-6 scrollbar-hide">
+      <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 mb-6 scrollbar-hide">
         {tabs.map((tab) => (
           <SettingsTab
             key={tab.id}
