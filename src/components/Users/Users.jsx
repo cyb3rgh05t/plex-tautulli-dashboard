@@ -125,7 +125,7 @@ const UsersTable = ({ users }) => (
                 {isWatching ? (
                   <span className="font-medium text-green-400 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                    Is Watching
+                    Watching
                   </span>
                 ) : (
                   <span className="text-theme">
