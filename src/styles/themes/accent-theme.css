@@ -1,9 +1,3 @@
-/* 
- * Enhanced accent color styles for tabs and navigation
- * Import this file in your globals.css after the other theme files
- */
-/* Enhanced accent color styles with theme-specific overlay handling */
-
 /* Base gradient backgrounds with theme-aware overlays */
 .theme-dark .accent-gradient-light {
   background: linear-gradient(

@@ -9,6 +9,7 @@ import ThemedButton from "../common/ThemedButton";
 import ThemedCard from "../common/ThemedCard";
 import { useTheme } from "../../context/ThemeContext";
 import axios from "axios";
+import ThemedTabButton from "../common/ThemedTabButton";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
@@ -236,7 +237,7 @@ const MediaCard = ({ media }) => {
             {/* Resolution Badge */}
             {resolution && (
               <div
-                className="px-2 py-1 bg-accent-base/20 backdrop-blur-sm rounded-lg 
+                className="px-2 py-1 bg-gray-900/70 backdrop-blur-sm rounded-lg 
                   border border-accent/20 text-accent-base text-xs font-medium"
               >
                 {resolution}
@@ -356,7 +357,7 @@ const getTypePriority = (type) => {
 };
 
 const MediaTypeSubTab = ({ active, onClick, icon: Icon, children }) => (
-  <button
+  <ThemedTabButton
     onClick={onClick}
     className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
       active
@@ -366,7 +367,7 @@ const MediaTypeSubTab = ({ active, onClick, icon: Icon, children }) => (
   >
     {Icon && <Icon size={16} />}
     {children}
-  </button>
+  </ThemedTabButton>
 );
 
 // Updated NoLibrariesCard component with centered layout

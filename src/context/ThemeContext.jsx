@@ -23,7 +23,6 @@ const THEMES = {
   },
 };
 
-// RENAMED: default → purple, purple → maroon, light → grey
 const ACCENTS = {
   purple: {
     "--accent-color": "167, 139, 250",
