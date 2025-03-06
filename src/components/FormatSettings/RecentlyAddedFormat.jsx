@@ -1,5 +1,3 @@
-// with theme styling applied
-
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery } from "react-query";
 import axios from "axios";
@@ -30,7 +28,8 @@ const EXAMPLE_DATA = {
     title: "Inception",
     year: "2010",
     mediaType: "movie",
-    addedAt: Math.floor(Date.now() / 1000) - 25 * 60, // 25 minutes ago
+    addedAt: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 3, // 3 days ago in seconds (Unix timestamp)
+    added_at: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 3, // Include both formats
     summary:
       "A thief who steals corporate secrets through the use of dream-sharing technology",
     rating: "8.8",
@@ -46,7 +45,8 @@ const EXAMPLE_DATA = {
     title: "Madrigal",
     year: "2012",
     mediaType: "show",
-    addedAt: Math.floor(Date.now() / 1000) - 25 * 60, // 25 minutes ago
+    addedAt: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 3, // 3 days ago in seconds (Unix timestamp)
+    added_at: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 3, // Include both formats
     summary: "Walt meets with Gus Fring's former employer",
     rating: "9.5",
     contentRating: "TV-MA",
@@ -60,7 +60,8 @@ const EXAMPLE_DATA = {
     parent_title: "A Night at the Opera",
     year: "1975",
     mediaType: "music",
-    addedAt: Math.floor(Date.now() / 1000) - 25 * 60, // 25 minutes ago
+    addedAt: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 3, // 3 days ago in seconds (Unix timestamp)
+    added_at: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 3, // Include both formats
     summary: "Iconic rock ballad by Queen",
     duration: "5:55",
   },
@@ -81,7 +82,7 @@ const AVAILABLE_VARIABLES = {
     },
     { name: "summary", description: "Brief summary of the media" },
     { name: "rating", description: "Media rating" },
-    { name: "contentRating", description: "Content rating (PG, R, etc.)" },
+    { name: "content_rating", description: "Content rating (PG, R, etc.)" },
     { name: "duration", description: "Runtime" },
   ],
   shows: [
@@ -100,7 +101,7 @@ const AVAILABLE_VARIABLES = {
     },
     { name: "summary", description: "Brief summary of the media" },
     { name: "rating", description: "Media rating" },
-    { name: "contentRating", description: "Content rating (PG, R, etc.)" },
+    { name: "content_rating", description: "Content rating (PG, R, etc.)" },
     { name: "duration", description: "Runtime" },
   ],
   music: [
@@ -223,29 +224,53 @@ const FormatCard = ({ format, onDelete, onEdit, previewValue, sections }) => {
 };
 
 // Updated helper function for date formatting
-// Robust date formatting function
 const formatDate = (timestamp, format = "default") => {
-  // Ensure we have a valid timestamp
-  const timestampNum =
-    typeof timestamp === "string"
-      ? timestamp.includes("-")
-        ? Date.parse(timestamp)
-        : Number(timestamp) * 1000
-      : timestamp;
+  // Return early if no timestamp
+  if (!timestamp) return "Never";
 
-  const date = new Date(timestampNum);
-  const now = new Date();
+  let date;
 
-  // Ensure we have a valid date
-  if (isNaN(date.getTime())) {
+  try {
+    // Handle different timestamp formats
+
+    // Case 1: If timestamp is a number but looks like seconds (10-digit number), convert to milliseconds
+    if (typeof timestamp === "number" || !isNaN(Number(timestamp))) {
+      const ts = Number(timestamp);
+      // Unix timestamp in seconds (e.g., 1612345678) vs milliseconds (e.g., 1612345678000)
+      // If the number is less than year 2100 in seconds, assume it's in seconds
+      date = ts < 4294967296 ? new Date(ts * 1000) : new Date(ts);
+    }
+    // Case 2: ISO string (e.g., "2021-02-03T12:34:56Z")
+    else if (typeof timestamp === "string" && timestamp.includes("-")) {
+      date = new Date(timestamp);
+    }
+    // Case 3: Already a Date object
+    else if (timestamp instanceof Date) {
+      date = timestamp;
+    }
+    // Case 4: Fallback - try direct conversion
+    else {
+      date = new Date(timestamp);
+    }
+  } catch (e) {
+    console.error(`Error parsing date from timestamp: ${timestamp}`, e);
     return "Invalid Date";
   }
 
+  // Ensure we have a valid date
+  if (isNaN(date.getTime())) {
+    console.warn(`Failed to parse timestamp: ${timestamp}`);
+    return "Invalid Date";
+  }
+
+  const now = new Date();
   const diffMs = now - date;
   const diffSeconds = Math.floor(diffMs / 1000);
   const diffMinutes = Math.floor(diffSeconds / 60);
   const diffHours = Math.floor(diffMinutes / 60);
   const diffDays = Math.floor(diffHours / 24);
+  const diffMonths = Math.floor(diffDays / 30);
+  const diffYears = Math.floor(diffDays / 365);
 
   switch (format) {
     case "short":
@@ -255,42 +280,37 @@ const formatDate = (timestamp, format = "default") => {
       });
 
     case "relative":
-      if (diffSeconds < 0)
-        return date.toLocaleDateString("en-GB", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-        });
-
-      if (diffSeconds < 60) {
-        return diffSeconds === 1
-          ? "1 second ago"
-          : `${diffSeconds} seconds ago`;
+      if (diffSeconds < 0) {
+        return "Future date";
       }
 
-      if (diffMinutes < 60) {
+      if (diffYears > 0) {
+        return diffYears === 1 ? "1 year ago" : `${diffYears} years ago`;
+      }
+
+      if (diffMonths > 0) {
+        return diffMonths === 1 ? "1 month ago" : `${diffMonths} months ago`;
+      }
+
+      if (diffDays > 0) {
+        return diffDays === 1 ? "1 day ago" : `${diffDays} days ago`;
+      }
+
+      if (diffHours > 0) {
+        return diffHours === 1 ? "1 hour ago" : `${diffHours} hours ago`;
+      }
+
+      if (diffMinutes > 0) {
         return diffMinutes === 1
           ? "1 minute ago"
           : `${diffMinutes} minutes ago`;
       }
 
-      if (diffHours < 24) {
-        return diffHours === 1 ? "1 hour ago" : `${diffHours} hours ago`;
-      }
-
-      if (diffDays < 30) {
-        return diffDays === 1 ? "1 day ago" : `${diffDays} days ago`;
-      }
-
-      // Fallback to date format if more than 30 days
-      return date.toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      });
+      return diffSeconds === 1 ? "1 second ago" : `${diffSeconds} seconds ago`;
 
     case "full":
       return date.toLocaleDateString("en-US", {
+        weekday: "long",
         year: "numeric",
         month: "long",
         day: "numeric",
@@ -303,10 +323,10 @@ const formatDate = (timestamp, format = "default") => {
       });
 
     default:
-      return date.toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "2-digit",
+      return date.toLocaleDateString("en-US", {
         year: "numeric",
+        month: "long",
+        day: "numeric",
       });
   }
 };
@@ -318,6 +338,31 @@ const processTemplate = (template, data) => {
   let result = template;
   const variables = template.match(/\{([^}]+)\}/g) || [];
 
+  // Create normalized data object with both camelCase and snake_case versions
+  const normalizedData = { ...data };
+
+  // Add camelCase versions of snake_case keys
+  Object.keys(data).forEach((key) => {
+    if (key.includes("_")) {
+      const camelKey = key.replace(/_([a-z])/g, (_, letter) =>
+        letter.toUpperCase()
+      );
+      if (!normalizedData[camelKey]) {
+        normalizedData[camelKey] = data[key];
+      }
+    }
+  });
+
+  // Add snake_case versions of camelCase keys
+  Object.keys(data).forEach((key) => {
+    if (/[A-Z]/.test(key)) {
+      const snakeKey = key.replace(/([A-Z])/g, "_$1").toLowerCase();
+      if (!normalizedData[snakeKey]) {
+        normalizedData[snakeKey] = data[key];
+      }
+    }
+  });
+
   variables.forEach((variable) => {
     const match = variable.slice(1, -1).split(":");
     const key = match[0];
@@ -328,24 +373,29 @@ const processTemplate = (template, data) => {
     // Special handling for timestamp - using key aliases for flexibility
     if (key === "addedAt" || key === "added_at") {
       // Get timestamp from either key
-      const timestamp = data.addedAt || data.added_at;
+      const timestamp = normalizedData.addedAt || normalizedData.added_at;
       value = formatDate(timestamp, format);
     }
     // Special handling for duration
     else if (key === "duration") {
       // Prioritize formatted_duration if available
-      value = data.formatted_duration || formatDuration(Number(data[key]) || 0);
+      value =
+        normalizedData.formatted_duration ||
+        formatDuration(Number(normalizedData[key]) || 0);
     }
     // Special handling for season and episode numbers - always show as 2 digits
     else if (key === "parent_media_index" || key === "media_index") {
       // Ensure all season and episode numbers are padded to 2 digits
-      const rawValue = data[key] || "0";
+      const rawValue = normalizedData[key] || "0";
       const numberValue =
         typeof rawValue === "number" ? rawValue : parseInt(rawValue, 10);
       value = String(numberValue).padStart(2, "0");
 
       // Add S or E prefix for show episode context
-      if (data.mediaType === "show" || data.media_type === "show") {
+      if (
+        normalizedData.mediaType === "show" ||
+        normalizedData.media_type === "show"
+      ) {
         if (key === "parent_media_index") {
           value = `S${value}`;
         } else if (key === "media_index") {
@@ -355,7 +405,7 @@ const processTemplate = (template, data) => {
     }
     // Handle all other variables
     else {
-      value = data[key];
+      value = normalizedData[key];
     }
 
     if (value !== undefined) {
@@ -573,11 +623,14 @@ const RecentlyAddedFormat = () => {
             recentMedia[0];
 
       if (mediaItem) {
+        // Copy all available properties
         Object.keys(previewData).forEach((key) => {
           if (mediaItem.hasOwnProperty(key)) {
             previewData[key] = mediaItem[key];
           }
         });
+
+        // Ensure critical properties are set
         if (activeMediaType === "shows") {
           previewData.grandparent_title =
             mediaItem.grandparent_title || previewData.grandparent_title;
@@ -586,10 +639,40 @@ const RecentlyAddedFormat = () => {
           previewData.media_index =
             mediaItem.media_index || previewData.media_index;
         }
-        previewData.addedAt = mediaItem.added_at || previewData.addedAt;
+
+        // Ensure both timestamp formats are available
+        previewData.addedAt =
+          mediaItem.added_at || mediaItem.addedAt || previewData.addedAt;
+        previewData.added_at =
+          mediaItem.added_at || mediaItem.addedAt || previewData.added_at;
+
+        // Ensure both content rating formats are available
+        previewData.contentRating =
+          mediaItem.content_rating ||
+          mediaItem.contentRating ||
+          previewData.contentRating;
+        previewData.content_rating =
+          mediaItem.content_rating ||
+          mediaItem.contentRating ||
+          previewData.content_rating;
+
+        // Set resolution
         previewData.video_full_resolution =
-          mediaMetadata[mediaItem.rating_key] || "Unknown";
+          mediaMetadata[mediaItem.rating_key] ||
+          mediaItem.video_full_resolution ||
+          "Unknown";
       }
+    }
+
+    // Ensure timestamp is in the right format for previews
+    if (
+      previewData.addedAt &&
+      typeof previewData.addedAt === "string" &&
+      !isNaN(Number(previewData.addedAt))
+    ) {
+      // Convert string timestamp to number if needed
+      previewData.addedAt = Number(previewData.addedAt);
+      previewData.added_at = Number(previewData.addedAt);
     }
 
     return previewData;
@@ -644,18 +727,31 @@ const RecentlyAddedFormat = () => {
     // Save current scroll position
     saveScrollPosition();
 
-    // Set form values from the format
-    setNewFormat({
+    console.log("Editing format:", format);
+
+    // Normalize the format data to prevent type mismatches
+    const normalizedFormat = {
       name: format.name,
       template: format.template,
-      sectionId: format.sectionId || "all",
+      sectionId: format.sectionId ? String(format.sectionId) : "all",
       type: format.type,
-    });
+    };
+
+    // Set form values from the format
+    setNewFormat(normalizedFormat);
     setIsEditing(true);
     setEditingFormatId({
-      name: format.name,
-      type: format.type,
-      sectionId: format.sectionId,
+      name: normalizedFormat.name,
+      type: normalizedFormat.type,
+      sectionId: normalizedFormat.sectionId,
+    });
+
+    // Temporarily disable media type switching while editing
+    const mediaTypeTabs = document.querySelectorAll(".media-type-tab");
+    mediaTypeTabs.forEach((tab) => {
+      if (tab.getAttribute("data-type") !== activeMediaType) {
+        tab.setAttribute("disabled", "true");
+      }
     });
 
     // Scroll to form and focus the template input
@@ -677,6 +773,12 @@ const RecentlyAddedFormat = () => {
     // Save current scroll position
     saveScrollPosition();
 
+    // Re-enable media type switching
+    const mediaTypeTabs = document.querySelectorAll(".media-type-tab");
+    mediaTypeTabs.forEach((tab) => {
+      tab.removeAttribute("disabled");
+    });
+
     setNewFormat({
       name: "",
       template: "",
@@ -693,25 +795,70 @@ const RecentlyAddedFormat = () => {
 
   // Validate a format to check for duplicates
   const validateFormat = (formatToCheck, currentFormats) => {
+    console.log("Validating format:", formatToCheck);
+    console.log("Against formats:", currentFormats);
+
+    // Normalize values for comparison
+    const normalizedFormatToCheck = {
+      name: String(formatToCheck.name),
+      type: String(formatToCheck.type),
+      sectionId: formatToCheck.sectionId
+        ? String(formatToCheck.sectionId)
+        : "all",
+    };
+
     // If editing, ignore the format with the same ID
     const formatsToCheck = isEditing
-      ? currentFormats.filter(
-          (f) =>
-            !(
-              f.name === editingFormatId.name &&
-              f.type === editingFormatId.type &&
-              f.sectionId === editingFormatId.sectionId
-            )
-        )
+      ? currentFormats.filter((f) => {
+          // Normalize values for comparison
+          const normalizedFormat = {
+            name: String(f.name),
+            type: String(f.type),
+            sectionId: f.sectionId ? String(f.sectionId) : "all",
+          };
+
+          const normalizedEditingId = {
+            name: String(editingFormatId.name),
+            type: String(editingFormatId.type),
+            sectionId: editingFormatId.sectionId
+              ? String(editingFormatId.sectionId)
+              : "all",
+          };
+
+          // Only return true (filter in) if it's NOT the format we're currently editing
+          const isCurrentlyEditing =
+            normalizedFormat.name === normalizedEditingId.name &&
+            normalizedFormat.type === normalizedEditingId.type &&
+            normalizedFormat.sectionId === normalizedEditingId.sectionId;
+
+          if (isCurrentlyEditing) {
+            console.log("Excluding current format from validation:", f);
+          }
+
+          return !isCurrentlyEditing;
+        })
       : currentFormats;
 
     // Allow duplicate names for different sections - only check within same sectionId
-    const duplicateFormat = formatsToCheck.find(
-      (f) =>
-        f.name === formatToCheck.name &&
-        f.type === formatToCheck.type &&
-        f.sectionId === formatToCheck.sectionId
-    );
+    const duplicateFormat = formatsToCheck.find((f) => {
+      // Normalize values for comparison
+      const normalizedF = {
+        name: String(f.name),
+        type: String(f.type),
+        sectionId: f.sectionId ? String(f.sectionId) : "all",
+      };
+
+      const isDuplicate =
+        normalizedF.name === normalizedFormatToCheck.name &&
+        normalizedF.type === normalizedFormatToCheck.type &&
+        normalizedF.sectionId === normalizedFormatToCheck.sectionId;
+
+      if (isDuplicate) {
+        console.log("Found duplicate:", f);
+      }
+
+      return isDuplicate;
+    });
 
     if (duplicateFormat) {
       return {
@@ -789,6 +936,20 @@ const RecentlyAddedFormat = () => {
           throw new Error("Failed to save format");
         }
 
+        // Clear media cache so that new formats are immediately applied
+        try {
+          console.log(
+            "Automatically clearing media cache after format change..."
+          );
+          await fetch(`/api/clear-cache/media`, {
+            method: "POST",
+          });
+          console.log("Media cache cleared successfully");
+        } catch (cacheError) {
+          console.error("Failed to clear media cache:", cacheError);
+          // Continue with success flow even if cache clear fails
+        }
+
         // Update local state with formats of the current media type
         setFormats(updatedFormats.filter((f) => f.type === activeMediaType));
 
@@ -847,6 +1008,20 @@ const RecentlyAddedFormat = () => {
 
       if (!saveResponse.ok) {
         throw new Error("Failed to save formats");
+      }
+
+      // Clear media cache so that format changes are immediately applied
+      try {
+        console.log(
+          "Automatically clearing media cache after format deletion..."
+        );
+        await fetch(`/api/clear-cache/media`, {
+          method: "POST",
+        });
+        console.log("Media cache cleared successfully");
+      } catch (cacheError) {
+        console.error("Failed to clear media cache:", cacheError);
+        // Continue with success flow even if cache clear fails
       }
 
       // Update local state
@@ -936,19 +1111,24 @@ const RecentlyAddedFormat = () => {
   const MediaTypeTab = ({ type, label }) => (
     <button
       onClick={() => {
+        if (isEditing) {
+          // Prevent changing media type while editing
+          toast.warning("Please finish editing the current format first");
+          return;
+        }
         setActiveMediaType(type);
         setNewFormat((prev) => ({ ...prev, type }));
         setValidationErrors(null);
-        // Reset edit mode when changing media type
-        if (isEditing) {
-          handleCancelEdit();
-        }
       }}
-      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+      disabled={isEditing}
+      className={`media-type-tab px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
         activeMediaType === type
           ? "bg-accent-light text-accent-base"
+          : isEditing
+          ? "text-gray-500 cursor-not-allowed" // Disabled state
           : "text-gray-400 hover:text-white hover:bg-gray-700/50"
       }`}
+      data-type={type}
     >
       {label}
     </button>
@@ -1180,28 +1360,27 @@ const RecentlyAddedFormat = () => {
               </span>
             </div>
           </div>
-          <ThemedCard hasBorder={false} className="p-0">
-            <div className="grid grid-cols-1 gap-4 p-4">
-              {formats.map((format, index) => {
-                const previewData = getPreviewData(format.sectionId || "all");
-                const previewValue = processTemplate(format.template, {
-                  ...previewData,
-                  mediaType: activeMediaType,
-                });
 
-                return (
-                  <FormatCard
-                    key={`${format.name}-${format.sectionId}-${index}`}
-                    format={format}
-                    onDelete={handleDeleteFormat}
-                    onEdit={handleEditFormat}
-                    previewValue={previewValue}
-                    sections={sections}
-                  />
-                );
-              })}
-            </div>
-          </ThemedCard>
+          <div className="grid grid-cols-1 gap-4">
+            {formats.map((format, index) => {
+              const previewData = getPreviewData(format.sectionId || "all");
+              const previewValue = processTemplate(format.template, {
+                ...previewData,
+                mediaType: activeMediaType,
+              });
+
+              return (
+                <FormatCard
+                  key={`${format.name}-${format.sectionId}-${index}`}
+                  format={format}
+                  onDelete={handleDeleteFormat}
+                  onEdit={handleEditFormat}
+                  previewValue={previewValue}
+                  sections={sections}
+                />
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
