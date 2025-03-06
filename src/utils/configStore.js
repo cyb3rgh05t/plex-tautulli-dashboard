@@ -1,5 +1,10 @@
-const fs = require("fs");
-const path = require("path");
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+// Get directory name in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Determine the correct path for the config file in the configs folder in root directory
 const CONFIG_FILE = path.join(process.cwd(), "configs", "config.json");
@@ -127,12 +132,11 @@ const setConfig = (newConfig) => {
   }
 };
 
+// Define getConfig function separately
+const getConfig = () => config;
+
 // Load initial configuration
 loadConfig();
 
-module.exports = {
-  setConfig,
-  getConfig: () => config,
-  loadConfig,
-  saveConfig,
-};
+// Export all functions
+export { setConfig, getConfig, loadConfig, saveConfig };

@@ -1,13 +1,17 @@
-require("dotenv").config({ path: ".env" });
+import "dotenv/config";
+import express from "express";
+import cors from "cors";
+import { createProxyMiddleware } from "http-proxy-middleware";
+import { getConfig, setConfig } from "./src/utils/configStore.js";
+import { getFormats, saveFormats } from "./src/utils/formatStore.js";
+import axios from "axios";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const express = require("express");
-const cors = require("cors");
-const { createProxyMiddleware } = require("http-proxy-middleware");
-const { getConfig, setConfig } = require("./src/utils/configStore.cjs");
-const { getFormats, saveFormats } = require("./src/utils/formatStore.cjs");
-const axios = require("axios");
-const fs = require("fs");
-const path = require("path");
+// Get directory name in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ======================================================================
 // Constants and Configuration
@@ -1013,7 +1017,6 @@ app.get("/api/media/:type", async (req, res) => {
   }
 });
 
-// Users API
 // Users API
 app.get("/api/users", async (req, res) => {
   try {
@@ -2053,6 +2056,21 @@ app.get("/api/recent/:type", async (req, res) => {
             console.log(
               `[${requestId}] Using cached metadata for ${media.rating_key}`
             );
+
+            // Apply cached metadata to the media item
+            media.video_full_resolution = videoResolution;
+            media.content_rating = metadata.content_rating || null;
+            media.rating = metadata.rating || null;
+            media.summary = metadata.summary || media.summary;
+
+            // If complete metadata is available, apply additional fields
+            if (metadata.complete_metadata) {
+              const completeData = metadata.complete_metadata;
+              // Apply other important fields that might be needed for display
+              media.genres = completeData.genres || [];
+              media.directors = completeData.directors || [];
+              media.actors = completeData.actors || [];
+            }
           }
         }
 
@@ -2070,22 +2088,35 @@ app.get("/api/recent/:type", async (req, res) => {
                   cmd: "get_metadata",
                   rating_key: media.rating_key,
                 },
-                timeout: 5000, // Add a timeout to prevent hanging
+                timeout: 5000,
               }
             );
 
-            // Extract video resolution from metadata
-            const mediaInfo =
-              metadataResponse.data?.response?.data?.media_info?.[0];
-            if (mediaInfo && mediaInfo.video_full_resolution) {
-              videoResolution = mediaInfo.video_full_resolution;
+            const responseData = metadataResponse.data?.response?.data;
 
-              // Cache the metadata
+            if (responseData) {
+              // Extract all metadata rather than just resolution
+              const mediaInfo = responseData.media_info?.[0] || {};
+              videoResolution = mediaInfo.video_full_resolution || "Unknown";
+
+              // Cache the complete metadata
               metadataCache.set(metadataCacheKey, {
+                // Include important metadata fields explicitly
                 video_full_resolution: videoResolution,
+                content_rating: responseData.content_rating || null,
+                rating: responseData.rating || null,
+                summary: responseData.summary || null,
+                duration: responseData.duration || null,
+                // Store the complete metadata for future use
+                complete_metadata: responseData,
                 media_info: mediaInfo,
                 timestamp: Date.now(),
               });
+
+              // Update the current media item with critical metadata
+              media.video_full_resolution = videoResolution;
+              media.content_rating = responseData.content_rating || null;
+              media.rating = responseData.rating || null;
             }
           } catch (error) {
             console.error(
@@ -2104,7 +2135,9 @@ app.get("/api/recent/:type", async (req, res) => {
           mediaType: type,
           media_type: type,
           formatted_duration: formattedDuration,
-          video_full_resolution: videoResolution, // Add resolution to the media object
+          video_full_resolution: videoResolution,
+          // Ensure content rating is included
+          content_rating: media.content_rating || null,
           // Add both key variations for timestamps
           addedAt: media.added_at,
           added_at: media.added_at,
@@ -2536,3 +2569,6 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(formatConfig(getConfig()));
   console.log("==================================\n");
 });
+
+// Export app for testing
+export default app;

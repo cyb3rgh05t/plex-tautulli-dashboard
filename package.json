@@ -5,13 +5,13 @@
   "type": "module",
   "scripts": {
     "dev:frontend": "vite --port 3005",
-    "dev:server": "node server.cjs",
+    "dev:server": "node server.js",
     "dev": "npm run update-version && concurrently \"npm run dev:frontend\" \"npm run dev:server\"",
     "build": "npm run update-version:prod && vite build",
     "preview": "vite preview",
     "update-version": "cross-env NODE_ENV=development node update-version.js",
     "update-version:prod": "cross-env NODE_ENV=production node update-version.js",
-    "start": "node server.cjs"
+    "start": "node server.js"
   },
   "dependencies": {
     "axios": "^1.7.9",
@@ -44,7 +44,7 @@
     "url": "git+https://github.com/cyb3rgh05t/plex-tautulli-dashboard.git"
   },
   "license": "MIT",
-  "main": "postcss.config.cjs",
+  "main": "postcss.config.js",
   "keywords": [],
   "bugs": {
     "url": "https://github.com/cyb3rgh05t/plex-tautulli-dashboard/issues"
