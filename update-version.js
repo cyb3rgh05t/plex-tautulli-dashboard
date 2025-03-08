@@ -2,7 +2,6 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { logError, logInfo, logDebug, logWarn } from "./src/utils/logger.js";
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -11,7 +10,7 @@ const __dirname = path.dirname(__filename);
 // Get environment (either from NODE_ENV or command-line args)
 const isDev =
   process.env.NODE_ENV === "development" || process.argv.includes("--dev");
-logInfo(`Running in ${isDev ? "development" : "production"} mode`);
+console.log(`Running in ${isDev ? "development" : "production"} mode`);
 
 // Read the version from version.js (the source of truth)
 function getVersionFromFile() {
@@ -19,7 +18,7 @@ function getVersionFromFile() {
     const versionFilePath = path.join(__dirname, "version.js");
 
     if (!fs.existsSync(versionFilePath)) {
-      logError("Error: version.js file does not exist!");
+      console.log("Error: version.js file does not exist!");
       process.exit(1);
     }
 
@@ -27,16 +26,16 @@ function getVersionFromFile() {
     const versionMatch = versionFileContent.match(/appVersion = "([^"]+)"/);
 
     if (!versionMatch || !versionMatch[1]) {
-      logError("Error: Could not parse version from version.js!");
+      console.log("Error: Could not parse version from version.js!");
       process.exit(1);
     }
 
     // Extract the base version from the file
     const version = versionMatch[1];
-    logInfo(`Found version in version.js: ${version}`);
+    console.log(`Found version in version.js: ${version}`);
     return version;
   } catch (error) {
-    logError("Error reading version.js:", error);
+    console.log("Error reading version.js:", error);
     process.exit(1);
   }
 }
@@ -47,7 +46,7 @@ function updatePackageJson(version) {
     const packageJsonPath = path.join(__dirname, "package.json");
 
     if (!fs.existsSync(packageJsonPath)) {
-      logError("Error: package.json file does not exist!");
+      console.log("Error: package.json file does not exist!");
       process.exit(1);
     }
 
@@ -61,11 +60,11 @@ function updatePackageJson(version) {
       packageJsonPath,
       JSON.stringify(packageJson, null, 2) + "\n"
     );
-    logInfo(`Updated package.json with version: ${version}`);
+    console.log(`Updated package.json with version: ${version}`);
 
     return true;
   } catch (error) {
-    logError("Error updating package.json:", error);
+    console.log("Error updating package.json:", error);
     return false;
   }
 }
@@ -76,7 +75,7 @@ function updateReadmeBadge(version) {
     const readmePath = path.join(__dirname, "README.md");
 
     if (!fs.existsSync(readmePath)) {
-      logInfo("README.md file not found, skipping badge update");
+      console.log("README.md file not found, skipping badge update");
       return true;
     }
 
@@ -85,7 +84,7 @@ function updateReadmeBadge(version) {
     // Format version for the badge URL - convert hyphen to nothing
     // Example: 2.2.1-dev becomes 2.2.1dev for shield.io compatibility
     const badgeVersion = version.replace(/-/g, "");
-    logInfo(`Using formatted version for badge: ${badgeVersion}`);
+    console.log(`Using formatted version for badge: ${badgeVersion}`);
 
     // Update the version badge
     // This regex matches the version badge in your README.md with a more flexible pattern
@@ -99,14 +98,16 @@ function updateReadmeBadge(version) {
       );
 
       fs.writeFileSync(readmePath, readmeContent);
-      logInfo(`Updated README.md badge with version: ${badgeVersion}`);
+      console.log(`Updated README.md badge with version: ${badgeVersion}`);
       return true;
     } else {
-      logInfo("Version badge not found in README.md, skipping badge update");
+      console.log(
+        "Version badge not found in README.md, skipping badge update"
+      );
       return true;
     }
   } catch (error) {
-    logError("Error updating README.md badge:", error);
+    console.log("Error updating README.md badge:", error);
     return false;
   }
 }
@@ -116,7 +117,7 @@ function main() {
   const version = getVersionFromFile();
 
   if (!version) {
-    logError("Failed to get version information.");
+    console.log("Failed to get version information.");
     process.exit(1);
   }
 
@@ -124,9 +125,9 @@ function main() {
   const readmeSuccess = updateReadmeBadge(version);
 
   if (packageSuccess && readmeSuccess) {
-    logInfo("Version update completed successfully!");
+    console.log("Version update completed successfully!");
   } else {
-    logError("Version update failed!");
+    console.log("Version update failed!");
     process.exit(1);
   }
 }
