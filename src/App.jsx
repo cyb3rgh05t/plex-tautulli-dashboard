@@ -11,7 +11,7 @@ import {
 import { QueryClient, QueryClientProvider, useQueryClient } from "react-query";
 import { Toaster } from "react-hot-toast";
 import { ConfigProvider, useConfig } from "./context/ConfigContext";
-import { ThemeProvider, useTheme } from "./context/ThemeContext";
+import { ThemeProvider, useTheme } from "./context/ThemeContext.jsx";
 import SetupWizard from "./components/SetupWizard/SetupWizard";
 import ThemedDashboardLayout from "./components/Layout/ThemedDashboardLayout";
 import LoadingScreen from "./components/common/LoadingScreen";

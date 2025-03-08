@@ -8,7 +8,7 @@ import * as Icons from "lucide-react";
 import toast from "react-hot-toast";
 import ThemedCard from "../common/ThemedCard";
 import ThemedButton from "../common/ThemedButton";
-import { useTheme } from "../../context/ThemeContext";
+import { useTheme } from "../../context/ThemeContext.jsx";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
@@ -20,7 +20,7 @@ const capitalizeFirstLetter = (string) => {
 const LibraryTypeIcon = ({ type }) => {
   switch (type.toLowerCase()) {
     case "movie":
-      return <Icons.Film className="text-accent-base" />;
+      return <Icons.Film className="text-accent" />;
     case "show":
       return <Icons.Tv className="text-green-400" />;
     case "artist":
@@ -31,51 +31,41 @@ const LibraryTypeIcon = ({ type }) => {
 };
 
 const LibraryCard = ({ library, isSelected, onToggleSelect }) => {
-  const { accentColor } = useTheme();
-
   // Safely extract section ID and count
   const rawData = library.raw_data || library;
   const sectionId = rawData.section_id;
   const itemCount = rawData.count || rawData.parent_count || 0;
   const libraryType = rawData.section_type || rawData.type;
 
-  // Get RGB value for current accent
-  const getAccentRgb = () => {
-    const accentColorMap = {
-      default: "167, 139, 250",
-      green: "109, 247, 81",
-      purple: "166, 40, 140",
-      orange: "255, 153, 0",
-      blue: "0, 98, 255",
-      red: "232, 12, 11",
-    };
-
-    return accentColorMap[accentColor] || accentColorMap.default;
-  };
-
-  const accentRgb = getAccentRgb();
-
   return (
     <div
-      className={`transition-all duration-200 rounded-xl p-4 hover:bg-gray-800/50 ${
-        isSelected ? "shadow-accent-md" : ""
-      }`}
-      style={{
-        backgroundColor: "rgba(31, 41, 55, 0.5)",
-        border: `1px solid rgba(${accentRgb}, ${isSelected ? "0.5" : "0.3"})`,
-        marginBottom: "1rem",
-      }}
+      className={`transition-theme duration-200 rounded-xl p-4 hover:bg-gray-800/50
+        border border-accent ${isSelected ? "shadow-accent" : ""}
+        mb-4 bg-gray-900/50`}
     >
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <input
-              type="checkbox"
-              checked={isSelected}
-              onChange={() => onToggleSelect(sectionId)}
-              className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-accent-base focus:ring-accent focus:ring-offset-gray-800"
-            />
-            <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700/50">
+            {/* Updated checkbox with accent styling */}
+            <div className="relative flex items-center">
+              <input
+                type="checkbox"
+                id={`library-${sectionId}`}
+                checked={isSelected}
+                onChange={() => onToggleSelect(sectionId)}
+                className="peer h-5 w-5 appearance-none rounded border border-gray-600 bg-gray-800 
+                  checked:bg-accent checked:border-accent focus:outline-none focus:ring-2 
+                  focus:ring-accent/50 focus:ring-offset-1 focus:ring-offset-gray-900 
+                  cursor-pointer transition-colors"
+              />
+              <label
+                htmlFor={`library-${sectionId}`}
+                className="absolute inset-0 flex items-center justify-center text-transparent peer-checked:text-white"
+              >
+                <Icons.Check className="h-3.5 w-3.5" />
+              </label>
+            </div>
+            <div className="p-3 bg-gray-800/50 rounded-lg border border-accent">
               <LibraryTypeIcon type={libraryType} />
             </div>
             <div>
@@ -88,9 +78,9 @@ const LibraryCard = ({ library, isSelected, onToggleSelect }) => {
             </div>
           </div>
           <div className="text-right">
-            <div className="bg-gray-800/50 px-3 py-1 rounded-lg border border-gray-700/50">
+            <div className="bg-gray-800/50 px-3 py-1 rounded-lg border border-accent">
               <span className="text-theme-muted text-sm">Items: </span>
-              <span className="text-accent-base font-medium">
+              <span className="text-accent font-medium">
                 {itemCount.toLocaleString()}
               </span>
             </div>
@@ -366,8 +356,8 @@ const Libraries = () => {
             Plex Libraries
           </h2>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
-              <Icons.Film size={14} className="text-accent-base" />
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-accent">
+              <Icons.Film size={14} className="text-accent" />
               <span className="text-theme-muted text-sm">
                 {Array.isArray(libraries) ? libraries.length : 0} Libraries
               </span>
@@ -404,7 +394,7 @@ const Libraries = () => {
             variant="accent"
             icon={
               isRefreshing
-                ? () => <Icons.RefreshCw className="animate-spin" />
+                ? () => <Icons.RefreshCw className="text-accent animate-spin" />
                 : Icons.RefreshCw
             }
           >
@@ -418,7 +408,7 @@ const Libraries = () => {
           {[1, 2, 3].map((n) => (
             <div
               key={n}
-              className="bg-modal rounded-xl p-4 animate-pulse border border-gray-700/50"
+              className="bg-modal rounded-xl p-4 animate-pulse border border-accent"
             >
               <div className="flex items-center gap-4">
                 <div className="w-5 h-5 bg-gray-700 rounded" />

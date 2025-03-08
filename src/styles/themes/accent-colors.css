@@ -1,0 +1,55 @@
+/* Purple Accent */
+.accent-purple {
+  --accent-color: 167, 139, 250;
+  --link-color: rgb(99, 102, 241);
+  --link-color-hover: rgb(167, 139, 250);
+}
+
+/* Grey Accent */
+.accent-grey {
+  --accent-color: 220, 220, 220;
+  --link-color: rgb(229, 231, 235);
+  --link-color-hover: rgb(255, 255, 255);
+}
+
+/* Green Accent */
+.accent-green {
+  --accent-color: 109, 247, 81;
+  --link-color: rgb(109, 247, 81);
+  --link-color-hover: rgba(109, 247, 81, 0.8);
+}
+
+/* Maroon Accent */
+.accent-maroon {
+  --accent-color: 166, 40, 140;
+  --link-color: rgb(223, 21, 179);
+  --link-color-hover: rgb(255, 0, 200);
+}
+
+/* Orange Accent */
+.accent-orange {
+  --accent-color: 255, 153, 0;
+  --link-color: rgb(255, 153, 0);
+  --link-color-hover: rgba(255, 153, 0, 0.8);
+}
+
+/* Blue Accent */
+.accent-blue {
+  --accent-color: 0, 98, 255;
+  --link-color: rgb(61, 126, 255);
+  --link-color-hover: rgb(0, 98, 255);
+}
+
+/* Red Accent */
+.accent-red {
+  --accent-color: 232, 12, 11;
+  --link-color: rgb(232, 12, 11);
+  --link-color-hover: rgba(232, 12, 11, 0.8);
+}
+
+/* Default (same as purple for backward compatibility) */
+.accent-default {
+  --accent-color: 167, 139, 250;
+  --link-color: rgb(99, 102, 241);
+  --link-color-hover: rgb(167, 139, 250);
+}

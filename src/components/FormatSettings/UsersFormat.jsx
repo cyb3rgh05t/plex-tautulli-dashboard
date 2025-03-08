@@ -80,7 +80,7 @@ const VariableButton = ({ variable, onClick }) => (
   <button
     onClick={() => onClick(variable.name)}
     className="bg-gray-800/50 p-4 rounded-lg text-left hover:bg-gray-800/70 
-      border border-gray-700/50 transition-all duration-200 group"
+      border  border-accent transition-all duration-200 group"
   >
     <div className="flex items-start justify-between">
       <div>
@@ -127,14 +127,14 @@ const FormatCard = ({ format, onDelete, onEdit, previewValue, id }) => (
     }
   >
     <div className="space-y-3">
-      <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+      <div className="bg-gray-900/50 rounded-lg p-3 border  border-accent">
         <div className="flex items-center gap-2 text-theme-muted text-sm mb-2">
           <Icons.Code size={14} />
           <span>Template</span>
         </div>
         <code className="text-sm text-theme font-mono">{format.template}</code>
       </div>
-      <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+      <div className="bg-gray-900/50 rounded-lg p-3 border  border-accent">
         <div className="flex items-center gap-2 text-theme-muted text-sm mb-2">
           <Icons.Variable size={14} />
           <span>Preview</span>
@@ -717,7 +717,7 @@ const UsersFormat = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
-        <div className="animate-spin mr-2">
+        <div className="text-accent animate-spin mr-2">
           <Icons.Loader2 className="h-8 w-8 text-accent-base" />
         </div>
         <span className="text-theme">Loading Formats...</span>
@@ -800,7 +800,7 @@ const UsersFormat = () => {
               onChange={(e) =>
                 setNewFormat({ ...newFormat, name: e.target.value })
               }
-              className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-4 py-3
+              className="w-full bg-gray-900/50 text-white border  border-accent rounded-lg px-4 py-3
                 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200"
               placeholder={`e.g., ${
@@ -828,7 +828,7 @@ const UsersFormat = () => {
               onChange={(e) =>
                 setNewFormat({ ...newFormat, template: e.target.value })
               }
-              className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-4 py-3
+              className="w-full bg-gray-900/50 text-white border  border-accent rounded-lg px-4 py-3
                 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200 font-mono"
               placeholder={
@@ -845,7 +845,7 @@ const UsersFormat = () => {
 
           {/* Live Preview */}
           {newFormat.template && previewData && (
-            <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700/50">
+            <div className="bg-gray-900/50 rounded-lg p-4 border  border-accent">
               <label className="block text-theme font-medium mb-2">
                 Preview
               </label>
@@ -887,7 +887,7 @@ const UsersFormat = () => {
               Existing {activeMediaType === "shows" ? "TV Show" : "Movie"}{" "}
               Formats
             </h3>
-            <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-gray-700/50">
+            <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border  border-accent">
               <span className="text-sm font-medium text-theme-muted">
                 {formats.length} Format{formats.length !== 1 ? "s" : ""}
               </span>

@@ -7,7 +7,7 @@ import * as Icons from "lucide-react";
 import MediaModal from "./MediaModal";
 import ThemedButton from "../common/ThemedButton";
 import ThemedCard from "../common/ThemedCard";
-import { useTheme } from "../../context/ThemeContext";
+import { useTheme } from "../../context/ThemeContext.jsx";
 import axios from "axios";
 import ThemedTabButton from "../common/ThemedTabButton";
 
@@ -149,9 +149,13 @@ const MediaCard = ({ media }) => {
       thumbPath = media.thumb;
     }
 
+    const cacheBreaker = Date.now();
+
+    const cacheKey = media._imageCacheKey || imageCacheKey;
+
     return `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
       thumbPath || ""
-    )}&apikey=${apiKey}&cacheKey=${imageCacheKey}`;
+    )}&apikey=${apiKey}&cacheKey=${cacheKey}`;
   };
 
   return (
@@ -162,15 +166,15 @@ const MediaCard = ({ media }) => {
       >
         <div
           className="relative aspect-[2/3] rounded-xl overflow-hidden 
-            bg-gray-800/50 border border-gray-700/50 
-            group-hover:border-accent group-hover:shadow-accent-lg
-            transition-all duration-200"
+            bg-gray-800/50 border border-accent 
+            group-hover:border-accent-hover group-hover:shadow-accent
+            transition-theme"
         >
           {/* Loading State */}
           {imageLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-modal backdrop-blur-sm">
               <div className="animate-spin mr-2">
-                <Icons.Loader2 className="h-8 w-8 text-accent-base" />
+                <Icons.Loader2 className="h-8 w-8 text-accent" />
               </div>
             </div>
           )}
@@ -202,11 +206,14 @@ const MediaCard = ({ media }) => {
                   setImageError(false);
                   setImageLoading(true);
                 }}
-                className="px-3 py-1.5 bg-accent-base/20 backdrop-blur-sm rounded-lg 
-                  border border-accent/20 text-accent-base text-xs font-medium 
-                  hover:bg-accent-base/30 transition-colors flex items-center gap-1.5"
+                className="px-3 py-1.5 bg-accent-lighter rounded-lg 
+                  border border-accent/20 text-accent text-xs font-medium 
+                  hover:bg-accent-light transition-theme flex items-center gap-1.5"
               >
-                <Icons.RefreshCw size={14} className="animate-spin" />
+                <Icons.RefreshCw
+                  size={14}
+                  className="text-accent animate-spin"
+                />
                 Refresh
               </button>
             </div>
@@ -227,7 +234,7 @@ const MediaCard = ({ media }) => {
             {/* Added Time Badge */}
             <div
               className="px-2 py-1 bg-gray-900/70 backdrop-blur-sm rounded-lg 
-                border border-gray-700/50 text-theme-muted text-xs font-medium 
+                border border-accent text-theme-muted text-xs font-medium 
                 flex items-center gap-1"
             >
               <Icons.Clock3 size={12} />
@@ -238,7 +245,7 @@ const MediaCard = ({ media }) => {
             {resolution && (
               <div
                 className="px-2 py-1 bg-gray-900/70 backdrop-blur-sm rounded-lg 
-                  border border-accent/20 text-accent-base text-xs font-medium"
+                  border border-accent/20 text-accent text-xs font-medium"
               >
                 {resolution}
               </div>
@@ -262,9 +269,9 @@ const MediaCard = ({ media }) => {
           <h3 className="text-white font-medium truncate">
             {getDisplayTitle()}
           </h3>
-          <div className="flex items-center gap-2 text-sm accent-base">
+          <div className="flex items-center gap-2 text-sm">
             {getDisplaySubtitle() && (
-              <span className="text-accent-base">{getDisplaySubtitle()}</span>
+              <span className="text-accent">{getDisplaySubtitle()}</span>
             )}
             {media.duration && (
               <div className="flex items-center gap-1 text-gray-400">
@@ -290,7 +297,7 @@ const MediaCard = ({ media }) => {
 
 const LoadingCard = () => (
   <div className="space-y-2 animate-pulse">
-    <div className="aspect-[2/3] rounded-xl bg-modal border border-gray-700/50" />
+    <div className="aspect-[2/3] rounded-xl bg-modal border border-accent" />
     <div className="space-y-2 px-1">
       <div className="h-4 bg-modal rounded w-3/4" />
       <div className="h-3 bg-modal rounded w-1/2" />
@@ -340,7 +347,9 @@ const EmptySection = ({ type }) => {
 
   return (
     <ThemedCard className="p-8 text-center flex flex-col items-center">
-      <Icon size={32} className="text-gray-500 mb-3" />
+      <div className="flex justify-center mb-4">
+        <Icon size={32} className="text-accent opacity-70" />
+      </div>
       <p className="text-theme-muted font-medium mb-1">{message}</p>
       <p className="text-sm text-theme-muted">{hint}</p>
     </ThemedCard>
@@ -357,17 +366,18 @@ const getTypePriority = (type) => {
 };
 
 const MediaTypeSubTab = ({ active, onClick, icon: Icon, children }) => (
-  <ThemedTabButton
+  <button
     onClick={onClick}
-    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-      active
-        ? "bg-accent-light text-accent-base"
-        : "text-gray-400 hover:text-white hover:bg-gray-700/50"
-    }`}
+    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-theme
+      ${
+        active
+          ? "tab-accent active bg-accent-light text-accent border border-accent/20"
+          : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+      }`}
   >
-    {Icon && <Icon size={16} />}
+    {Icon && <Icon size={16} className={active ? "text-accent" : ""} />}
     {children}
-  </ThemedTabButton>
+  </button>
 );
 
 // Updated NoLibrariesCard component with centered layout
@@ -395,7 +405,7 @@ const NoLibrariesCard = ({ type }) => {
     >
       <div className="text-center">
         <div className="flex justify-center mb-4">
-          <Icon size={48} className="text-accent-base opacity-70" />
+          <Icon size={48} className="text-accent opacity-70" />
         </div>
         <h3 className="text-white text-xl font-semibold mb-2">
           No {description} have been saved yet
@@ -501,6 +511,7 @@ const RecentlyAdded = () => {
 
     setIsRefreshing(true);
     try {
+      await axios.get("/api/clear-image-cache");
       const savedSections = await fetchSections();
       const sectionMediaResults = {};
 
@@ -559,6 +570,48 @@ const RecentlyAdded = () => {
       };
     }
   }, [config.tautulliApiKey]);
+
+  useEffect(() => {
+    const handleImageCacheCleared = (event) => {
+      logInfo(
+        "Image cache cleared event received, refreshing image cache keys"
+      );
+      // Refresh all image cache keys by regenerating them
+      const timestamp = event.detail?.timestamp || Date.now();
+
+      // Update sections to force image reload
+      setSectionMedia((prevSections) => {
+        const updatedSections = { ...prevSections };
+
+        // Update each section's media items with new cache keys
+        Object.keys(updatedSections).forEach((sectionId) => {
+          if (updatedSections[sectionId]?.media?.length) {
+            const updatedMedia = updatedSections[sectionId].media.map(
+              (item) => ({
+                ...item,
+                _imageCacheKey: timestamp, // Add a cache-breaking key to each media item
+              })
+            );
+
+            updatedSections[sectionId] = {
+              ...updatedSections[sectionId],
+              media: updatedMedia,
+            };
+          }
+        });
+
+        return updatedSections;
+      });
+    };
+
+    // Add event listener for image cache cleared
+    window.addEventListener("imageCacheCleared", handleImageCacheCleared);
+
+    // Cleanup event listener on component unmount
+    return () => {
+      window.removeEventListener("imageCacheCleared", handleImageCacheCleared);
+    };
+  }, []);
 
   // Calculate time until next refresh
   const timeUntilNextRefresh = Math.max(
@@ -641,8 +694,8 @@ const RecentlyAdded = () => {
             Recently Added
           </h2>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
-              <Icons.Film size={14} className="text-accent-base" />
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-accent">
+              <Icons.Film size={14} className="text-accent" />
               <span className="text-theme-muted text-sm">
                 {sections.length} Sections
               </span>
@@ -663,7 +716,7 @@ const RecentlyAdded = () => {
           variant="accent"
           icon={
             isRefreshing
-              ? () => <Icons.RefreshCw className="animate-spin" />
+              ? () => <Icons.RefreshCw className="text-accent animate-spin" />
               : Icons.RefreshCw
           }
         >
@@ -706,7 +759,9 @@ const RecentlyAdded = () => {
       {/* Existing rendering logic remains the same */}
       {error && (
         <ThemedCard className="bg-red-500/10 border-red-500/20 p-6 text-center flex flex-col items-center">
-          <Icons.AlertCircle size={24} className="text-red-400 mb-2" />
+          <div className="flex justify-center mb-4">
+            <Icons.AlertCircle size={24} className="text-red-400 mb-2" />
+          </div>
           <p className="text-red-400">{error}</p>
           <ThemedButton
             onClick={handleRefresh}
@@ -721,7 +776,9 @@ const RecentlyAdded = () => {
 
       {!sections.length && (
         <ThemedCard className="p-8 text-center flex flex-col items-center">
-          <Icons.Film size={32} className="text-gray-500 mb-3" />
+          <div className="flex justify-center mb-4">
+            <Icons.Film size={32} className="text-accent opacity-70" />
+          </div>
           <p className="text-theme-muted mb-2">
             No library sections have been saved yet
           </p>
@@ -783,11 +840,11 @@ const RecentlyAdded = () => {
 
             return (
               <div key={sectionId} className="space-y-4">
-                <div className="flex items-center gap-3 pb-2 border-b border-gray-700/50">
+                <div className="flex items-center gap-3 pb-2 border-b border-accent">
                   <h3 className="text-xl font-medium text-white">
                     {sectionData.name || "Unknown Section"}
                   </h3>
-                  <div className="px-2 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
+                  <div className="px-2 py-1 bg-gray-800/50 rounded-lg border border-accent">
                     <span className="text-theme-muted text-sm">
                       {formattedType}
                     </span>
@@ -803,7 +860,7 @@ const RecentlyAdded = () => {
                         key={`${media.media_type || "unknown"}-${
                           media.rating_key ||
                           Math.random().toString(36).substring(2, 9)
-                        }`}
+                        }-${lastRefreshTime}`}
                         media={media}
                       />
                     ))}

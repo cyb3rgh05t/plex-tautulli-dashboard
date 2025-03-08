@@ -1664,6 +1664,36 @@ app.post("/api/clear-cache/:type", (req, res) => {
   }
 });
 
+// Add a route to clear image cache headers
+app.get("/api/clear-image-cache", (req, res) => {
+  try {
+    // Set cache control headers to prevent browser caching
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    // Generate a timestamp to use as a global cache breaker
+    const timestamp = Date.now();
+
+    logInfo(`Image cache clearing requested. New timestamp: ${timestamp}`);
+
+    res.json({
+      success: true,
+      message: "Image cache headers cleared",
+      timestamp: timestamp,
+    });
+  } catch (error) {
+    logError("Failed to clear image cache", error);
+    res.status(500).json({
+      error: "Failed to clear image cache",
+      message: error.message,
+    });
+  }
+});
+
 // Downloads endpoint
 app.get("/api/downloads", async (req, res) => {
   try {

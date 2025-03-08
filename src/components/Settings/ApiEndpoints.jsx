@@ -55,7 +55,7 @@ const RequestExampleDisplay = ({ examples }) => {
       {examples.map((example, index) => (
         <div key={index} className="space-y-2">
           <p className="text-theme-muted text-sm">{example.description}</p>
-          <pre className="bg-gray-900/50 p-4 rounded-lg border border-gray-700/50 overflow-x-auto">
+          <pre className="bg-gray-900/50 p-4 rounded-lg border border-accent overflow-x-auto">
             <code className="text-sm text-theme font-mono">
               {activeLanguage === "url" && example.curlCommand}
               {activeLanguage === "python" && example.pythonRequest}
@@ -233,7 +233,7 @@ const EndpointCard = ({
             {method === "GET" ? <FaCheck size={12} /> : null}
             {method}
           </span>
-          <code className="text-white font-mono bg-gray-900/50 px-4 py-2 rounded-lg border border-gray-700/50">
+          <code className="text-white font-mono bg-gray-900/50 px-4 py-2 rounded-lg border border-accent">
             {modifiedEndpoint}
           </code>
         </div>
@@ -262,7 +262,7 @@ const EndpointCard = ({
 
       {/* URL Parameters Input Fields */}
       {urlParams.length > 0 && (
-        <div className="mb-4 bg-gray-900/20 p-4 rounded-lg border border-gray-700/30">
+        <div className="mb-4 bg-gray-900/20 p-4 rounded-lg border border-accent">
           <h4 className="text-white font-medium mb-3">URL Parameters</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {urlParams.map((param) => (
@@ -275,7 +275,7 @@ const EndpointCard = ({
                   value={paramValues[param] || ""}
                   onChange={(e) => handleParamChange(param, e.target.value)}
                   placeholder={`Replace :${param}`}
-                  className="flex-1 bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-3 py-2 
+                  className="flex-1 bg-gray-900/50 text-white border border-accent rounded-lg px-3 py-2 
                     placeholder-gray-500 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                 />
               </div>
@@ -297,7 +297,7 @@ const EndpointCard = ({
 
       {/* Test Response Section */}
       {loading && (
-        <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700/50">
+        <div className="bg-gray-900/50 p-4 rounded-lg border border-accent">
           <p className="text-theme-muted animate-pulse">Testing endpoint...</p>
         </div>
       )}
@@ -327,7 +327,7 @@ const EndpointCard = ({
       {example && (
         <div className="space-y-2">
           <p className="text-gray-500 text-sm">Example Response:</p>
-          <pre className="bg-gray-900/50 p-4 rounded-lg border border-gray-700/50 overflow-x-auto">
+          <pre className="bg-gray-900/50 p-4 rounded-lg border border-accent overflow-x-auto">
             <code className="text-sm text-theme font-mono">
               {JSON.stringify(example, null, 2)}
             </code>
@@ -1135,7 +1135,7 @@ fetch('${baseUrl}/api/formats', {
             Server Configuration
           </h2>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-900/50 border border-gray-700/50">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-900/50 border border-accent">
           <div
             className={`w-2 h-2 rounded-full ${
               serverStatus === "active"
@@ -1154,7 +1154,12 @@ fetch('${baseUrl}/api/formats', {
           </span>
         </div>
       </div>
-      <ThemedCard>
+      <ThemedCard
+        className="mb-4 hover:bg-gray-800/70 transition-all duration-200"
+        isInteractive
+        hasBorder
+        useAccentBorder={true}
+      >
         <div className="space-y-2">
           <label className="block text-theme font-medium">API Server URL</label>
           <div className="relative">
@@ -1165,7 +1170,7 @@ fetch('${baseUrl}/api/formats', {
               type="url"
               value={baseUrl}
               onChange={(e) => handleBaseUrlChange(e.target.value)}
-              className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg pl-10 pr-4 py-3
+              className="w-full bg-gray-900/50 text-white border border-accent rounded-lg pl-10 pr-4 py-3
                 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200"
               placeholder="API Endpoint URL"
@@ -1196,8 +1201,8 @@ fetch('${baseUrl}/api/formats', {
           <h2 className="text-xl font-semibold text-white">
             {activeTab === "get" ? "GET" : "POST"} Endpoints
           </h2>
-          <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-gray-700/50">
-            <span className="text-sm font-medium text-theme-muted">
+          <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-accent">
+            <span className="text-sm font-medium text-accent-base">
               {activeTab === "get"
                 ? `${GET_ENDPOINTS.length} Endpoints`
                 : `${POST_ENDPOINTS.length} Endpoints`}

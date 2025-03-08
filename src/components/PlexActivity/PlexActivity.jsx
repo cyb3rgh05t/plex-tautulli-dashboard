@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
-import { useTheme } from "../../context/ThemeContext";
+import { useTheme } from "../../context/ThemeContext.jsx";
 import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 import * as Icons from "lucide-react";
 import ThemedCard from "../common/ThemedCard";
@@ -17,30 +17,22 @@ const ActivityBadge = ({ type }) => {
   const styles = {
     download: {
       icon: Icons.Download,
-      bg: "bg-brand-primary-500/10",
-      text: "text-accent",
-      border: "border-accent",
+      className: "bg-accent-lighter text-accent border border-accent/30",
       label: "Downloading....",
     },
     transcode: {
       icon: Icons.Play,
-      bg: "bg-brand-primary-500/10",
-      text: "text-accent",
-      border: "border-accent",
+      className: "bg-accent-lighter text-accent border border-accent/30",
       label: "Transcoding...",
     },
     stream: {
       icon: Icons.Play,
-      bg: "bg-brand-primary-500/10",
-      text: "text-accent",
-      border: "border-accent",
+      className: "bg-accent-lighter text-accent border border-accent/30",
       label: "Streaming...",
     },
     pause: {
       icon: Icons.Pause,
-      bg: "bg-brand-primary-500/10",
-      text: "text-accent",
-      border: "border-accent",
+      className: "bg-accent-lighter text-accent border border-accent/30",
       label: "Paused",
     },
   };
@@ -54,8 +46,7 @@ const ActivityBadge = ({ type }) => {
 
   return (
     <div
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border
-        ${style.bg} ${style.text} ${style.border}`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${style.className}`}
     >
       <Icon size={14} />
       <span className="text-xs font-medium">{style.label}</span>
@@ -71,7 +62,7 @@ const ProgressBar = ({ progress }) => {
     <div className="space-y-1">
       <div className="h-2 bg-gray-800/50 rounded-full overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-accent-base to-accent-hover 
+          className="h-full bg-gradient-to-r from-accent-light to-accent-hover 
             rounded-full transition-all duration-300 ease-out"
           style={{ width: `${percent}%` }}
         />
@@ -92,7 +83,10 @@ const ActivityItem = ({ activity }) => {
   }
 
   return (
-    <ThemedCard className="hover:bg-gray-800/50" isInteractive>
+    <ThemedCard
+      className="hover:bg-gray-800/50 border border-accent"
+      isInteractive
+    >
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1 flex-1 min-w-0">
@@ -134,8 +128,8 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="p-2 rounded-lg border border-gray-700/50 bg-gray-800/50 text-theme-muted 
-          hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="p-2 rounded-lg border  border-accent bg-accent text-theme-muted 
+          hover:bg-accent-light hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Icons.ChevronLeft size={16} />
       </button>
@@ -148,8 +142,8 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
             className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors
               ${
                 currentPage === page
-                  ? "bg-accent-base text-white"
-                  : "bg-gray-800/50 text-theme-muted hover:bg-gray-700 hover:text-white border border-gray-700/50"
+                  ? "bg-accent-light text-white"
+                  : "bg-gray-800/50 text-theme-muted hover:bg-accent-light hover:text-white border  border-accent"
               }`}
           >
             {page}
@@ -160,8 +154,8 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="p-2 rounded-lg border border-gray-700/50 bg-gray-800/50 text-theme-muted 
-          hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="p-2 rounded-lg border  border-accent bg-gray-800/50 text-theme-muted 
+          hover:bg-accent-light hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Icons.ChevronRight size={16} />
       </button>
@@ -298,7 +292,7 @@ const PlexActivity = () => {
             Sync Activities
           </h2>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border  border-accent">
               <Icons.Download size={14} className="text-accent-base" />
               <span className="text-theme-muted text-sm">
                 {activities?.length || 0} Active
@@ -320,7 +314,7 @@ const PlexActivity = () => {
           variant="accent"
           icon={
             isRefreshing
-              ? () => <Icons.RefreshCw className="animate-spin" />
+              ? () => <Icons.RefreshCw className="text-accent animate-spin" />
               : Icons.RefreshCw
           }
         >

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark theme-dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -8,8 +8,8 @@
     <script>
       // Theme detection script to run before React loads
       (function () {
-        // Get theme preference (now always dark)
-        const savedTheme = "dark"; // Force dark theme
+        // Always use dark theme
+        const savedTheme = "dark";
 
         // Get saved Accent color
         const savedAccent = localStorage.getItem("accentColor") || "purple";
@@ -30,28 +30,20 @@
           ? savedAccent
           : "purple";
 
-        // Apply theme classes immediately
-        document.documentElement.classList.add("theme-" + savedTheme);
-        document.body.classList.add("theme-" + savedTheme);
-
-        // Apply accent classes immediately
+        // Apply theme and accent classes immediately
+        document.documentElement.classList.add("theme-dark");
+        document.documentElement.classList.add("dark"); // For Tailwind dark mode
         document.documentElement.classList.add("accent-" + accent);
-        document.body.classList.add("accent-" + accent);
 
         // Set data attributes for theme and accent
-        document.documentElement.setAttribute("data-theme", savedTheme);
+        document.documentElement.setAttribute("data-theme", "dark");
         document.documentElement.setAttribute("data-accent", accent);
 
-        console.log(
-          "Initial theme applied:",
-          savedTheme,
-          "with accent:",
-          accent
-        );
+        console.log("Initial theme applied: dark with accent:", accent);
       })();
     </script>
   </head>
-  <body>
+  <body class="theme-dark">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -4,29 +4,53 @@ import toast from "react-hot-toast";
 import axios from "axios";
 import ThemedButton from "../common/ThemedButton";
 import ThemedCard from "../common/ThemedCard";
+import ThemedTabButton from "../common/ThemedTabButton";
+import { useTheme } from "../../context/ThemeContext";
 import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
-// Tab component for cache type selection
-const CacheTypeTab = ({ active, onClick, label, icon: Icon, count }) => (
-  <button
-    onClick={onClick}
-    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-      active
-        ? "bg-accent-light text-accent-base"
-        : "text-theme-muted hover:text-theme-hover hover:bg-gray-700/50"
-    }`}
-  >
-    <Icon size={16} />
-    <span className="font-medium">{label}</span>
-    {count !== undefined && (
-      <span className="px-1.5 py-0.5 text-xs rounded-full bg-gray-800">
-        {count}
-      </span>
-    )}
-  </button>
-);
+// Enhanced cache stats card with theme integration
+const CacheStatCard = ({
+  icon: Icon,
+  title,
+  value,
+  subtitle,
+  accent = false,
+}) => {
+  const { accentRgb } = useTheme();
+
+  return (
+    <div
+      className={`bg-gray-800/50 rounded-lg border ${
+        accent ? "border-accent" : "border-gray-700/50"
+      } p-4 transition-all duration-200 hover:bg-gray-800/70`}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <div
+          className={`p-2 rounded-full ${
+            accent ? "bg-accent-light" : "bg-gray-700/50"
+          }`}
+        >
+          <Icon
+            size={16}
+            className={accent ? "text-accent-base" : "text-gray-300"}
+          />
+        </div>
+        <h4 className="text-white font-medium">{title}</h4>
+      </div>
+      <p
+        className={`text-lg font-semibold ${
+          accent ? "text-accent-base" : "text-white"
+        }`}
+      >
+        {value}
+      </p>
+      <p className="text-xs text-theme-muted mt-1">{subtitle}</p>
+    </div>
+  );
+};
 
 const CacheManager = () => {
+  const { accentColor, accentRgb } = useTheme();
   const [activeTab, setActiveTab] = useState("all");
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -173,10 +197,24 @@ const CacheManager = () => {
         // Clear all caches
         endpoint = `/api/clear-cache`;
         response = await axios.post(endpoint);
+
+        // Also clear image cache for all cache types
+        await axios.get("/api/clear-image-cache").catch((error) => {
+          logWarn("Failed to clear image cache:", error);
+        });
       } else if (type === "history") {
         // Use the backward-compatible endpoint specifically for user history cache
         endpoint = `/api/users/clear-cache`;
         response = await axios.post(endpoint);
+      } else if (type === "media") {
+        // Use type-specific endpoint for media cache
+        endpoint = `/api/clear-cache/${type}`;
+        response = await axios.post(endpoint);
+
+        // Also clear image cache when clearing media cache specifically
+        await axios.get("/api/clear-image-cache").catch((error) => {
+          logWarn("Failed to clear image cache for media cache:", error);
+        });
       } else {
         // Use type-specific endpoint for other cache types
         endpoint = `/api/clear-cache/${type}`;
@@ -194,6 +232,31 @@ const CacheManager = () => {
             lastCleared: new Date().toISOString(),
             lastRefreshed: prev.lastRefreshed,
           }));
+
+          // Dispatch event to notify components to refresh their image cache
+          window.dispatchEvent(
+            new CustomEvent("imageCacheCleared", {
+              detail: { timestamp: Date.now() },
+            })
+          );
+        } else if (type === "media") {
+          setCacheStats((prev) => {
+            const newStats = { ...prev };
+            newStats[type].size = 0;
+            newStats.totalSize =
+              newStats.history.size +
+              newStats.media.size +
+              newStats.metadata.size;
+            newStats.lastCleared = new Date().toISOString();
+            return newStats;
+          });
+
+          // Dispatch event to notify RecentlyAdded component to refresh image cache
+          window.dispatchEvent(
+            new CustomEvent("imageCacheCleared", {
+              detail: { timestamp: Date.now(), type: "media" },
+            })
+          );
         } else {
           setCacheStats((prev) => {
             const newStats = { ...prev };
@@ -276,6 +339,7 @@ const CacheManager = () => {
       title="Cache Management"
       icon={Icons.Database}
       useAccentBorder={true}
+      useAccentGradient={true}
     >
       <div className="space-y-6">
         <div className="flex items-center justify-between mb-2">
@@ -285,52 +349,76 @@ const CacheManager = () => {
           </p>
           <ThemedButton
             onClick={() => fetchCacheStats(true)}
-            variant="ghost"
+            variant="accent"
             size="sm"
-            icon={refreshing ? Icons.Loader2 : Icons.RefreshCw}
+            icon={
+              refreshing
+                ? () => <Icons.RefreshCw className="text-accent animate-spin" />
+                : Icons.RefreshCw
+            }
             disabled={refreshing}
             className="ml-auto"
             title="Refresh cache statistics"
           >
-            Refresh
+            {refreshing ? "Refreshing..." : "Refresh"}
           </ThemedButton>
         </div>
 
-        {/* Cache Type Tabs */}
-        <div className="flex flex-wrap gap-2 pb-2 border-b border-gray-700/50">
-          <CacheTypeTab
+        {/* Cache Type Tabs - Enhanced with ThemedTabButton */}
+        <div className="flex flex-wrap gap-2 pb-2 border-b border-accent/30">
+          <ThemedTabButton
             active={activeTab === "all"}
             onClick={() => setActiveTab("all")}
-            label="All Caches"
             icon={Icons.Database}
-            count={cacheStats.totalSize}
-          />
-          <CacheTypeTab
+          >
+            All Caches
+            <span className="ml-2 px-1.5 py-0.5 text-xs bg-accent-light/30 rounded-full">
+              {cacheStats.totalSize}
+            </span>
+          </ThemedTabButton>
+
+          <ThemedTabButton
             active={activeTab === "history"}
             onClick={() => setActiveTab("history")}
-            label="User History"
             icon={Icons.Users}
-            count={cacheStats.history.size}
-          />
-          <CacheTypeTab
+          >
+            User History
+            <span className="ml-2 px-1.5 py-0.5 text-xs bg-accent-light/30 rounded-full">
+              {cacheStats.history.size}
+            </span>
+          </ThemedTabButton>
+
+          <ThemedTabButton
             active={activeTab === "media"}
             onClick={() => setActiveTab("media")}
-            label="Recently Added"
             icon={Icons.Film}
-            count={cacheStats.media.size}
-          />
-          <CacheTypeTab
+          >
+            Recently Added
+            <span className="ml-2 px-1.5 py-0.5 text-xs bg-accent-light/30 rounded-full">
+              {cacheStats.media.size}
+            </span>
+          </ThemedTabButton>
+
+          <ThemedTabButton
             active={activeTab === "metadata"}
             onClick={() => setActiveTab("metadata")}
-            label="Metadata"
             icon={Icons.FileText}
-            count={cacheStats.metadata.size}
-          />
+          >
+            Metadata
+            <span className="ml-2 px-1.5 py-0.5 text-xs bg-accent-light/30 rounded-full">
+              {cacheStats.metadata.size}
+            </span>
+          </ThemedTabButton>
         </div>
 
-        {/* Current Cache Information */}
-        <div className="flex gap-6 items-center p-5 bg-gray-800/50 rounded-lg border border-gray-700/50">
-          <div className="bg-gray-900/50 rounded-full p-4">
+        {/* Current Cache Information - Enhanced with accent color */}
+        <div
+          className="flex gap-6 items-center p-5 rounded-lg border border-accent transition-all duration-200"
+          style={{
+            background: `linear-gradient(135deg, rgba(${accentRgb}, 0.05) 0%, rgba(31, 41, 55, 0.6) 100%)`,
+          }}
+        >
+          <div className="bg-accent-light/30 rounded-full p-4 transition-all duration-200">
             <activeCache.icon size={24} className="text-accent-base" />
           </div>
           <div className="flex-1">
@@ -342,56 +430,43 @@ const CacheManager = () => {
             </p>
           </div>
           <div className="text-right">
-            <div className="text-2xl font-semibold text-accent-base">
+            <div className="text-2xl font-semibold text-accent-base transition-all duration-200">
               {activeCache.size}
             </div>
             <div className="text-sm text-theme-muted">Items cached</div>
           </div>
         </div>
 
-        {/* Cache Statistics */}
+        {/* Cache Statistics - Enhanced with CacheStatCard component */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-gray-800/50 rounded-lg border border-gray-700/50 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Icons.Clock size={16} className="text-accent-base" />
-              <h4 className="text-white font-medium">Cache TTL</h4>
-            </div>
-            <p className="text-lg font-semibold text-white">
-              {activeCache.ttl}
-            </p>
-            <p className="text-xs text-theme-muted mt-1">
-              Time until cache expires
-            </p>
-          </div>
+          <CacheStatCard
+            icon={Icons.Clock}
+            title="Cache TTL"
+            value={activeCache.ttl}
+            subtitle="Time until cache expires"
+            accent={true}
+          />
 
-          <div className="bg-gray-800/50 rounded-lg border border-gray-700/50 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Icons.RefreshCw size={16} className="text-green-500" />
-              <h4 className="text-white font-medium">Last Refreshed</h4>
-            </div>
-            <p className="text-lg font-semibold text-white">
-              {formatDate(cacheStats.lastRefreshed)}
-            </p>
-            <p className="text-xs text-theme-muted mt-1">Stats last updated</p>
-          </div>
+          <CacheStatCard
+            icon={Icons.RefreshCw}
+            title="Last Refreshed"
+            value={formatDate(cacheStats.lastRefreshed)}
+            subtitle="Stats last updated"
+          />
 
-          <div className="bg-gray-800/50 rounded-lg border border-gray-700/50 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Icons.Trash2 size={16} className="text-red-400" />
-              <h4 className="text-white font-medium">Last Cleared</h4>
-            </div>
-            <p className="text-lg font-semibold text-white">
-              {formatDate(cacheStats.lastCleared)}
-            </p>
-            <p className="text-xs text-theme-muted mt-1">Manual cache clear</p>
-          </div>
+          <CacheStatCard
+            icon={Icons.Trash2}
+            title="Last Cleared"
+            value={formatDate(cacheStats.lastCleared)}
+            subtitle="Manual cache clear"
+          />
         </div>
 
-        {/* Cache Management Actions */}
+        {/* Cache Management Actions - Enhanced with ThemedButton */}
         <div className="flex flex-col sm:flex-row gap-3 mt-2">
           <ThemedButton
             onClick={() => clearCache(activeTab === "all" ? "all" : activeTab)}
-            variant="warning"
+            variant="danger"
             icon={loading ? Icons.Loader2 : Icons.Trash2}
             disabled={loading}
             className="w-full sm:w-auto"
@@ -426,10 +501,12 @@ const CacheManager = () => {
           </div>
         </div>
 
-        {/* Detailed Information About Cache Types */}
-        <div className="bg-gray-900/50 border border-gray-700/50 rounded-lg p-4 mt-2">
+        {/* Detailed Information About Cache Types - Enhanced design with accent colors */}
+        <div className="bg-accent-light/5 rounded-lg border border-accent/20 p-4">
           <div className="flex items-center gap-2 mb-3">
-            <Icons.HelpCircle size={16} className="text-accent-base" />
+            <div className="p-2 rounded-full bg-accent-light/20">
+              <Icons.HelpCircle size={16} className="text-accent-base" />
+            </div>
             <h4 className="text-white font-medium">About Caching System</h4>
           </div>
 
@@ -438,27 +515,52 @@ const CacheManager = () => {
               The dashboard uses three different caching systems to improve
               performance:
             </p>
-            <ul className="list-disc list-inside space-y-1 pl-2">
-              <li>
-                <span className="text-white font-medium">
-                  User History Cache (10m):
-                </span>{" "}
-                Stores information about users' previously watched content
-              </li>
-              <li>
-                <span className="text-white font-medium">
-                  Media Cache (5m):
-                </span>{" "}
-                Stores recently added media lists for movies, shows, and music
-              </li>
-              <li>
-                <span className="text-white font-medium">
-                  Metadata Cache (30m):
-                </span>{" "}
-                Stores media details like resolution, quality, codec, etc.
-              </li>
-            </ul>
-            <p>
+
+            {/* Cache type cards with accent colors */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+              <div className="bg-gray-800/40 border border-accent/10 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icons.Users size={14} className="text-accent-base" />
+                  <span className="text-white font-medium">
+                    User History Cache
+                  </span>
+                </div>
+                <p className="text-xs text-theme-muted">
+                  Stores information about users' previously watched content
+                </p>
+                <div className="mt-2 text-xs text-accent-base">
+                  TTL: 10 minutes
+                </div>
+              </div>
+
+              <div className="bg-gray-800/40 border border-accent/10 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icons.Film size={14} className="text-accent-base" />
+                  <span className="text-white font-medium">Media Cache</span>
+                </div>
+                <p className="text-xs text-theme-muted">
+                  Stores recently added media lists for movies, shows, and music
+                </p>
+                <div className="mt-2 text-xs text-accent-base">
+                  TTL: 5 minutes
+                </div>
+              </div>
+
+              <div className="bg-gray-800/40 border border-accent/10 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icons.FileText size={14} className="text-accent-base" />
+                  <span className="text-white font-medium">Metadata Cache</span>
+                </div>
+                <p className="text-xs text-theme-muted">
+                  Stores media details like resolution, quality, codec, etc.
+                </p>
+                <div className="mt-2 text-xs text-accent-base">
+                  TTL: 30 minutes
+                </div>
+              </div>
+            </div>
+
+            <p className="mt-3">
               Caches automatically expire after their TTL (Time To Live), but
               you can manually clear them to ensure the freshest data. Active
               users always bypass the cache to ensure real-time data.
@@ -466,26 +568,26 @@ const CacheManager = () => {
           </div>
         </div>
 
-        {/* Indicator for media cache actual API endpoints */}
+        {/* Indicator for media cache actual API endpoints - Enhanced styling */}
         <div className="bg-accent-light/10 border border-accent/20 rounded-lg p-3">
-          <div className="flex items-center gap-2">
-            <Icons.Info size={16} className="text-accent-base" />
+          <div className="flex items-start gap-2">
+            <Icons.Info size={16} className="text-accent-base mt-0.5" />
             <div className="text-sm text-theme-muted">
-              <p className="mb-1">
-                This component uses the server's{" "}
-                <code className="bg-gray-900/50 px-1 py-0.5 rounded text-accent-base font-mono">
+              <p className="mb-1">API endpoints used:</p>
+              <div className="flex flex-wrap gap-2 mb-2">
+                <code className="bg-gray-900/50 px-2 py-1 rounded text-accent-base font-mono text-xs inline-block border border-accent/10">
                   /api/clear-cache
                 </code>
-                ,{" "}
-                <code className="bg-gray-900/50 px-1 py-0.5 rounded text-accent-base font-mono">
+                <code className="bg-gray-900/50 px-2 py-1 rounded text-accent-base font-mono text-xs inline-block border border-accent/10">
+                  /api/clear-image-cache
+                </code>
+                <code className="bg-gray-900/50 px-2 py-1 rounded text-accent-base font-mono text-xs inline-block border border-accent/10">
                   /api/clear-cache/:type
                 </code>
-                , and{" "}
-                <code className="bg-gray-900/50 px-1 py-0.5 rounded text-accent-base font-mono">
+                <code className="bg-gray-900/50 px-2 py-1 rounded text-accent-base font-mono text-xs inline-block border border-accent/10">
                   /api/users/clear-cache
-                </code>{" "}
-                endpoints for cache management.
-              </p>
+                </code>
+              </div>
               <p className="text-xs text-gray-400">
                 Note: For media and metadata caches, the displayed counts are
                 estimates since the API doesn't provide exact counts. History

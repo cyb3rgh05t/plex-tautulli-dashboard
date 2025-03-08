@@ -17,23 +17,23 @@ const LoadingScreen = ({ message = "Loading Dashboard" }) => {
   }, []);
 
   return (
-    <div className="fixed inset-0 bg-main flex items-center justify-center">
+    <div className="fixed inset-0 bg-theme flex items-center justify-center">
       <div className="relative">
         {/* Background blur effect */}
-        <div className="absolute inset-0 bg-modal backdrop-blur-xl rounded-2xl" />
+        <div className="absolute inset-0 bg-theme-modal backdrop-blur-xl rounded-2xl" />
 
         {/* Content */}
         <div className="relative px-12 py-8 text-center">
           {/* Primary loader */}
           <div className="relative mb-6">
             {/* Outer ring - using accent color */}
-            <div className="w-16 h-16 rounded-full border-2 border-accent/20 border-t-accent-base animate-spin" />
+            <div className="w-16 h-16 rounded-full border-2 border-accent/20 border-t-accent animate-spin" />
 
             {/* Inner ring */}
-            <div className="absolute inset-0 m-2 rounded-full border-2 border-accent/20 border-t-accent-base animate-spin animate-delay-150" />
+            <div className="absolute inset-0 m-2 rounded-full border-2 border-accent/20 border-t-accent animate-spin animate-delay-150" />
 
             {/* Center dot */}
-            <div className="absolute inset-0 m-7 rounded-full bg-accent/10 animate-pulse" />
+            <div className="absolute inset-0 m-7 rounded-full bg-accent-lighter animate-pulse" />
           </div>
 
           {/* Text content */}
@@ -50,7 +50,7 @@ const LoadingScreen = ({ message = "Loading Dashboard" }) => {
             {[...Array(3)].map((_, i) => (
               <div
                 key={i}
-                className="w-2 h-2 rounded-full bg-accent-base animate-pulse"
+                className="w-2 h-2 rounded-full bg-accent animate-pulse"
                 style={{ animationDelay: `${i * 200}ms` }}
               />
             ))}

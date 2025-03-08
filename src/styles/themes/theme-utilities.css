@@ -1,0 +1,175 @@
+/* Text colors */
+.text-theme {
+  color: var(--text);
+}
+
+.text-theme-muted {
+  color: var(--text-muted);
+}
+
+.text-accent {
+  color: var(--accent-color-base);
+}
+
+.text-accent-hover:hover {
+  color: var(--accent-color-hover);
+}
+
+/* Background colors */
+.bg-theme {
+  background-color: var(--main-bg-color);
+}
+
+.bg-theme-modal {
+  background-color: var(--modal-bg-color);
+}
+
+.bg-accent {
+  background-color: var(--accent-color-base);
+}
+
+.bg-accent-hover:hover {
+  background-color: var(--accent-color-hover);
+}
+
+.bg-accent-light {
+  background-color: var(--accent-color-light);
+}
+
+.bg-accent-lighter {
+  background-color: var(--accent-color-lighter);
+}
+
+/* Border colors */
+.border-accent {
+  border-color: var(--accent-color-border);
+}
+
+.border-accent-hover:hover {
+  border-color: var(--accent-color-border-hover);
+}
+
+/* Gradients */
+.bg-gradient-accent {
+  background-image: var(--theme-gradient-primary);
+}
+
+/* Shadows */
+.shadow-accent {
+  box-shadow: var(--theme-shadow-accent);
+}
+
+.shadow-accent-hover:hover {
+  box-shadow: var(--theme-shadow-accent-hover);
+}
+
+/* Button styles */
+.btn-accent {
+  background-color: var(--accent-color-base);
+  color: var(--button-text);
+}
+
+.btn-accent:hover {
+  background-color: var(--accent-color-hover);
+  color: var(--button-text-hover);
+}
+
+.btn-accent-light {
+  background-color: var(--accent-color-light);
+  color: var(--accent-color-base);
+}
+
+.btn-accent-light:hover {
+  background-color: var(--accent-color-lighter);
+  color: var(--accent-color-hover);
+}
+
+.btn-accent-outline {
+  background-color: transparent;
+  border-color: var(--accent-color-border);
+  color: var(--accent-color-base);
+}
+
+.btn-accent-outline:hover {
+  background-color: var(--accent-color-lighter);
+  border-color: var(--accent-color-border-hover);
+  color: var(--accent-color-hover);
+}
+
+/* Link styles */
+.link-accent {
+  color: var(--link-color);
+}
+
+.link-accent:hover {
+  color: var(--link-color-hover);
+}
+
+/* Focus states */
+.focus-accent:focus {
+  box-shadow: 0 0 0 3px var(--accent-color-lighter);
+  border-color: var(--accent-color-border);
+  outline: none;
+}
+
+/* Cards */
+.card-accent {
+  border-color: var(--accent-color-border);
+  background-color: var(--modal-bg-color);
+}
+
+.card-accent:hover {
+  border-color: var(--accent-color-border-hover);
+  box-shadow: var(--theme-shadow-accent);
+}
+
+/* Tabs */
+.tab-accent {
+  color: var(--text-muted);
+}
+
+.tab-accent.active {
+  color: var(--accent-color-base);
+  background-color: var(--accent-color-lighter);
+  border-color: var(--accent-color-border);
+}
+
+.tab-accent:hover:not(.active) {
+  color: var(--text-hover);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Transitions */
+.transition-theme {
+  transition: color 0.2s ease, background-color 0.2s ease,
+    border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Custom checkbox styling */
+input[type="checkbox"] {
+  position: relative;
+}
+
+/* Checkmark styles */
+input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* Focus styles */
+input[type="checkbox"]:focus {
+  box-shadow: 0 0 0 2px rgba(var(--accent-color), 0.4);
+}
+
+/* Disabled styles */
+input[type="checkbox"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

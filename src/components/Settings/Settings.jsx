@@ -7,6 +7,7 @@ import { testTautulliConnection } from "../../services/tautulliService";
 import * as Icons from "lucide-react";
 import toast from "react-hot-toast";
 import ThemedButton from "../common/ThemedButton";
+import ThemedTabButton from "../common/ThemedTabButton";
 import ThemedCard from "../common/ThemedCard";
 import BackupSettings from "./BackupSettings";
 import CacheManager from "./CacheManager";
@@ -15,44 +16,50 @@ import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
 // Styled tab component for settings
 const SettingsTab = ({ active, onClick, icon: Icon, label }) => (
-  <button
+  <ThemedTabButton
+    active={active}
     onClick={onClick}
-    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-      active
-        ? "bg-accent-light text-accent-base"
-        : "text-gray-400 hover:text-white hover:bg-gray-700/50"
-    }`}
+    icon={Icon}
+    className="min-w-[140px]"
   >
-    {Icon && <Icon size={16} className={active ? "text-accent-base" : ""} />}
-    <span>{label}</span>
-  </button>
+    {label}
+  </ThemedTabButton>
 );
 
-// Color option component for accent selection
+// Enhanced color option component for accent selection
 const ColorOption = ({ color, current, onChange, displayName, rgb }) => {
+  const isActive = current === color;
+
   return (
     <button
       onClick={() => onChange(color)}
-      className={`flex flex-col items-center p-4 rounded-lg transition-all ${
-        current === color
-          ? "border-2 border-white"
-          : "border border-gray-700/50"
+      className={`flex flex-col items-center p-4 rounded-lg transition-all duration-200 ${
+        isActive
+          ? "border-2 border-white shadow-lg"
+          : "border border-accent hover:border-accent/50 hover:shadow-accent-sm"
       }`}
       style={{
-        backgroundColor:
-          current === color ? `rgba(${rgb}, 0.4)` : `rgba(${rgb}, 0.2)`,
+        backgroundColor: isActive ? `rgba(${rgb}, 0.15)` : `rgba(${rgb}, 0.05)`,
       }}
     >
       <div
-        className="w-12 h-12 rounded-full mb-2 flex items-center justify-center"
+        className={`w-12 h-12 rounded-full mb-2 flex items-center justify-center transition-transform duration-200 ${
+          isActive ? "scale-110" : "hover:scale-105"
+        }`}
         style={{
           background: `linear-gradient(135deg, rgba(${rgb}, 0.8) 0%, rgba(${rgb}, 0.4) 100%)`,
-          boxShadow: current === color ? `0 0 10px rgba(${rgb}, 0.6)` : "none",
+          boxShadow: isActive ? `0 0 15px rgba(${rgb}, 0.6)` : "none",
         }}
       >
-        {current === color && <Icons.Check size={20} className="text-white" />}
+        {isActive && <Icons.Check size={20} className="text-white" />}
       </div>
-      <span className="text-white text-sm font-medium">{displayName}</span>
+      <span
+        className={`text-white text-sm font-medium ${
+          isActive ? "text-accent-base" : ""
+        }`}
+      >
+        {displayName}
+      </span>
     </button>
   );
 };
@@ -195,6 +202,7 @@ const SettingsPage = () => {
             title="Server Configuration"
             icon={Icons.Server}
             useAccentBorder={true}
+            useAccentGradient={true}
             className="p-6"
           >
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -204,16 +212,21 @@ const SettingsPage = () => {
                   <label className="block text-theme font-medium mb-2">
                     Plex URL
                   </label>
-                  <input
-                    type="text"
-                    name="plexUrl"
-                    value={formData.plexUrl}
-                    onChange={handleChange}
-                    className="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-4 py-3 
-                      text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
-                      transition-all duration-200"
-                    placeholder="http://your-plex-server:32400"
-                  />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Icons.Link className="text-accent-base opacity-70" />
+                    </div>
+                    <input
+                      type="text"
+                      name="plexUrl"
+                      value={formData.plexUrl}
+                      onChange={handleChange}
+                      className="w-full bg-gray-900/50 border border-accent rounded-lg pl-10 px-4 py-3 
+                        text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+                        transition-all duration-200"
+                      placeholder="http://your-plex-server:32400"
+                    />
+                  </div>
                 </div>
 
                 {/* Plex Token */}
@@ -222,25 +235,28 @@ const SettingsPage = () => {
                     Plex Token
                   </label>
                   <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Icons.Key className="text-accent-base opacity-70" />
+                    </div>
                     <input
                       type={showPasswords.plexToken ? "text" : "password"}
                       name="plexToken"
                       value={formData.plexToken}
                       onChange={handleChange}
-                      className="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-4 py-3 
+                      className="w-full bg-gray-900/50 border border-accent rounded-lg pl-10 px-4 py-3 
                         text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                         transition-all duration-200 font-mono"
                     />
                     <button
                       type="button"
                       onClick={() => togglePasswordVisibility("plexToken")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 
-                        hover:text-white transition-colors bg-transparent border-none outline-none focus:outline-none focus:ring-0"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-accent-base opacity-70
+                        hover:opacity-100 transition-opacity bg-transparent border-none outline-none focus:outline-none focus:ring-0"
                     >
                       {showPasswords.plexToken ? (
-                        <Icons.EyeOff size={16} />
+                        <Icons.EyeOff size={18} />
                       ) : (
-                        <Icons.Eye size={16} />
+                        <Icons.Eye size={18} />
                       )}
                     </button>
                   </div>
@@ -251,16 +267,21 @@ const SettingsPage = () => {
                   <label className="block text-theme font-medium mb-2">
                     Tautulli URL
                   </label>
-                  <input
-                    type="text"
-                    name="tautulliUrl"
-                    value={formData.tautulliUrl}
-                    onChange={handleChange}
-                    className="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-4 py-3 
-                      text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
-                      transition-all duration-200"
-                    placeholder="http://your-tautulli-server:8181"
-                  />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Icons.Link className="text-accent-base opacity-70" />
+                    </div>
+                    <input
+                      type="text"
+                      name="tautulliUrl"
+                      value={formData.tautulliUrl}
+                      onChange={handleChange}
+                      className="w-full bg-gray-900/50 border border-accent rounded-lg pl-10 px-4 py-3 
+                        text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+                        transition-all duration-200"
+                      placeholder="http://your-tautulli-server:8181"
+                    />
+                  </div>
                 </div>
 
                 {/* Tautulli API Key */}
@@ -269,25 +290,28 @@ const SettingsPage = () => {
                     Tautulli API Key
                   </label>
                   <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Icons.Key className="text-accent-base opacity-70" />
+                    </div>
                     <input
                       type={showPasswords.tautulliApiKey ? "text" : "password"}
                       name="tautulliApiKey"
                       value={formData.tautulliApiKey}
                       onChange={handleChange}
-                      className="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-4 py-3 
+                      className="w-full bg-gray-900/50 border border-accent rounded-lg pl-10 px-4 py-3 
                         text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                         transition-all duration-200 font-mono"
                     />
                     <button
                       type="button"
                       onClick={() => togglePasswordVisibility("tautulliApiKey")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 
-                        hover:text-white transition-colors bg-transparent border-none outline-none focus:outline-none focus:ring-0"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-accent-base opacity-70
+                        hover:opacity-100 transition-opacity bg-transparent border-none outline-none focus:outline-none focus:ring-0"
                     >
                       {showPasswords.tautulliApiKey ? (
-                        <Icons.EyeOff size={16} />
+                        <Icons.EyeOff size={18} />
                       ) : (
-                        <Icons.Eye size={16} />
+                        <Icons.Eye size={18} />
                       )}
                     </button>
                   </div>
@@ -359,6 +383,7 @@ const SettingsPage = () => {
             title="Theme Settings"
             icon={Icons.Palette}
             useAccentBorder={true}
+            useAccentGradient={true}
             className="p-6"
           >
             <div className="space-y-6">
@@ -383,27 +408,43 @@ const SettingsPage = () => {
                   ))}
                 </div>
 
-                {/* Current theme information */}
-                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50 mt-6">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Icons.Info size={16} className="text-accent-base" />
+                {/* Current theme information with active accent preview */}
+                <div className="bg-accent-light/10 rounded-lg p-4 border border-accent mt-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="p-2 bg-accent-base rounded-lg">
+                      <Icons.Palette size={16} className="text-white" />
+                    </div>
                     <h4 className="text-white font-medium">
-                      Theme Information
+                      Current Theme:{" "}
+                      <span className="text-accent-base">Dark</span>
                     </h4>
                   </div>
-                  <p className="text-theme-muted mb-4">
+
+                  <div className="flex flex-wrap gap-3">
+                    <div className="p-3 bg-accent-light rounded-lg border border-accent">
+                      <span className="text-accent-base font-medium">
+                        Text with accent color
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-accent-base rounded-lg">
+                      <span className="text-white font-medium">
+                        Accent background
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-gray-900/70 rounded-lg border border-accent/30">
+                      <span className="text-accent-base font-medium">
+                        Border accent
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-theme-muted mt-4">
                     The dashboard uses a dark theme with customizable accent
                     colors. Your accent color selection will be remembered
                     across sessions.
                   </p>
-
-                  <div className="flex items-center gap-3">
-                    <div className="px-3 py-2 bg-gray-900/70 rounded-lg border border-gray-700/50">
-                      <span className="text-accent-base font-medium">
-                        Current accent: {accentColor}
-                      </span>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -425,6 +466,7 @@ const SettingsPage = () => {
             title="API Documentation"
             icon={Icons.FileCode}
             useAccentBorder={true}
+            useAccentGradient={true}
             className="p-6"
           >
             <div className="space-y-6">
@@ -449,6 +491,7 @@ const SettingsPage = () => {
             title="Reset Application"
             icon={Icons.AlertTriangle}
             useAccentBorder={true}
+            useAccentGradient={true}
             className="p-6"
           >
             <div className="space-y-6">
@@ -494,8 +537,8 @@ const SettingsPage = () => {
         </p>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 mb-6 scrollbar-hide">
+      {/* Tabs Navigation - Enhanced with accent colors */}
+      <div className="flex flex-wrap gap-2 overflow-x-auto pb-4 mb-6 scrollbar-hide">
         {tabs.map((tab) => (
           <SettingsTab
             key={tab.id}

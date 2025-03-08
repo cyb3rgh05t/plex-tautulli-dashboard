@@ -1,376 +1,51 @@
-/* src/styles/globals.css */
-/* Import theme CSS files first */
-@import "./themes/base.css";
-@import "./themes/accents.css";
-@import "./themes/variables.css";
-@import "./themes/theme-fixes.css";
-@import "./themes/accent-theme.css";
+/* Import theme files first */
+@import "./themes/theme-variables.css";
+@import "./themes/accent-colors.css";
+@import "./themes/theme-utilities.css";
 
 /* Then include Tailwind directives */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  /* Base theme variables */
-  :root {
-    /* Default theme values - will be overridden by specific themes */
-    --primary-hue: 214;
-    --secondary-hue: 265;
-    --bg-gradient: radial-gradient(
-        at 0% 0%,
-        rgba(0, 112, 243, 0.1) 0px,
-        transparent 50%
-      ),
-      radial-gradient(at 98% 100%, rgba(82, 0, 243, 0.1) 0px, transparent 50%);
-  }
-
-  /* Common values for all themes */
-  :root {
-    /* Primary colors */
-    --color-primary-50: hsl(var(--primary-hue), 100%, 95%);
-    --color-primary-100: hsl(var(--primary-hue), 100%, 85%);
-    --color-primary-200: hsl(var(--primary-hue), 100%, 75%);
-    --color-primary-300: hsl(var(--primary-hue), 100%, 65%);
-    --color-primary-400: hsl(var(--primary-hue), 100%, 55%);
-    --color-primary-500: hsl(var(--primary-hue), 100%, 48%);
-    --color-primary-600: hsl(var(--primary-hue), 100%, 38%);
-    --color-primary-700: hsl(var(--primary-hue), 100%, 28%);
-    --color-primary-800: hsl(var(--primary-hue), 100%, 18%);
-    --color-primary-900: hsl(var(--primary-hue), 100%, 8%);
-
-    /* Secondary colors */
-    --color-secondary-50: hsl(var(--secondary-hue), 100%, 95%);
-    --color-secondary-100: hsl(var(--secondary-hue), 100%, 85%);
-    --color-secondary-200: hsl(var(--secondary-hue), 100%, 75%);
-    --color-secondary-300: hsl(var(--secondary-hue), 100%, 65%);
-    --color-secondary-400: hsl(var(--secondary-hue), 100%, 55%);
-    --color-secondary-500: hsl(var(--secondary-hue), 100%, 48%);
-    --color-secondary-600: hsl(var(--secondary-hue), 100%, 38%);
-    --color-secondary-700: hsl(var(--secondary-hue), 100%, 28%);
-    --color-secondary-800: hsl(var(--secondary-hue), 100%, 18%);
-    --color-secondary-900: hsl(var(--secondary-hue), 100%, 8%);
-
-    /* Gradients and shadows based on theme colors */
-    --gradient-brand: linear-gradient(
-      to right,
-      hsl(var(--primary-hue), 100%, 48%),
-      hsl(var(--secondary-hue), 100%, 48%),
-      hsl(var(--secondary-hue), 100%, 65%)
-    );
-    --gradient-dark: linear-gradient(
-      to right,
-      var(--color-dark-50),
-      var(--color-dark-100),
-      var(--color-dark-200)
-    );
-    --shadow-brand-lg: 0 10px 25px -5px hsla(var(--primary-hue), 100%, 48%, 0.2),
-      0 5px 15px -5px hsla(var(--secondary-hue), 100%, 48%, 0.1);
-    --shadow-brand-xl: 0 15px 35px -5px hsla(var(--primary-hue), 100%, 48%, 0.3),
-      0 10px 20px -5px hsla(var(--secondary-hue), 100%, 48%, 0.2);
-  }
-
-  /* Dark theme (default) */
-  .dark {
-    --color-neutral-50: #f9fafb;
-    --color-neutral-100: #f3f4f6;
-    --color-neutral-200: #e5e7eb;
-    --color-neutral-300: #d1d5db;
-    --color-neutral-400: #9ca3af;
-    --color-neutral-500: #6b7280;
-    --color-neutral-600: #4b5563;
-    --color-neutral-700: #374151;
-    --color-neutral-800: #1f2937;
-    --color-neutral-900: #111827;
-
-    --color-dark-50: #171923;
-    --color-dark-100: #2d3748;
-    --color-dark-200: #4a5568;
-    --color-dark-300: #718096;
-    --color-dark-400: #a0aec0;
-    --color-dark-500: #cbd5e0;
-    --color-dark-600: #e2e8f0;
-    --color-dark-700: #edf2f7;
-    --color-dark-800: #f7fafc;
-    --color-dark-900: #ffffff;
-
-    --background-color: #111827;
-    --background-gradient: var(--bg-gradient);
-  }
-
-  /* Light theme */
-  .light {
-    --primary-hue: 214;
-    --secondary-hue: 265;
-
-    /* Invert neutral colors for light theme */
-    --color-neutral-900: #f9fafb;
-    --color-neutral-800: #f3f4f6;
-    --color-neutral-700: #e5e7eb;
-    --color-neutral-600: #d1d5db;
-    --color-neutral-500: #9ca3af;
-    --color-neutral-400: #6b7280;
-    --color-neutral-300: #4b5563;
-    --color-neutral-200: #374151;
-    --color-neutral-100: #1f2937;
-    --color-neutral-50: #111827;
-
-    /* Invert dark colors for light theme */
-    --color-dark-900: #171923;
-    --color-dark-800: #2d3748;
-    --color-dark-700: #4a5568;
-    --color-dark-600: #718096;
-    --color-dark-500: #a0aec0;
-    --color-dark-400: #cbd5e0;
-    --color-dark-300: #e2e8f0;
-    --color-dark-200: #edf2f7;
-    --color-dark-100: #f7fafc;
-    --color-dark-50: #ffffff;
-
-    --background-color: #f7fafc;
-    --background-gradient: radial-gradient(
-        at 0% 0%,
-        rgba(0, 112, 243, 0.05) 0px,
-        transparent 50%
-      ),
-      radial-gradient(at 98% 100%, rgba(82, 0, 243, 0.05) 0px, transparent 50%);
-  }
-
-  /* Apply specific overrides for light theme */
-  html.light body {
-    background-color: #f7fafc !important;
-    color: #1f2937 !important;
-  }
-
-  html.light header {
-    background-color: rgba(255, 255, 255, 0.8) !important;
-    border-color: rgba(226, 232, 240, 0.5) !important;
-  }
-
-  html.light main > div {
-    background-color: rgba(255, 255, 255, 0.8) !important;
-    border-color: rgba(226, 232, 240, 0.5) !important;
-  }
-
-  /* Blue theme - blue primary colors */
-  .blue {
-    --primary-hue: 214; /* Bluer hue */
-    --secondary-hue: 240; /* More blue-purple */
-    --bg-gradient: radial-gradient(
-        at 0% 0%,
-        rgba(0, 112, 243, 0.15) 0px,
-        transparent 50%
-      ),
-      radial-gradient(at 98% 100%, rgba(0, 83, 243, 0.15) 0px, transparent 50%);
-  }
-
-  /* Apply specific overrides for blue theme */
-  html.blue body {
-    background-color: #0f172a !important;
-    background-image: radial-gradient(
-        at 0% 0%,
-        rgba(0, 112, 243, 0.2) 0px,
-        transparent 50%
-      ),
-      radial-gradient(at 98% 100%, rgba(0, 83, 243, 0.2) 0px, transparent 50%) !important;
-  }
-
-  html.blue .bg-brand-primary-500 {
-    background-color: #0070f3 !important;
-  }
-
-  /* Purple theme - purple primary colors */
-  .purple {
-    --primary-hue: 265; /* Main purple */
-    --secondary-hue: 290; /* Pink-purple */
-    --bg-gradient: radial-gradient(
-        at 0% 0%,
-        rgba(112, 0, 243, 0.15) 0px,
-        transparent 50%
-      ),
-      radial-gradient(at 98% 100%, rgba(182, 0, 243, 0.15) 0px, transparent 50%);
-  }
-
-  /* Apply specific overrides for purple theme */
-  html.purple body {
-    background-color: #13111c !important;
-    background-image: radial-gradient(
-        at 0% 0%,
-        rgba(112, 0, 243, 0.2) 0px,
-        transparent 50%
-      ),
-      radial-gradient(at 98% 100%, rgba(182, 0, 243, 0.2) 0px, transparent 50%) !important;
-  }
-
-  html.purple .bg-brand-primary-500 {
-    background-color: #7000f3 !important;
-  }
-
-  /* Green theme - green primary colors */
-  .green {
-    --primary-hue: 142; /* Green */
-    --secondary-hue: 170; /* Teal */
-    --bg-gradient: radial-gradient(
-        at 0% 0%,
-        rgba(0, 243, 112, 0.15) 0px,
-        transparent 50%
-      ),
-      radial-gradient(at 98% 100%, rgba(0, 243, 183, 0.15) 0px, transparent 50%);
-  }
-
-  /* Apply specific overrides for green theme */
-  html.green body {
-    background-color: #0f1a13 !important;
-    background-image: radial-gradient(
-        at 0% 0%,
-        rgba(0, 243, 112, 0.2) 0px,
-        transparent 50%
-      ),
-      radial-gradient(at 98% 100%, rgba(0, 243, 183, 0.2) 0px, transparent 50%) !important;
-  }
-
-  html.green .bg-brand-primary-500 {
-    background-color: #00b467 !important;
-  }
-}
-
+/* Basic element styling */
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: var(--background-color, #111827);
-  background-image: var(--background-gradient);
-  background-attachment: fixed;
+  background-color: var(--main-bg-color);
+  color: var(--text);
   font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-  line-height: 1.5;
-  color-scheme: dark;
-  scroll-behavior: smooth;
-}
-
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-  background: var(--main-bg-color);
-  color: var(--text);
-}
-
-/* Dashboard gradient background base styles */
-.dashboard-accent-gradient {
-  position: relative;
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-}
-
-.dashboard-accent-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--color-dark-200);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--color-dark-300);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-dark-400);
-}
-
-/* Smooth transitions for interactive elements */
-@layer base {
-  * {
-    @apply transition-colors duration-200 ease-in-out;
-  }
-}
-
-/* Utility classes for brand interactions */
-.brand-focus {
-  @apply focus:outline-none focus:ring-2 focus:ring-brand-primary-500 focus:ring-offset-2 focus:ring-offset-gray-900;
-}
-
-.brand-hover {
-  @apply hover:bg-brand-primary-600 hover:text-white;
-}
-
-/* Subtle background animations */
-@keyframes bg-shift {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
-}
-
-.animated-gradient-bg {
-  background: linear-gradient(
-    -45deg,
-    rgb(var(--accent-color)),
-    rgb(var(--accent-color), 0.5)
-  );
-  background-size: 400% 400%;
-  animation: bg-shift 15s ease infinite;
-}
-
-/* Theme-specific overrides for common elements */
-button {
-  color: var(--button-text);
-}
-
-button:hover {
-  color: var(--button-text-hover);
 }
 
 a {
   color: var(--link-color);
+  transition: color 0.2s ease;
 }
 
 a:hover {
   color: var(--link-color-hover);
 }
 
-/* Reusable themed components */
-.card {
-  @apply bg-gray-800/30 border border-gray-700/50 rounded-xl p-4 hover:bg-gray-800/50 transition-all duration-200;
+button {
+  transition: all 0.2s ease;
 }
 
-.input {
-  @apply bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-4 py-2 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent;
+/* Accent-colored scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
 }
 
-.badge {
-  @apply px-2 py-1 text-xs font-medium rounded-full;
+::-webkit-scrollbar-track {
+  background: var(--theme-bg-secondary);
 }
 
-.badge-accent {
-  @apply bg-accent-light text-accent-base;
+::-webkit-scrollbar-thumb {
+  background: rgba(var(--accent-color), 0.5);
+  border-radius: 4px;
 }
 
-.btn {
-  @apply px-4 py-2 rounded-lg transition-all duration-200 inline-flex items-center gap-2;
-}
-
-.btn-accent {
-  @apply bg-accent-base text-white shadow-accent-md hover:shadow-accent-lg;
-}
-
-.gradient-overlay {
-  @apply absolute inset-0;
-  background: var(--overseerr-gradient);
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--accent-color), 0.7);
 }

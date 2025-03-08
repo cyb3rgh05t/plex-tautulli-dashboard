@@ -17,21 +17,16 @@ const ThemedNavbar = () => {
 
   // Map accent colors to their RGB values for background gradient
   const accentColorMap = {
-    purple: "167, 139, 250", // Renamed from default
-    grey: "220, 220, 220", // Renamed from light
+    purple: "167, 139, 250",
+    grey: "220, 220, 220",
     green: "109, 247, 81",
-    maroon: "166, 40, 140", // Renamed from purple
+    maroon: "166, 40, 140",
     orange: "255, 153, 0",
     blue: "0, 98, 255",
     red: "232, 12, 11",
   };
 
   const accentRgb = accentColorMap[accentColor] || accentColorMap.purple;
-
-  // Navigate to settings page
-  const handleSettingsClick = () => {
-    navigate("/settings");
-  };
 
   return (
     <header

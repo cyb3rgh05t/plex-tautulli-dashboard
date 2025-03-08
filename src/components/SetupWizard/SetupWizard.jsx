@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
-import { useTheme } from "../../context/ThemeContext";
+import { useTheme } from "../../context/ThemeContext.jsx";
 import { testPlexConnection } from "../../services/plexService";
 import { testTautulliConnection } from "../../services/tautulliService";
 import { FaExternalLinkAlt, FaGithub } from "react-icons/fa";
@@ -21,7 +21,7 @@ const HelpLink = ({ href, children }) => (
     href={href}
     target="_blank"
     rel="noopener noreferrer"
-    className="inline-flex items-center gap-1 text-xs text-accent-base hover:text-accent-hover transition-colors"
+    className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent-hover transition-theme"
   >
     <Icons.HelpCircle size={12} />
     {children}
@@ -58,6 +58,14 @@ const SetupWizard = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setTesting(true);
+
+    // Create a normalized copy of form data for testing
+    const normalizedFormData = {
+      ...formData,
+      // Remove trailing slashes from URLs except when they're part of the protocol
+      plexUrl: formData.plexUrl.replace(/\/+$/, ""),
+      tautulliUrl: formData.tautulliUrl.replace(/\/+$/, ""),
+    };
 
     try {
       const loadingToast = toast.loading("Testing connections...");
@@ -125,18 +133,7 @@ const SetupWizard = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
-    // Allow typing '/' in URL fields - only remove trailing slashes when needed
-    let formattedValue = value;
-
-    // For URL fields, we'll only remove a trailing slash if it's not part of typing a path
-    // This allows users to type a slash, but cleans up trailing slashes upon completion
-    if (name.includes("Url") && value.endsWith("/") && !value.endsWith("://")) {
-      // Only remove trailing slash if it's not immediately after protocol (http://)
-      formattedValue = value.replace(/\/$/, "");
-    }
-
-    setFormData((prev) => ({ ...prev, [name]: formattedValue }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const togglePasswordVisibility = (field) => {
@@ -260,7 +257,7 @@ const SetupWizard = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-3">
-            <Icons.ActivitySquare className="text-accent-base text-3xl" />
+            <Icons.ActivitySquare className="text-accent text-3xl" />
             <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
               Plex & Tautulli Dashboard
             </h1>
@@ -274,7 +271,8 @@ const SetupWizard = () => {
         <div className="w-full max-w-lg mb-4 flex justify-center">
           <button
             onClick={toggleRestoreMode}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-900/60 border border-gray-700/70 text-theme hover:bg-gray-800/70 transition-all duration-200"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-900/60 border border-gray-700/70 
+      text-theme hover:bg-gray-800/70 hover:border-accent/30 transition-theme"
           >
             {isRestoreMode ? (
               <>
@@ -291,18 +289,17 @@ const SetupWizard = () => {
         </div>
 
         {/* Setup Form or Restore UI */}
-        <div className="w-full max-w-lg p-6 rounded-xl shadow-xl shadow-black/30 bg-gray-900/90 border border-gray-700/50">
+        <div className="w-full max-w-lg p-6 rounded-xl shadow-xl shadow-black/30 bg-gray-900/90 border border-accent">
           {isRestoreMode ? (
-            /* Restore from backup UI */
             <div className="space-y-6">
-              <div className="flex items-center gap-2 pb-2 border-b border-gray-700/50">
-                <Icons.Save size={16} className="text-accent-base" />
+              <div className="flex items-center gap-2 pb-2 border-b border-accent">
+                <Icons.Save size={16} className="text-accent" />
                 <h2 className="text-lg font-medium text-white">
                   Restore Configuration
                 </h2>
               </div>
 
-              <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-4 space-y-4">
+              <div className="bg-gray-800/50 border border-accent rounded-lg p-4 space-y-4">
                 <p className="text-theme-muted text-sm">
                   Upload a backup file to quickly restore your dashboard
                   configuration.
@@ -333,9 +330,9 @@ const SetupWizard = () => {
                 </div>
               </div>
 
-              <div className="bg-accent-light/10 border border-accent-base/20 rounded-lg p-3">
+              <div className="bg-accent-lighter border border-accent/20 rounded-lg p-3">
                 <div className="flex items-start gap-2">
-                  <Icons.Info size={16} className="text-accent-base mt-0.5" />
+                  <Icons.Info size={16} className="text-accent mt-0.5" />
                   <p className="text-sm text-theme-muted">
                     After restoring your configuration, you'll still need to
                     test the connections before proceeding to the dashboard.
@@ -348,8 +345,8 @@ const SetupWizard = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Plex Section */}
               <div className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-gray-700/50">
-                  <Icons.Server size={16} className="text-accent-base" />
+                <div className="flex items-center gap-2 pb-2 border-b border-accent">
+                  <Icons.Server size={16} className="text-accent" />
                   <h2 className="text-lg font-medium text-white">
                     Plex Configuration
                   </h2>
@@ -366,9 +363,9 @@ const SetupWizard = () => {
                         name="plexUrl"
                         value={formData.plexUrl}
                         onChange={handleChange}
-                        className="w-full bg-gray-900/80 border border-gray-700/50 rounded-lg px-4 py-2.5 
-                          text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
-                          transition-all duration-200"
+                        className="w-full bg-gray-900/80 border border-accent rounded-lg px-4 py-2.5 
+            text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+            transition-theme"
                         placeholder="http://your-plex-server:32400"
                         required
                         disabled={testing}
@@ -395,9 +392,9 @@ const SetupWizard = () => {
                         name="plexToken"
                         value={formData.plexToken}
                         onChange={handleChange}
-                        className="w-full bg-gray-900/80 border border-gray-700/50 rounded-lg px-4 py-2.5 
-                          text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
-                          transition-all duration-200 font-mono pr-24"
+                        className="w-full bg-gray-900/80 border border-accent rounded-lg px-4 py-2.5 
+            text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+            transition-theme font-mono pr-24"
                         required
                         disabled={testing}
                       />
@@ -405,7 +402,7 @@ const SetupWizard = () => {
                         type="button"
                         onClick={() => togglePasswordVisibility("plexToken")}
                         className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 
-                          hover:text-white transition-colors bg-transparent border-none outline-none focus:outline-none focus:ring-0"
+            hover:text-white transition-theme bg-transparent border-none outline-none focus:outline-none focus:ring-0"
                       >
                         {showPasswords.plexToken ? (
                           <Icons.EyeOff size={16} />
@@ -427,8 +424,8 @@ const SetupWizard = () => {
 
               {/* Tautulli Section */}
               <div className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-gray-700/50">
-                  <Icons.Database size={16} className="text-accent-base" />
+                <div className="flex items-center gap-2 pb-2 border-b border-accent">
+                  <Icons.Database size={16} className="text-accent" />
                   <h2 className="text-lg font-medium text-white">
                     Tautulli Configuration
                   </h2>
@@ -445,9 +442,9 @@ const SetupWizard = () => {
                         name="tautulliUrl"
                         value={formData.tautulliUrl}
                         onChange={handleChange}
-                        className="w-full bg-gray-900/80 border border-gray-700/50 rounded-lg px-4 py-2.5 
-                          text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
-                          transition-all duration-200"
+                        className="w-full bg-gray-900/80 border border-accent rounded-lg px-4 py-2.5 
+            text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+            transition-theme"
                         placeholder="http://your-tautulli-server:8181"
                         required
                         disabled={testing}
@@ -479,9 +476,9 @@ const SetupWizard = () => {
                         name="tautulliApiKey"
                         value={formData.tautulliApiKey}
                         onChange={handleChange}
-                        className="w-full bg-gray-900/80 border border-gray-700/50 rounded-lg px-4 py-2.5 
-                          text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
-                          transition-all duration-200 font-mono pr-24"
+                        className="w-full bg-gray-900/80 border border-accent rounded-lg px-4 py-2.5 
+            text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+            transition-theme font-mono pr-24"
                         required
                         disabled={testing}
                       />
@@ -491,7 +488,7 @@ const SetupWizard = () => {
                           togglePasswordVisibility("tautulliApiKey")
                         }
                         className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 
-                          hover:text-white transition-colors bg-transparent border-none outline-none focus:outline-none focus:ring-0"
+            hover:text-white transition-theme bg-transparent border-none outline-none focus:outline-none focus:ring-0"
                       >
                         {showPasswords.tautulliApiKey ? (
                           <Icons.EyeOff size={16} />
@@ -534,7 +531,7 @@ const SetupWizard = () => {
             href="https://github.com/cyb3rgh05t/plex-tautulli-dashboard"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-theme-muted hover:text-theme-hover transition-colors"
+            className="inline-flex items-center gap-2 text-theme-muted hover:text-accent transition-theme"
           >
             <FaGithub size={16} />
             <span className="text-sm">View on GitHub</span>
