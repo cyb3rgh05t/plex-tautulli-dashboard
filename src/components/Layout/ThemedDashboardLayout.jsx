@@ -90,7 +90,7 @@ const ThemedDashboardLayout = () => {
           {
             service: "plex",
           },
-          { timeout: 5000 }
+          { timeout: 10000 }
         );
 
         return response.data?.status || "unknown";
@@ -104,7 +104,7 @@ const ThemedDashboardLayout = () => {
           {
             service: "tautulli",
           },
-          { timeout: 5000 }
+          { timeout: 10000 }
         );
 
         return response.data?.status || "unknown";

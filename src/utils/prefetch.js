@@ -38,16 +38,51 @@ export const prefetchActivities = (queryClient) => {
 };
 
 /**
- * Prefetch recently added media
+ * Prefetch recently added media for all major media types
  */
-export const prefetchRecentlyAdded = (queryClient) => {
-  return safePrefetch(queryClient, "recentlyAdded", async () => {
-    const response = await fetch(`/api/recent/movies`);
-    if (!response.ok) {
-      throw new Error("Failed to fetch recently added");
-    }
-    return await response.json();
-  });
+export const prefetchRecentlyAdded = async (queryClient) => {
+  try {
+    // Prefetch sections first
+    await safePrefetch(queryClient, "sections", async () => {
+      const response = await fetch(`/api/sections`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch sections");
+      }
+      return await response.json();
+    });
+
+    // Prefetch all three media types in parallel
+    await Promise.all([
+      safePrefetch(queryClient, "recentlyAdded:movies", async () => {
+        const response = await fetch(`/api/recent/movies?count=20`);
+        if (!response.ok) {
+          throw new Error("Failed to fetch recently added movies");
+        }
+        return await response.json();
+      }),
+
+      safePrefetch(queryClient, "recentlyAdded:shows", async () => {
+        const response = await fetch(`/api/recent/shows?count=20`);
+        if (!response.ok) {
+          throw new Error("Failed to fetch recently added shows");
+        }
+        return await response.json();
+      }),
+
+      safePrefetch(queryClient, "recentlyAdded:music", async () => {
+        const response = await fetch(`/api/recent/music?count=10`);
+        if (!response.ok) {
+          return []; // Be more lenient with music as it's less commonly used
+        }
+        return await response.json();
+      }),
+    ]);
+
+    return true;
+  } catch (error) {
+    logError("Error prefetching recently added media:", error);
+    return false;
+  }
 };
 
 /**

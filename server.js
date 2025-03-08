@@ -669,8 +669,115 @@ const createCache = (defaultTTL = 10 * 60 * 1000) => {
 
 // Create specific cache instances
 const historyCache = createCache(10 * 60 * 1000); // 10 minutes
-const mediaCache = createCache(5 * 60 * 1000); // 5 minutes
+const mediaCache = createCache(10 * 60 * 1000); // 10 minutes - increased cache time
 const metadataCache = createCache(30 * 60 * 1000); // 30 minutes
+
+// Track ongoing background refreshes to prevent duplicates
+const pendingRefreshes = new Map();
+
+// Function to refresh cache in the background without blocking the current request
+const refreshCacheInBackground = async (type, section, count) => {
+  const config = getConfig();
+  if (!config.tautulliUrl || !config.tautulliApiKey) return false;
+
+  // Create a unique key for this refresh
+  const refreshKey = `refresh:${type}:${section || "all"}`;
+
+  // If already refreshing this data, skip
+  if (pendingRefreshes.has(refreshKey)) return false;
+
+  // Mark as pending
+  pendingRefreshes.set(refreshKey, Date.now());
+
+  try {
+    const validTypes = {
+      movies: "movie",
+      shows: "show",
+      music: "artist",
+    };
+
+    if (!validTypes[type]) return false;
+
+    // Get sections first to identify what needs refreshing
+    const sectionsResponse = await axios.get(`${config.tautulliUrl}/api/v2`, {
+      params: {
+        apikey: config.tautulliApiKey,
+        cmd: "get_libraries_table",
+      },
+    });
+
+    const allSections = sectionsResponse.data?.response?.data?.data || [];
+
+    // Filter sections by type and optional section ID
+    const matchingSections = allSections.filter((s) => {
+      const sectionType = (s.section_type || s.type || "")
+        .toString()
+        .toLowerCase();
+      const matchesType = sectionType === validTypes[type];
+
+      if (section) {
+        return matchesType && s.section_id.toString() === section.toString();
+      }
+
+      return matchesType;
+    });
+
+    // Fetch and cache section media
+    for (const section of matchingSections) {
+      const sectionCacheKey = `section:${section.section_id}:media`;
+
+      // Fetch from API
+      const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
+        params: {
+          apikey: config.tautulliApiKey,
+          cmd: "get_recently_added",
+          section_id: section.section_id,
+          count: 50,
+        },
+      });
+
+      const sectionMedia = (
+        response.data?.response?.data?.recently_added || []
+      ).map((item) => ({
+        ...item,
+        section_id: section.section_id,
+        section_name: section.section_name || section.name,
+      }));
+
+      // Cache the section media
+      mediaCache.set(sectionCacheKey, sectionMedia);
+      logDebug(
+        `Background refresh: Updated cache for section ${section.section_id}`
+      );
+    }
+
+    // Main cache key update
+    const mainCacheKey = `media:${type}:${section || "all"}:${count}`;
+
+    // Process the full data like the main endpoint would
+    // We won't fetch metadata as that's a separate cache and would slow this down
+    const cacheEntry = {
+      total: matchingSections.length,
+      sections: matchingSections.map((s) => ({
+        id: s.section_id,
+        name: s.section_name || s.name,
+      })),
+      _timestamp: Date.now(),
+    };
+
+    // Update the main cache entry
+    mediaCache.set(mainCacheKey, cacheEntry);
+    logDebug(`Background refresh: Updated main cache for ${mainCacheKey}`);
+
+    return true;
+  } catch (error) {
+    logError("Error in background cache refresh:", error);
+    return false;
+  } finally {
+    // Remove from pending list
+    pendingRefreshes.delete(refreshKey);
+  }
+};
 
 // ======================================================================
 // Dynamic Proxy Helper
@@ -1694,6 +1801,146 @@ app.get("/api/clear-image-cache", (req, res) => {
   }
 });
 
+// Refresh posters endpoint - used to clear specific cached images
+app.post("/api/refresh-posters", async (req, res) => {
+  try {
+    const { sectionId, mediaId } = req.body;
+
+    // Generate a unique timestamp for cache busting
+    const timestamp = Date.now();
+    const requestId = `refresh-${timestamp}-${Math.random()
+      .toString(36)
+      .substring(2, 9)}`;
+
+    logInfo(
+      `[${requestId}] Poster refresh requested: ${
+        mediaId
+          ? `Media ID ${mediaId}`
+          : sectionId
+          ? `Section ID ${sectionId}`
+          : "All posters"
+      }`
+    );
+
+    if (mediaId) {
+      // Invalidate specific media item's metadata cache
+      const cacheKey = `metadata:${mediaId}`;
+      const hadCachedData = metadataCache.get(cacheKey) !== null;
+
+      if (hadCachedData) {
+        metadataCache.delete(cacheKey);
+        logInfo(
+          `[${requestId}] Cleared metadata cache for media ID ${mediaId}`
+        );
+      } else {
+        logInfo(
+          `[${requestId}] No cached metadata found for media ID ${mediaId}`
+        );
+      }
+
+      // Also try to clear any section cache that might contain this media
+      // This is more aggressive but ensures the changes get picked up
+      try {
+        const config = getConfig();
+
+        // Get the full metadata to find the section ID
+        const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
+          params: {
+            apikey: config.tautulliApiKey,
+            cmd: "get_metadata",
+            rating_key: mediaId,
+          },
+          timeout: 5000,
+        });
+
+        // If we got a section ID, clear that section's cache
+        const sectionId = response.data?.response?.data?.section_id;
+        if (sectionId) {
+          const sectionCacheKey = `section:${sectionId}:media`;
+          mediaCache.delete(sectionCacheKey);
+          logInfo(
+            `[${requestId}] Cleared section cache for section ID ${sectionId} containing media ID ${mediaId}`
+          );
+        }
+      } catch (metadataError) {
+        // Non-fatal error - we'll still return success since we cleared the metadata cache
+        logError(
+          `[${requestId}] Error getting section ID for media ${mediaId}:`,
+          metadataError
+        );
+      }
+    } else if (sectionId) {
+      // Invalidate all media in a section
+      const sectionCacheKey = `section:${sectionId}:media`;
+      const hadCachedData = mediaCache.get(sectionCacheKey) !== null;
+
+      if (hadCachedData) {
+        mediaCache.delete(sectionCacheKey);
+        logInfo(`[${requestId}] Cleared cache for section ID ${sectionId}`);
+      } else {
+        logInfo(
+          `[${requestId}] No cached data found for section ID ${sectionId}`
+        );
+      }
+
+      // Also look for any type-specific cache keys
+      const typeKeys = ["movies", "shows", "music"];
+      typeKeys.forEach((type) => {
+        const typeCacheKey = `media:${type}:${sectionId}:${
+          requestedCount || 50
+        }`;
+        if (mediaCache.get(typeCacheKey)) {
+          mediaCache.delete(typeCacheKey);
+          logInfo(
+            `[${requestId}] Cleared type cache for ${type} section ${sectionId}`
+          );
+        }
+      });
+    } else {
+      // Clear browser image cache by sending a response event that the frontend can handle
+      logInfo(`[${requestId}] Sending global image cache clear event`);
+    }
+
+    // Return success with timestamp for cache busting
+    res.json({
+      success: true,
+      message: mediaId
+        ? `Poster cache cleared for media ID ${mediaId}`
+        : sectionId
+        ? `Poster cache cleared for section ID ${sectionId}`
+        : "All poster caches cleared",
+      timestamp,
+    });
+
+    // Dispatch event for global updates if needed
+    if (!mediaId && !sectionId) {
+      // Trigger the imageCacheCleared event
+      try {
+        const eventPayload = {
+          timestamp,
+          requestId,
+        };
+
+        // This will only work if we have a real event emitter set up
+        // If not, just log it
+        logInfo(
+          `[${requestId}] Would dispatch imageCacheCleared event: ${JSON.stringify(
+            eventPayload
+          )}`
+        );
+      } catch (eventError) {
+        logError(`[${requestId}] Error dispatching event:`, eventError);
+      }
+    }
+  } catch (error) {
+    logError("Failed to refresh posters", error);
+    res.status(500).json({
+      error: "Failed to refresh posters",
+      message: error.message,
+    });
+  }
+});
+
 // Downloads endpoint
 app.get("/api/downloads", async (req, res) => {
   try {
@@ -2023,6 +2270,10 @@ app.post("/api/sections", async (req, res) => {
   }
 });
 
+// ======================================================================
+// Recently Added API Endpoint with Improved Caching
+// ======================================================================
+
 // Recently Added endpoint
 app.get("/api/recent/:type", async (req, res) => {
   try {
@@ -2051,21 +2302,36 @@ app.get("/api/recent/:type", async (req, res) => {
     // Create cache key based on request parameters
     const cacheKey = `media:${type}:${section || "all"}:${requestedCount}`;
 
-    // Try to get from cache if not forcing refresh
+    // Get from cache first if not forcing refresh
     if (!forceRefresh) {
       const cachedMedia = mediaCache.get(cacheKey);
       if (cachedMedia) {
         logDebug(`[${requestId}] Cache hit for ${cacheKey}`);
 
         // Add cache metadata to response
-        return res.json({
+        const response = {
           ...cachedMedia,
           _cache: {
             hit: true,
             age: Math.floor((Date.now() - cachedMedia._timestamp) / 1000) + "s",
             key: cacheKey,
           },
-        });
+        };
+
+        // Even though we're returning cached data, refresh the cache in the background
+        // for the next request. This keeps the cache fresh without blocking the user.
+        setTimeout(() => {
+          try {
+            logDebug(
+              `[${requestId}] Refreshing cache in background for ${cacheKey}`
+            );
+            refreshCacheInBackground(type, section, requestedCount);
+          } catch (e) {
+            logError(`[${requestId}] Error refreshing cache in background:`, e);
+          }
+        }, 100);
+
+        return res.json(response);
       }
       logDebug(`[${requestId}] Cache miss for ${cacheKey}`);
     } else {

@@ -1,6 +1,4 @@
-// with theme styling applied
-
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useConfig } from "../../context/ConfigContext";
 import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 import * as Icons from "lucide-react";
@@ -10,48 +8,147 @@ import ThemedCard from "../common/ThemedCard";
 import { useTheme } from "../../context/ThemeContext.jsx";
 import axios from "axios";
 import ThemedTabButton from "../common/ThemedTabButton";
+import { useQuery, useQueryClient } from "react-query";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
 
 const MediaCard = ({ media }) => {
+  // Safety check - if media is not valid, render nothing
+  if (!media || typeof media !== "object") {
+    return null;
+  }
+
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [resolution, setResolution] = useState(null);
-  const [imageCacheKey, setImageCacheKey] = useState(Date.now()); // Added cache key state
+  const [imageCacheKey, setImageCacheKey] = useState(Date.now());
+  const [isRefreshingPoster, setIsRefreshingPoster] = useState(false);
 
-  // Fetch resolution metadata
-  useEffect(() => {
-    const fetchResolution = async () => {
-      try {
-        const response = await axios.get(`/api/tautulli/api/v2`, {
-          params: {
-            apikey: media.apiKey,
-            cmd: "get_metadata",
-            rating_key: media.rating_key,
-          },
-        });
+  // Safely get media type
+  const getMediaType = () => {
+    return media.media_type && typeof media.media_type === "string"
+      ? media.media_type.toLowerCase()
+      : "unknown";
+  };
 
-        const mediaInfo = response.data?.response?.data?.media_info?.[0];
-        if (mediaInfo) {
-          let videoResolution = mediaInfo.video_full_resolution;
-          // Convert 4K to 2160p for consistent display
-          if (videoResolution === "4k") {
-            videoResolution = "2160p";
-          }
-          setResolution(videoResolution);
-        }
-      } catch (error) {
-        logError("Failed to fetch resolution:", error);
-      }
-    };
-
-    // Only fetch if rating_key exists
-    if (media.rating_key) {
-      fetchResolution();
+  // Get thumbnail based on media type
+  const getThumbnailUrl = () => {
+    // Safety check for media object
+    if (!media || !media.apiKey) {
+      return "";
     }
-  }, [media.rating_key, media.apiKey]);
+
+    let thumbPath;
+    const mediaType = getMediaType();
+
+    switch (mediaType) {
+      case "movie":
+        thumbPath = media.parent_thumb;
+        break;
+      case "show":
+        thumbPath = media.parent_thumb;
+        break;
+      case "episode":
+        thumbPath = media.grandparent_thumb;
+        break;
+      case "season":
+        thumbPath = media.grandparent_thumb;
+        break;
+      default:
+        thumbPath = media.thumb;
+    }
+
+    if (!thumbPath) {
+      thumbPath = media.thumb;
+    }
+
+    const cacheKey = media._imageCacheKey || imageCacheKey;
+
+    return `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
+      thumbPath || ""
+    )}&apikey=${media.apiKey}&cacheKey=${cacheKey}`;
+  };
+
+  // Function to refresh just this poster
+  const refreshPoster = async (e) => {
+    if (e) {
+      e.stopPropagation(); // Prevent triggering the card click event
+    }
+
+    setIsRefreshingPoster(true);
+
+    try {
+      // Clear browser cache for this specific image
+      const newCacheKey = Date.now();
+      setImageCacheKey(newCacheKey);
+
+      // Reset image state
+      setImageError(false);
+      setImageLoading(true);
+
+      // If the image is in the metadata cache on the server, refresh it
+      if (media.rating_key) {
+        await axios.post(`/api/refresh-posters`, {
+          mediaId: media.rating_key,
+        });
+      }
+
+      // Log the refresh
+      logInfo(`Refreshed poster for ${media.title || "media item"}`);
+    } catch (error) {
+      logError("Failed to refresh poster", error);
+    } finally {
+      // After a short delay, turn off the refreshing indicator
+      setTimeout(() => {
+        setIsRefreshingPoster(false);
+      }, 500);
+    }
+  };
+
+  const getDisplayTitle = () => {
+    // Safety check for media object
+    if (!media) return "Unknown";
+
+    const mediaType = getMediaType();
+
+    switch (mediaType) {
+      case "movie":
+        return media.title || "Unknown Movie";
+      case "episode":
+        return media.grandparent_title || "Unknown Show";
+      case "season":
+        return media.grandparent_title || "Unknown Show";
+      case "show":
+        return media.title || "Unknown Show";
+      default:
+        return media.title || "Unknown";
+    }
+  };
+
+  const getDisplaySubtitle = () => {
+    // Safety check for media object
+    if (!media) return "";
+
+    const mediaType = getMediaType();
+
+    switch (mediaType) {
+      case "movie":
+        return media.year || "";
+      case "episode":
+        return `S${String(media.parent_media_index || "0").padStart(
+          2,
+          "0"
+        )}・E${String(media.media_index || "0").padStart(2, "0")}`;
+      case "season":
+        return `Season ${media.media_index || 1}`;
+      case "show":
+        return `Season ${media.season || 1}`;
+      default:
+        return "";
+    }
+  };
 
   // Date formatting helper for relative added time
   const getRelativeAddedTime = (timestamp) => {
@@ -76,87 +173,86 @@ const MediaCard = ({ media }) => {
     return `${diffDays}d`;
   };
 
-  const getDisplayTitle = () => {
-    // Use our safe media type getter
-    const mediaType = getMediaType();
+  // Generate the image URL once
+  const imageUrl = getThumbnailUrl();
 
-    switch (mediaType) {
-      case "movie":
-        return media.title;
-      case "episode":
-        return media.grandparent_title;
-      case "season":
-        return media.grandparent_title;
-      case "show":
-        return media.title;
-      default:
-        return media.title || "Unknown";
-    }
-  };
+  // Fetch resolution metadata
+  useEffect(() => {
+    if (!media || !media.rating_key || !media.apiKey) return;
 
-  const getDisplaySubtitle = () => {
-    // Use our safe media type getter
-    const mediaType = getMediaType();
+    const controller = new AbortController();
+    let isMounted = true;
 
-    switch (mediaType) {
-      case "movie":
-        return media.year || "";
-      case "episode":
-        return `S${String(media.parent_media_index || "0").padStart(
-          2,
-          "0"
-        )}・E${String(media.media_index || "0").padStart(2, "0")}`;
-      case "season":
-        return `Season ${media.media_index || 1}`;
-      case "show":
-        return `Season ${media.season || 1}`;
-      default:
-        return "";
-    }
-  };
+    // Add a small random delay to spread out API calls
+    const timeoutId = setTimeout(async () => {
+      try {
+        const response = await axios.get(`/api/tautulli/api/v2`, {
+          params: {
+            apikey: media.apiKey,
+            cmd: "get_metadata",
+            rating_key: media.rating_key,
+          },
+          signal: controller.signal,
+        });
 
-  // Add safety check for media_type
-  const getMediaType = () => {
-    return media.media_type && typeof media.media_type === "string"
-      ? media.media_type.toLowerCase()
-      : "unknown";
-  };
+        if (!isMounted) return;
 
-  const getThumbnailUrl = (media, apiKey) => {
-    let thumbPath;
+        const mediaInfo = response.data?.response?.data?.media_info?.[0];
+        if (mediaInfo) {
+          let videoResolution = mediaInfo.video_full_resolution;
+          // Convert 4K to 2160p for consistent display
+          if (videoResolution === "4k") {
+            videoResolution = "2160p";
+          }
+          setResolution(videoResolution);
+        }
+      } catch (error) {
+        if (!axios.isCancel(error)) {
+          logError("Failed to fetch resolution:", error);
+        }
+      }
+    }, Math.random() * 2000); // Random delay up to 2 seconds
 
-    // Use our safe media type getter
-    const mediaType = getMediaType();
+    return () => {
+      isMounted = false;
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [media?.rating_key, media?.apiKey]);
 
-    switch (mediaType) {
-      case "movie":
-        thumbPath = media.parent_thumb;
-        break;
-      case "show":
-        thumbPath = media.parent_thumb;
-        break;
-      case "episode":
-        thumbPath = media.grandparent_thumb;
-        break;
-      case "season":
-        thumbPath = media.grandparent_thumb;
-        break;
-      default:
-        thumbPath = media.thumb;
+  // Check if image is cached in browser
+  useEffect(() => {
+    if (!imageUrl) {
+      setImageLoading(false);
+      setImageError(true);
+      return;
     }
 
-    if (!thumbPath) {
-      thumbPath = media.thumb;
+    const img = new Image();
+    img.onload = () => {
+      setImageLoading(false);
+    };
+    img.onerror = () => {
+      setImageError(true);
+      setImageLoading(false);
+    };
+    img.src = imageUrl;
+
+    // Image is already cached in browser
+    if (img.complete) {
+      setImageLoading(false);
     }
 
-    const cacheBreaker = Date.now();
+    return () => {
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [imageUrl]);
 
-    const cacheKey = media._imageCacheKey || imageCacheKey;
-
-    return `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
-      thumbPath || ""
-    )}&apikey=${apiKey}&cacheKey=${cacheKey}`;
-  };
+  // Get values for display
+  const displayTitle = getDisplayTitle();
+  const displaySubtitle = getDisplaySubtitle();
+  const relativeAddedTime = getRelativeAddedTime(media.added_at);
 
   return (
     <>
@@ -170,6 +266,23 @@ const MediaCard = ({ media }) => {
             group-hover:border-accent-hover group-hover:shadow-accent
             transition-theme"
         >
+          {/* Add refresh button in top-left corner */}
+          <button
+            aria-label="Refresh poster"
+            onClick={refreshPoster}
+            className={`absolute top-2 left-2 p-1 rounded-full z-10
+              bg-black/50 backdrop-blur-sm border border-gray-700/50
+              opacity-0 group-hover:opacity-100 transition-opacity duration-200
+              hover:bg-accent-light/50 hover:border-accent/50`}
+          >
+            <Icons.RefreshCw
+              size={14}
+              className={`text-white ${
+                isRefreshingPoster ? "animate-spin" : ""
+              }`}
+            />
+          </button>
+
           {/* Loading State */}
           {imageLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-modal backdrop-blur-sm">
@@ -180,14 +293,15 @@ const MediaCard = ({ media }) => {
           )}
 
           {/* Image */}
-          {!imageError ? (
+          {!imageError && imageUrl ? (
             <img
-              src={getThumbnailUrl(media, media.apiKey)}
+              src={imageUrl}
               alt={media.title || "Media"}
               className={`w-full h-full object-cover transition-all duration-300 
                   group-hover:scale-105 ${
                     imageLoading ? "opacity-0" : "opacity-100"
                   }`}
+              loading="lazy"
               onLoad={() => setImageLoading(false)}
               onError={() => {
                 setImageError(true);
@@ -202,9 +316,7 @@ const MediaCard = ({ media }) => {
                 onClick={(e) => {
                   e.stopPropagation(); // Prevent the card click event
                   // Generate a new cache key to force image reload
-                  setImageCacheKey(Date.now());
-                  setImageError(false);
-                  setImageLoading(true);
+                  refreshPoster(e);
                 }}
                 className="px-3 py-1.5 bg-accent-lighter rounded-lg 
                   border border-accent/20 text-accent text-xs font-medium 
@@ -212,7 +324,9 @@ const MediaCard = ({ media }) => {
               >
                 <Icons.RefreshCw
                   size={14}
-                  className="text-accent animate-spin"
+                  className={`text-accent ${
+                    isRefreshingPoster ? "animate-spin" : ""
+                  }`}
                 />
                 Refresh
               </button>
@@ -238,7 +352,7 @@ const MediaCard = ({ media }) => {
                 flex items-center gap-1"
             >
               <Icons.Clock3 size={12} />
-              {getRelativeAddedTime(media.added_at)}
+              {relativeAddedTime}
             </div>
 
             {/* Resolution Badge */}
@@ -296,11 +410,26 @@ const MediaCard = ({ media }) => {
 };
 
 const LoadingCard = () => (
-  <div className="space-y-2 animate-pulse">
-    <div className="aspect-[2/3] rounded-xl bg-modal border border-accent" />
-    <div className="space-y-2 px-1">
-      <div className="h-4 bg-modal rounded w-3/4" />
-      <div className="h-3 bg-modal rounded w-1/2" />
+  <div className="space-y-3">
+    {/* Card image skeleton */}
+    <div className="aspect-[2/3] rounded-xl overflow-hidden relative border border-accent bg-gray-800/50">
+      {/* Pulsing overlay */}
+      <div className="absolute inset-0 bg-gray-700/50 animate-pulse"></div>
+
+      {/* Add subtle accent color glow */}
+      <div className="absolute bottom-2 right-2 flex flex-col gap-1">
+        <div className="h-5 w-16 bg-accent/20 rounded-lg animate-pulse"></div>
+        <div className="h-5 w-12 bg-accent/20 rounded-lg animate-pulse"></div>
+      </div>
+    </div>
+
+    {/* Title skeleton */}
+    <div className="h-4 bg-gray-800 rounded w-4/5 animate-pulse"></div>
+
+    {/* Metadata skeletons */}
+    <div className="flex items-center gap-2">
+      <div className="h-3 bg-accent/30 rounded w-1/3 animate-pulse"></div>
+      <div className="h-3 bg-gray-800 rounded w-1/4 animate-pulse"></div>
     </div>
   </div>
 );
@@ -381,7 +510,6 @@ const MediaTypeSubTab = ({ active, onClick, icon: Icon, children }) => (
 );
 
 // Updated NoLibrariesCard component with centered layout
-
 const NoLibrariesCard = ({ type }) => {
   const typeIcons = {
     movies: Icons.Film,
@@ -442,58 +570,97 @@ const NoLibrariesCard = ({ type }) => {
 
 const RecentlyAdded = () => {
   const { config } = useConfig();
-  const [sections, setSections] = useState([]);
+  const queryClient = useQueryClient();
   const [sectionMedia, setSectionMedia] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
   const refreshInterval = useRef(null);
   const REFRESH_INTERVAL = 600000; // 10 minutes in milliseconds
 
+  // Add this new state for component loading
+  const [isComponentLoading, setIsComponentLoading] = useState(true);
+
   // New state for media type filtering
   const [activeMediaTypeFilter, setActiveMediaTypeFilter] = useState("all");
 
-  // Fetch saved sections
-  const fetchSections = async () => {
-    try {
+  // Use React Query to fetch and cache sections data
+  const {
+    data: sectionsData,
+    isLoading: isSectionsLoading,
+    error: sectionsError,
+  } = useQuery(
+    ["sections"],
+    async () => {
       const response = await fetch(`/api/sections`);
-      const data = await response.json();
-
-      // Check if sections are available and in the expected format
-      const processedSections = (data.sections || []).map((section) => {
-        // Handle both raw_data and direct section format
-        const sectionData = section.raw_data || section;
-
-        return {
-          ...sectionData,
-          // Ensure type is always available by looking at different possible properties
-          type: sectionData.type || sectionData.section_type || "unknown",
-          // Ensure name is always available
-          name:
-            sectionData.name || sectionData.section_name || "Unknown Section",
-        };
-      });
-
-      setSections(processedSections);
-      return processedSections;
-    } catch (error) {
-      logError("Failed to fetch sections", error);
-      setError("Failed to load sections");
-      return [];
+      if (!response.ok) throw new Error("Failed to load sections");
+      return response.json();
+    },
+    {
+      staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+      refetchOnWindowFocus: false,
+      onError: (err) => setError("Failed to load sections: " + err.message),
     }
-  };
+  );
 
-  // Fetch recently added media for a specific section
+  // Extract sections from query result
+  const sectionsArray = sectionsData?.sections || [];
+
+  // Process sections from the cached data instead of fetching anew
+  const processedSections = useMemo(() => {
+    if (!sectionsData || !sectionsData.sections) return [];
+
+    return sectionsData.sections.map((section) => {
+      // Handle both raw_data and direct section format
+      const sectionData = section.raw_data || section;
+
+      return {
+        ...sectionData,
+        // Ensure type is always available by looking at different possible properties
+        type: sectionData.type || sectionData.section_type || "unknown",
+        // Ensure name is always available
+        name: sectionData.name || sectionData.section_name || "Unknown Section",
+      };
+    });
+  }, [sectionsData]);
+
+  // Fetch recently added media for a specific section with caching
   const fetchSectionRecentlyAdded = async (sectionId) => {
     try {
+      // Safety check for API key
+      if (!config?.tautulliApiKey) {
+        logWarn(`Missing API key when trying to fetch section ${sectionId}`);
+        return [];
+      }
+
+      // Try to get from React Query cache first
+      const cachedData = queryClient.getQueryData([
+        `section:${sectionId}:recentlyAdded`,
+      ]);
+      if (cachedData) {
+        logDebug(`Using cached data for section ${sectionId}`);
+        return cachedData;
+      }
+
+      // If not in cache, fetch from API
       const response = await fetch(
         `/api/tautulli/api/v2?apikey=${config.tautulliApiKey}&cmd=get_recently_added&section_id=${sectionId}&count=6`
       );
       const data = await response.json();
 
       if (data?.response?.result === "success") {
-        return data.response.data.recently_added || [];
+        const mediaData = data.response.data.recently_added || [];
+
+        // Cache the result
+        queryClient.setQueryData(
+          [`section:${sectionId}:recentlyAdded`],
+          mediaData,
+          {
+            staleTime: 5 * 60 * 1000, // 5 minutes
+          }
+        );
+
+        return mediaData;
       }
       return [];
     } catch (error) {
@@ -505,22 +672,137 @@ const RecentlyAdded = () => {
     }
   };
 
+  const checkForPosterUpdates = async () => {
+    if (!config?.tautulliApiKey) return;
+
+    try {
+      logInfo("Checking for poster updates...");
+
+      // Get current sections with media
+      const sectionsToCheck = Object.keys(sectionMedia);
+      if (sectionsToCheck.length === 0) return;
+
+      let updatedMedia = false;
+
+      // Sample a few items from each section to check their modification dates
+      for (const sectionId of sectionsToCheck) {
+        // Skip if no media exists for this section
+        if (!sectionMedia[sectionId]?.media?.length) continue;
+
+        // Get the first media item with a rating_key
+        const sampleItem = sectionMedia[sectionId].media.find(
+          (m) => m.rating_key
+        );
+        if (!sampleItem) continue;
+
+        try {
+          // Check this media item's metadata modified date
+          const response = await axios.get(`/api/tautulli/api/v2`, {
+            params: {
+              apikey: config.tautulliApiKey,
+              cmd: "get_metadata",
+              rating_key: sampleItem.rating_key,
+            },
+            timeout: 5000,
+          });
+
+          // Look for updated_at or last_modified fields that might indicate changes
+          const fetchedItem = response.data?.response?.data;
+          if (!fetchedItem) continue;
+
+          // Check if the updated_at timestamp is different from our stored data
+          const storedTimestamp =
+            sampleItem.updated_at ||
+            sampleItem.last_updated ||
+            sampleItem.added_at;
+          const newTimestamp =
+            fetchedItem.updated_at || fetchedItem.last_updated;
+
+          // Compare timestamps if available
+          if (
+            storedTimestamp &&
+            newTimestamp &&
+            storedTimestamp !== newTimestamp
+          ) {
+            logInfo(
+              `Media item ${sampleItem.rating_key} has been updated, refreshing section ${sectionId}`
+            );
+            updatedMedia = true;
+
+            // We found an update - invalidate this specific section
+            await axios.post("/api/refresh-posters", {
+              sectionId: sectionId,
+            });
+
+            // Update section's cache key to force image reloads
+            setSectionMedia((prev) => {
+              const updated = { ...prev };
+
+              // Update all media items in this section with a new cache key
+              if (updated[sectionId] && updated[sectionId].media) {
+                updated[sectionId] = {
+                  ...updated[sectionId],
+                  media: updated[sectionId].media.map((item) => ({
+                    ...item,
+                    _imageCacheKey: Date.now(),
+                  })),
+                };
+              }
+
+              return updated;
+            });
+
+            // Since we found an update, no need to check the rest of this section
+            break;
+          }
+        } catch (error) {
+          logError(
+            `Error checking media ${sampleItem.rating_key} for updates:`,
+            error
+          );
+        }
+      }
+
+      // If any sections had updates, trigger a refresh of the UI
+      if (updatedMedia) {
+        logInfo("Media updates detected, refreshing posters");
+      } else {
+        logInfo("No poster updates detected");
+      }
+
+      return updatedMedia;
+    } catch (error) {
+      logError("Error checking for poster updates:", error);
+      return false;
+    }
+  };
+
   const handleRefresh = async () => {
     // Prevent multiple refreshes happening at once
     if (isRefreshing) return;
 
     setIsRefreshing(true);
     try {
+      // Clear image cache
       await axios.get("/api/clear-image-cache");
-      const savedSections = await fetchSections();
+
+      // Invalidate and refetch sections data
+      await queryClient.invalidateQueries(["sections"]);
+
+      // Get processed sections from the updated cache
       const sectionMediaResults = {};
 
-      for (const section of savedSections) {
+      for (const section of processedSections) {
         // Skip if section_id is missing
         if (!section.section_id) {
           console.warn("Section missing section_id, skipping:", section);
           continue;
         }
+
+        // Invalidate this section's cache before fetching
+        queryClient.invalidateQueries([
+          `section:${section.section_id}:recentlyAdded`,
+        ]);
 
         const media = await fetchSectionRecentlyAdded(section.section_id);
         const transformedMedia = media.map((item) => ({
@@ -544,18 +826,60 @@ const RecentlyAdded = () => {
     }
   };
 
-  // Initial load
+  // Initial load using React Query for sections and dependent media fetches
   useEffect(() => {
     const loadSectionMedia = async () => {
-      setIsLoading(true);
+      if (!processedSections.length) {
+        setIsComponentLoading(false);
+        return;
+      }
+
       setError(null);
-      await handleRefresh();
-      setIsLoading(false);
+      setIsComponentLoading(true); // Show loading state while fetching data
+
+      try {
+        // Only do API calls if no cached data exists
+        if (Object.keys(sectionMedia).length === 0) {
+          const sectionMediaResults = {};
+
+          // Process each section and load its media
+          for (const section of processedSections) {
+            if (!section.section_id) continue;
+
+            try {
+              const media = await fetchSectionRecentlyAdded(section.section_id);
+              const transformedMedia = media.map((item) => ({
+                ...item,
+                apiKey: config.tautulliApiKey,
+              }));
+
+              sectionMediaResults[section.section_id] = {
+                ...section,
+                media: transformedMedia,
+              };
+            } catch (err) {
+              logError(
+                `Error loading media for section ${section.section_id}:`,
+                err
+              );
+            }
+          }
+
+          setSectionMedia(sectionMediaResults);
+        }
+
+        setLastRefreshTime(Date.now());
+      } catch (error) {
+        logError("Error loading section media:", error);
+        setError("Failed to load media content");
+      } finally {
+        // Once data is loaded, turn off loading state
+        setIsComponentLoading(false);
+      }
     };
 
-    if (config.tautulliApiKey) {
+    if (config?.tautulliApiKey && !isSectionsLoading) {
       loadSectionMedia();
-      setLastRefreshTime(Date.now());
 
       // Setup interval for auto-refresh
       refreshInterval.current = setInterval(() => {
@@ -569,7 +893,7 @@ const RecentlyAdded = () => {
         }
       };
     }
-  }, [config.tautulliApiKey]);
+  }, [config?.tautulliApiKey, processedSections, isSectionsLoading]);
 
   useEffect(() => {
     const handleImageCacheCleared = (event) => {
@@ -613,6 +937,28 @@ const RecentlyAdded = () => {
     };
   }, []);
 
+  useEffect(() => {
+    // Don't run if we don't have config or sections loaded
+    if (!config?.tautulliApiKey || Object.keys(sectionMedia).length === 0) {
+      return;
+    }
+
+    // Check for updates on initial render
+    checkForPosterUpdates();
+
+    // Set up interval for periodic checks (every 5 minutes)
+    const intervalId = setInterval(() => {
+      checkForPosterUpdates();
+    }, 5 * 60 * 1000); // 5 minutes
+
+    logInfo("Poster update checker initialized (5 minute interval)");
+
+    return () => {
+      clearInterval(intervalId);
+      logInfo("Poster update checker removed");
+    };
+  }, [config?.tautulliApiKey, Object.keys(sectionMedia).length]);
+
   // Calculate time until next refresh
   const timeUntilNextRefresh = Math.max(
     0,
@@ -623,11 +969,35 @@ const RecentlyAdded = () => {
   const remainingSeconds = secondsUntilRefresh % 60;
   const formattedTimeUntilRefresh = `${minutesUntilRefresh}`;
 
-  const getSortedSectionEntries = () => {
+  // Check if there are any sections for the current media type filter
+  const hasSectionsForCurrentFilter = () => {
+    const typeMap = {
+      movies: "movie",
+      shows: "show",
+      music: "artist",
+    };
+
+    if (activeMediaTypeFilter === "all") return processedSections.length > 0;
+
+    return processedSections.some((section) => {
+      const sectionType = (
+        section.type ||
+        section.section_type ||
+        "unknown"
+      ).toLowerCase();
+      return sectionType === typeMap[activeMediaTypeFilter];
+    });
+  };
+
+  // Memoized section entries for improved performance
+  const getSortedSectionEntries = useMemo(() => {
     const allEntries = Object.entries(sectionMedia);
 
     // Filter based on media type
     const filteredEntries = allEntries.filter(([_, sectionData]) => {
+      // Check if sectionData is valid
+      if (!sectionData) return false;
+
       // Check if no filter is selected or matches current media type
       if (activeMediaTypeFilter === "all") return true;
 
@@ -664,27 +1034,7 @@ const RecentlyAdded = () => {
 
       return typePriorityDiff;
     });
-  };
-
-  // Check if there are any sections for the current media type filter
-  const hasSectionsForCurrentFilter = () => {
-    const typeMap = {
-      movies: "movie",
-      shows: "show",
-      music: "artist",
-    };
-
-    if (activeMediaTypeFilter === "all") return sections.length > 0;
-
-    return sections.some((section) => {
-      const sectionType = (
-        section.type ||
-        section.section_type ||
-        "unknown"
-      ).toLowerCase();
-      return sectionType === typeMap[activeMediaTypeFilter];
-    });
-  };
+  }, [sectionMedia, activeMediaTypeFilter]);
 
   return (
     <div className="space-y-8">
@@ -697,7 +1047,7 @@ const RecentlyAdded = () => {
             <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-accent">
               <Icons.Film size={14} className="text-accent" />
               <span className="text-theme-muted text-sm">
-                {sections.length} Sections
+                {processedSections.length} Sections
               </span>
             </div>
             {isRefreshing ? (
@@ -774,7 +1124,7 @@ const RecentlyAdded = () => {
         </ThemedCard>
       )}
 
-      {!sections.length && (
+      {!processedSections.length && (
         <ThemedCard className="p-8 text-center flex flex-col items-center">
           <div className="flex justify-center mb-4">
             <Icons.Film size={32} className="text-accent opacity-70" />
@@ -810,11 +1160,11 @@ const RecentlyAdded = () => {
       )}
 
       {/* New condition for no libraries of specific type */}
-      {sections.length > 0 && !hasSectionsForCurrentFilter() && (
+      {processedSections.length > 0 && !hasSectionsForCurrentFilter() && (
         <NoLibrariesCard type={activeMediaTypeFilter} />
       )}
 
-      {isLoading ? (
+      {isSectionsLoading || isComponentLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
           {[...Array(12)].map((_, i) => (
             <LoadingCard key={i} />
@@ -822,7 +1172,7 @@ const RecentlyAdded = () => {
         </div>
       ) : (
         <div className="space-y-12">
-          {getSortedSectionEntries().map(([sectionId, sectionData]) => {
+          {getSortedSectionEntries.map(([sectionId, sectionData]) => {
             // Check if the section data is valid
             if (!sectionData || typeof sectionData !== "object") {
               return null;

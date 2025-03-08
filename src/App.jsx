@@ -9,9 +9,11 @@ import {
   useLocation,
 } from "react-router-dom";
 import { QueryClient, QueryClientProvider, useQueryClient } from "react-query";
+import { prefetchRecentlyAdded } from "./utils/prefetch";
 import { Toaster } from "react-hot-toast";
 import { ConfigProvider, useConfig } from "./context/ConfigContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext.jsx";
+import ImagePreloader from "./components/ImagePreloader.jsx";
 import SetupWizard from "./components/SetupWizard/SetupWizard";
 import ThemedDashboardLayout from "./components/Layout/ThemedDashboardLayout";
 import LoadingScreen from "./components/common/LoadingScreen";
@@ -82,15 +84,11 @@ const SetupCompletionHandler = ({ onComplete }) => {
               return data.activities || [];
             }),
 
-            queryClient.prefetchQuery(["recentlyAdded"], async () => {
-              const response = await fetch(`/api/downloads`);
-              if (!response.ok)
-                throw new Error("Failed to fetch recently added");
-              return await response.json();
-            }),
+            // Properly prefetch recently added content
+            prefetchRecentlyAdded(queryClient),
 
             queryClient.prefetchQuery(["libraries"], async () => {
-              const response = await fetch(`/api/downloads`);
+              const response = await fetch(`/api/libraries`);
               if (!response.ok) throw new Error("Failed to fetch libraries");
               return await response.json();
             }),
@@ -138,15 +136,11 @@ const ProtectedRoute = ({ children }) => {
               return data.activities || [];
             }),
 
-            queryClient.prefetchQuery(["recentlyAdded"], async () => {
-              const response = await fetch(`/api/downloads`);
-              if (!response.ok)
-                throw new Error("Failed to fetch recently added");
-              return await response.json();
-            }),
+            // Prefetch with improved function
+            prefetchRecentlyAdded(queryClient),
 
             queryClient.prefetchQuery(["libraries"], async () => {
-              const response = await fetch(`/api/downloads`);
+              const response = await fetch(`/api/libraries`);
               if (!response.ok) throw new Error("Failed to fetch libraries");
               return await response.json();
             }),
@@ -297,6 +291,7 @@ const App = () => {
         <ThemeProvider>
           <ThemeWrapper>
             <Router>
+              <ImagePreloader />
               <AppRoutes />
               <Toaster
                 position="top-right"
