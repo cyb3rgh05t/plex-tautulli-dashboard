@@ -9,7 +9,6 @@ import {
   useLocation,
 } from "react-router-dom";
 import { QueryClient, QueryClientProvider, useQueryClient } from "react-query";
-import { prefetchRecentlyAdded, prefetchSections } from "./utils/prefetch";
 import { Toaster } from "react-hot-toast";
 import { ConfigProvider, useConfig } from "./context/ConfigContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext.jsx";
