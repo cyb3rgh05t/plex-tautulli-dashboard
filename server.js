@@ -2299,6 +2299,64 @@ app.get("/api/recent/:type", async (req, res) => {
       return res.status(400).json({ error: "Invalid media type" });
     }
 
+    // Verify Tautulli configuration
+    if (!config.tautulliUrl || !config.tautulliApiKey) {
+      return res.status(500).json({
+        error: "Tautulli not configured",
+        message: "Please configure Tautulli URL and API key in settings",
+        config: {
+          hasTautulliUrl: !!config.tautulliUrl,
+          hasTautulliApiKey: !!config.tautulliApiKey,
+        },
+      });
+    }
+
+    // Test Tautulli connection before proceeding
+    try {
+      logDebug(`[${requestId}] Testing Tautulli connection`);
+      const testResponse = await axios.get(`${config.tautulliUrl}/api/v2`, {
+        params: {
+          apikey: config.tautulliApiKey,
+          cmd: "status",
+        },
+        timeout: 5000,
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+      });
+
+      if (testResponse.data?.response?.result !== "success") {
+        logError(
+          `[${requestId}] Tautulli connection test failed:`,
+          testResponse.data
+        );
+        return res.status(502).json({
+          error: "Tautulli connection failed",
+          message: "Could not connect to Tautulli API",
+          details: testResponse.data,
+        });
+      }
+
+      logDebug(`[${requestId}] Tautulli connection test successful`);
+    } catch (error) {
+      logError(`[${requestId}] Tautulli connection test error:`, {
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+
+      return res.status(502).json({
+        error: "Tautulli connection failed",
+        message: `Error connecting to Tautulli: ${error.message}`,
+        details: {
+          code: error.code,
+          status: error.response?.status,
+        },
+      });
+    }
+
     // Create cache key based on request parameters
     const cacheKey = `media:${type}:${section || "all"}:${requestedCount}`;
 
@@ -2308,30 +2366,50 @@ app.get("/api/recent/:type", async (req, res) => {
       if (cachedMedia) {
         logDebug(`[${requestId}] Cache hit for ${cacheKey}`);
 
-        // Add cache metadata to response
-        const response = {
-          ...cachedMedia,
-          _cache: {
-            hit: true,
-            age: Math.floor((Date.now() - cachedMedia._timestamp) / 1000) + "s",
-            key: cacheKey,
-          },
-        };
+        // Verify cache data has media
+        if (
+          !cachedMedia.media ||
+          !Array.isArray(cachedMedia.media) ||
+          cachedMedia.media.length === 0
+        ) {
+          logWarn(
+            `[${requestId}] Cache hit but media array is invalid. Forcing refresh.`
+          );
+        } else {
+          // Create a deep copy to prevent reference issues
+          const cachedResponse = JSON.parse(JSON.stringify(cachedMedia));
 
-        // Even though we're returning cached data, refresh the cache in the background
-        // for the next request. This keeps the cache fresh without blocking the user.
-        setTimeout(() => {
-          try {
-            logDebug(
-              `[${requestId}] Refreshing cache in background for ${cacheKey}`
-            );
-            refreshCacheInBackground(type, section, requestedCount);
-          } catch (e) {
-            logError(`[${requestId}] Error refreshing cache in background:`, e);
+          // Add cache metadata
+          const response = {
+            ...cachedResponse,
+            _cache: {
+              hit: true,
+              age:
+                Math.floor((Date.now() - cachedResponse._timestamp) / 1000) +
+                "s",
+              key: cacheKey,
+            },
+          };
+
+          // Trigger background refresh if cache is more than 5 minutes old
+          if (Date.now() - cachedResponse._timestamp > 5 * 60 * 1000) {
+            setTimeout(() => {
+              try {
+                logDebug(
+                  `[${requestId}] Refreshing cache in background for ${cacheKey}`
+                );
+                refreshCacheInBackground(type, section, requestedCount);
+              } catch (e) {
+                logError(
+                  `[${requestId}] Error refreshing cache in background:`,
+                  e
+                );
+              }
+            }, 100);
           }
-        }, 100);
 
-        return res.json(response);
+          return res.json(response);
+        }
       }
       logDebug(`[${requestId}] Cache miss for ${cacheKey}`);
     } else {
@@ -2350,14 +2428,34 @@ app.get("/api/recent/:type", async (req, res) => {
           apikey: config.tautulliApiKey,
           cmd: "get_libraries_table",
         },
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
       });
 
       allSections = sectionsResponse.data?.response?.data?.data || [];
+
+      if (
+        !allSections ||
+        !Array.isArray(allSections) ||
+        allSections.length === 0
+      ) {
+        logWarn(`[${requestId}] No sections found in Tautulli response`);
+        return res.status(404).json({
+          error: "No library sections found",
+          message:
+            "No sections were returned from Tautulli. Please check your library configuration.",
+        });
+      }
+
+      logDebug(`[${requestId}] Found ${allSections.length} total sections`);
     } catch (sectionsError) {
-      logError("Error fetching sections:", sectionsError);
+      logError(`[${requestId}] Error fetching sections:`, sectionsError);
       return res.status(500).json({
         error: "Failed to fetch library sections",
         message: sectionsError.message,
+        details: sectionsError.response?.data,
       });
     }
 
@@ -2377,6 +2475,10 @@ app.get("/api/recent/:type", async (req, res) => {
       return matchesType;
     });
 
+    logDebug(
+      `[${requestId}] Found ${matchingSections.length} matching sections for type ${type}`
+    );
+
     // If no matching sections, return empty result
     if (matchingSections.length === 0) {
       return res.json({
@@ -2389,73 +2491,143 @@ app.get("/api/recent/:type", async (req, res) => {
       });
     }
 
-    // Fetch media for matching sections
-    const sectionMediaPromises = matchingSections.map(async (section) => {
-      try {
-        // Generate section cache key
-        const sectionCacheKey = `section:${section.section_id}:media`;
-        let sectionMedia;
+    // Helper function for sequentially processing sections
+    const fetchSectionMediaSequentially = async (sections) => {
+      const results = [];
 
-        // Try to get section media from cache unless forced refresh
-        if (!forceRefresh) {
-          sectionMedia = mediaCache.get(sectionCacheKey);
-          if (sectionMedia) {
-            logDebug(
-              `[${requestId}] Using cached media for section ${section.section_id}`
-            );
-            return sectionMedia;
+      for (const section of sections) {
+        try {
+          // Generate section cache key
+          const sectionCacheKey = `section:${section.section_id}:media`;
+          let sectionMedia;
+
+          // Try to get section media from cache unless forced refresh
+          if (!forceRefresh) {
+            sectionMedia = mediaCache.get(sectionCacheKey);
+            if (sectionMedia) {
+              logDebug(
+                `[${requestId}] Using cached media for section ${section.section_id}`
+              );
+              results.push(sectionMedia);
+              continue;
+            }
           }
+
+          // If not in cache, fetch from API
+          logDebug(
+            `[${requestId}] Fetching media for section ${section.section_id}`
+          );
+
+          // Add detailed error handling and request headers
+          try {
+            const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
+              params: {
+                apikey: config.tautulliApiKey,
+                cmd: "get_recently_added",
+                section_id: section.section_id,
+                count: 50, // Fetch enough items
+              },
+              headers: {
+                "Cache-Control": "no-cache, no-store",
+                Pragma: "no-cache",
+                "If-Modified-Since": "0",
+                "If-None-Match": "", // Prevent 304 responses
+              },
+              timeout: 10000, // Increase timeout
+            });
+
+            // Check if we have a valid response
+            if (response.data?.response?.result !== "success") {
+              throw new Error(
+                `Tautulli returned error: ${JSON.stringify(response.data)}`
+              );
+            }
+
+            // Process and cache the section media data
+            sectionMedia = (
+              response.data?.response?.data?.recently_added || []
+            ).map((item) => ({
+              ...item,
+              section_id: section.section_id,
+              section_name: section.section_name || section.name,
+            }));
+
+            // Only cache if we have items
+            if (sectionMedia.length > 0) {
+              // Clone data before caching
+              const clonedData = JSON.parse(JSON.stringify(sectionMedia));
+              mediaCache.set(sectionCacheKey, clonedData);
+              logDebug(
+                `[${requestId}] Cached ${clonedData.length} items for section ${section.section_id}`
+              );
+            } else {
+              logDebug(
+                `[${requestId}] No media items found for section ${section.section_id}`
+              );
+            }
+
+            results.push(sectionMedia);
+          } catch (error) {
+            // Detailed error logging
+            logError(
+              `Error fetching recently added for section ${section.section_id}:`,
+              {
+                message: error.message,
+                code: error.code,
+                response: error.response?.data,
+                status: error.response?.status,
+                details: error.toJSON ? error.toJSON() : error,
+              }
+            );
+
+            // Add empty array for this section
+            results.push([]);
+          }
+
+          // Add a short delay between requests to avoid rate limiting
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        } catch (outerError) {
+          logError(
+            `Unexpected error processing section ${section.section_id}:`,
+            outerError
+          );
+          results.push([]);
         }
-
-        // If not in cache, fetch from API
-        logDebug(
-          `[${requestId}] Fetching media for section ${section.section_id}`
-        );
-        const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
-          params: {
-            apikey: config.tautulliApiKey,
-            cmd: "get_recently_added",
-            section_id: section.section_id,
-            count: 50, // Fetch enough items to ensure we have at least the requested count
-          },
-        });
-
-        // Process and cache the section media data
-        sectionMedia = (
-          response.data?.response?.data?.recently_added || []
-        ).map((item) => ({
-          ...item,
-          section_id: section.section_id,
-          section_name: section.section_name || section.name,
-        }));
-
-        // Cache the section media for future requests
-        mediaCache.set(sectionCacheKey, sectionMedia);
-
-        return sectionMedia;
-      } catch (error) {
-        logError(
-          `Error fetching recently added for section ${section.section_id}:`,
-          error
-        );
-        return [];
       }
-    });
 
-    // Wait for all section media fetches
-    let allMedia = await Promise.all(sectionMediaPromises);
+      return results;
+    };
+
+    // Use sequential fetching instead of parallel promises
+    let allMedia = await fetchSectionMediaSequentially(matchingSections);
     allMedia = allMedia.flat();
 
-    // If no media found
+    // Handle case where no media was found
     if (allMedia.length === 0) {
-      return res.json({
+      const emptyResponse = {
         total: 0,
         media: [],
         sections: matchingSections.map((s) => ({
           id: s.section_id,
           name: s.section_name || s.name,
         })),
-        error: "No recently added media found",
+        message: "No recently added media found in any section",
+        _timestamp: Date.now(),
+      };
+
+      // Don't cache empty responses
+      logDebug(
+        `[${requestId}] No media found, returning empty response without caching`
+      );
+
+      return res.json({
+        ...emptyResponse,
+        _cache: {
+          hit: false,
+          fresh: true,
+          empty: true,
+          key: cacheKey,
+        },
       });
     }
 
@@ -2467,6 +2639,7 @@ app.get("/api/recent/:type", async (req, res) => {
     // Limit results to the requested count
     const limitedMedia = allMedia.slice(0, requestedCount);
 
+    // Process media with metadata and formatting
     const processedMedia = await Promise.all(
       limitedMedia.map(async (media) => {
         // Try to get metadata from cache
@@ -2516,6 +2689,10 @@ app.get("/api/recent/:type", async (req, res) => {
                   rating_key: media.rating_key,
                 },
                 timeout: 5000,
+                headers: {
+                  "Cache-Control": "no-cache",
+                  Pragma: "no-cache",
+                },
               }
             );
 
@@ -2615,6 +2792,29 @@ app.get("/api/recent/:type", async (req, res) => {
             );
           });
 
+        // If no formats were applied, create a default format based on media type
+        if (Object.keys(formattedData).length === 0) {
+          if (type === "movies") {
+            formattedData["Movie Title"] = `${media.title || "Unknown"} (${
+              media.year || ""
+            })`;
+          } else if (type === "shows") {
+            formattedData["Show Title"] = `${
+              media.grandparent_title || media.title || "Unknown"
+            }`;
+            if (media.parent_media_index && media.media_index) {
+              formattedData["Episode"] = `S${String(
+                media.parent_media_index
+              ).padStart(2, "0")}E${String(media.media_index).padStart(
+                2,
+                "0"
+              )} - ${media.title || ""}`;
+            }
+          } else {
+            formattedData["Title"] = media.title || "Unknown";
+          }
+        }
+
         return {
           ...formattedData,
           raw_data: {
@@ -2644,13 +2844,44 @@ app.get("/api/recent/:type", async (req, res) => {
       _timestamp: Date.now(),
     };
 
-    // Cache the entire response
-    mediaCache.set(cacheKey, responseData);
+    // Add additional validation to ensure the media array is present and not empty
+    if (!responseData.media || responseData.media.length === 0) {
+      logWarn(
+        `[${requestId}] Processed media array is empty or null even though raw media was found`
+      );
+      responseData.media = limitedMedia.map((item) => ({
+        raw_data: item,
+        // Add basic formatted info if custom formatting failed
+        title: item.title || "Unknown",
+        year: item.year || "",
+        type: item.media_type || type,
+      }));
+      responseData.total = responseData.media.length;
+      logDebug(
+        `[${requestId}] Created fallback media array with ${responseData.media.length} items`
+      );
+    }
+
+    // Log the final structure before caching
+    logDebug(
+      `[${requestId}] Final response structure: Total: ${
+        responseData.total
+      }, Media array length: ${responseData.media?.length || 0}`
+    );
+
+    // Create a deep clone of the response data to prevent reference issues
+    const clonedForCache = JSON.parse(JSON.stringify(responseData));
+
+    // Cache the cloned response
+    mediaCache.set(cacheKey, clonedForCache);
     logDebug(`[${requestId}] Cached response with key ${cacheKey}`);
+
+    // Create a fresh clone for the response
+    const responseClone = JSON.parse(JSON.stringify(responseData));
 
     // Send response
     res.json({
-      ...responseData,
+      ...responseClone,
       _cache: {
         hit: false,
         fresh: true,
