@@ -21,6 +21,10 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import chalk from "chalk"; // Adding chalk for colored output in server banner
+import { EventEmitter } from "events";
+
+// Increase the default max listeners to prevent warnings
+EventEmitter.defaultMaxListeners = 20;
 
 // Set log level from environment variable or config
 setLogLevel(process.env.LOG_LEVEL || "INFO");
@@ -490,6 +494,256 @@ function formatShowTitle(session) {
   return title.replace(/\s*\(\d{4}\)|\s+[-–]\s+\d{4}/, "");
 }
 
+// Helper function for processing media in batches
+const processMediaInBatches = async (
+  mediaItems,
+  requestId,
+  config,
+  recentlyAddedFormats,
+  type
+) => {
+  const BATCH_SIZE = 5; // Process 5 items at a time
+  const processedItems = [];
+
+  // Create batches
+  const batches = [];
+  for (let i = 0; i < mediaItems.length; i += BATCH_SIZE) {
+    batches.push(mediaItems.slice(i, i + BATCH_SIZE));
+  }
+
+  logDebug(
+    `[${requestId}] Processing ${mediaItems.length} media items in ${batches.length} batches`
+  );
+
+  // Process each batch sequentially
+  for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+    const batch = batches[batchIndex];
+    logDebug(
+      `[${requestId}] Processing batch ${batchIndex + 1}/${
+        batches.length
+      } with ${batch.length} items`
+    );
+
+    // Process all items in this batch in parallel
+    const batchResults = await Promise.all(
+      batch.map(async (media) => {
+        try {
+          // Try to get metadata from cache
+          const metadataCacheKey = `metadata:${media.rating_key}`;
+          let videoResolution = "Unknown";
+          let cachedMetadata = false;
+
+          // Check metadata cache
+          const metadata = metadataCache.get(metadataCacheKey);
+          if (metadata) {
+            videoResolution = metadata.video_full_resolution || "Unknown";
+            cachedMetadata = true;
+
+            // Apply cached metadata to the media item
+            media.video_full_resolution = videoResolution;
+            media.content_rating = metadata.content_rating || null;
+            media.rating = metadata.rating || null;
+            media.summary = metadata.summary || media.summary;
+
+            // If complete metadata is available, apply additional fields
+            if (metadata.complete_metadata) {
+              const completeData = metadata.complete_metadata;
+              // Apply other important fields that might be needed for display
+              media.genres = completeData.genres || [];
+              media.directors = completeData.directors || [];
+              media.actors = completeData.actors || [];
+            }
+          } else if (media.rating_key) {
+            // Only fetch metadata if not cached and we have a rating_key
+            try {
+              const metadataResponse = await axios.get(
+                `${config.tautulliUrl}/api/v2`,
+                {
+                  params: {
+                    apikey: config.tautulliApiKey,
+                    cmd: "get_metadata",
+                    rating_key: media.rating_key,
+                  },
+                  // Increase timeout to 20 seconds
+                  timeout: 20000,
+                  headers: {
+                    "Cache-Control": "no-cache",
+                    Pragma: "no-cache",
+                  },
+                }
+              );
+
+              const responseData = metadataResponse.data?.response?.data;
+
+              if (responseData) {
+                // Extract metadata
+                const mediaInfo = responseData.media_info?.[0] || {};
+                videoResolution = mediaInfo.video_full_resolution || "Unknown";
+
+                // Cache the metadata
+                metadataCache.set(metadataCacheKey, {
+                  video_full_resolution: videoResolution,
+                  content_rating: responseData.content_rating || null,
+                  rating: responseData.rating || null,
+                  summary: responseData.summary || null,
+                  duration: responseData.duration || null,
+                  complete_metadata: responseData,
+                  media_info: mediaInfo,
+                  timestamp: Date.now(),
+                });
+
+                // Update the media item
+                media.video_full_resolution = videoResolution;
+                media.content_rating = responseData.content_rating || null;
+                media.rating = responseData.rating || null;
+              }
+            } catch (error) {
+              // Graceful error handling - log but continue
+              logWarn(
+                `[${requestId}] Could not fetch metadata for item ${media.rating_key} (${media.title}): ${error.message}`
+              );
+
+              // Use default values
+              media.video_full_resolution =
+                media.video_full_resolution || "Unknown";
+            }
+          }
+
+          // Calculate formatted duration once
+          const formattedDuration = formatDuration(media.duration || 0);
+
+          // Enhanced media object with both aliases and formatted data
+          const enhancedMedia = {
+            ...media,
+            mediaType: type,
+            media_type: type,
+            formatted_duration: formattedDuration,
+            video_full_resolution:
+              media.video_full_resolution || videoResolution,
+            // Ensure content rating is included
+            content_rating: media.content_rating || null,
+            // Add both key variations for timestamps
+            addedAt: media.added_at,
+            added_at: media.added_at,
+          };
+
+          const formattedData = {};
+
+          // Apply formats based on media type
+          recentlyAddedFormats
+            .filter(
+              (format) =>
+                format.type === type &&
+                (format.sectionId === "all" ||
+                  format.sectionId === media.section_id.toString())
+            )
+            .forEach((format) => {
+              try {
+                // Process special variables before template processing
+                let processedTemplate = format.template;
+
+                // Handle added_at:format pattern specifically
+                const dateFormatPattern = /\{added_at:([^}]+)\}/g;
+                processedTemplate = processedTemplate.replace(
+                  dateFormatPattern,
+                  (match, formatType) => {
+                    return formatDate(media.added_at, formatType);
+                  }
+                );
+
+                // Same for addedAt:format
+                const dateFormatPattern2 = /\{addedAt:([^}]+)\}/g;
+                processedTemplate = processedTemplate.replace(
+                  dateFormatPattern2,
+                  (match, formatType) => {
+                    return formatDate(media.added_at, formatType);
+                  }
+                );
+
+                // Special handling for duration
+                processedTemplate = processedTemplate.replace(
+                  /\{duration\}/g,
+                  formattedDuration
+                );
+
+                // Now process the template with the enhanced media data
+                formattedData[format.name] = enhancedProcessTemplate(
+                  processedTemplate,
+                  enhancedMedia
+                );
+              } catch (templateError) {
+                logWarn(
+                  `[${requestId}] Template processing error for ${media.title}: ${templateError.message}`
+                );
+                formattedData[
+                  format.name
+                ] = `[Error: ${templateError.message}]`;
+              }
+            });
+
+          // If no formats were applied, create a default format based on media type
+          if (Object.keys(formattedData).length === 0) {
+            if (type === "movies") {
+              formattedData["Movie Title"] = `${media.title || "Unknown"} (${
+                media.year || ""
+              })`;
+            } else if (type === "shows") {
+              formattedData["Show Title"] = `${
+                media.grandparent_title || media.title || "Unknown"
+              }`;
+              if (media.parent_media_index && media.media_index) {
+                formattedData["Episode"] = `S${String(
+                  media.parent_media_index
+                ).padStart(2, "0")}E${String(media.media_index).padStart(
+                  2,
+                  "0"
+                )} - ${media.title || ""}`;
+              }
+            } else {
+              formattedData["Title"] = media.title || "Unknown";
+            }
+          }
+
+          return {
+            ...formattedData,
+            raw_data: {
+              ...media,
+              formatted_duration: formattedDuration,
+              video_full_resolution:
+                media.video_full_resolution || videoResolution,
+              _cached_metadata: cachedMetadata,
+            },
+          };
+        } catch (itemError) {
+          // Handle any unexpected errors for this item
+          logError(
+            `[${requestId}] Error processing media item ${
+              media.title || "unknown"
+            }:`,
+            itemError
+          );
+
+          // Return a simple object with the raw data to ensure we don't drop this item
+          return {
+            title: media.title || "Unknown",
+            raw_data: media,
+          };
+        }
+      })
+    );
+
+    // Add all successfully processed items from this batch
+    processedItems.push(...batchResults);
+
+    // Brief pause between batches to reduce server load
+    if (batchIndex < batches.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+
+  return processedItems;
+};
+
 // ======================================================================
 // API Services
 // ======================================================================
@@ -621,6 +875,7 @@ async function getUserHistoryWithMetadata(
 // ======================================================================
 
 // Generic cache factory to create different cache instances
+// Generic cache factory to create different cache instances
 const createCache = (defaultTTL = 10 * 60 * 1000) => {
   return {
     cache: new Map(),
@@ -636,14 +891,35 @@ const createCache = (defaultTTL = 10 * 60 * 1000) => {
         return null;
       }
 
-      return item.value;
+      // Return a deep clone of the value to prevent reference issues
+      try {
+        return JSON.parse(JSON.stringify(item.value));
+      } catch (error) {
+        // If cloning fails (e.g., circular reference), return a simple copy
+        console.warn(
+          `Warning: Could not deep clone cached item ${key}, returning simple copy`
+        );
+        return { ...item.value };
+      }
     },
 
     set(key, value, ttl = this.ttl) {
-      this.cache.set(key, {
-        value,
-        expires: Date.now() + ttl,
-      });
+      try {
+        // Store a deep clone of the value to prevent reference issues
+        this.cache.set(key, {
+          value: JSON.parse(JSON.stringify(value)),
+          expires: Date.now() + ttl,
+        });
+      } catch (error) {
+        // If cloning fails (e.g., circular reference), store a simple copy
+        console.warn(
+          `Warning: Could not deep clone value for ${key}, using simple copy`
+        );
+        this.cache.set(key, {
+          value: { ...value },
+          expires: Date.now() + ttl,
+        });
+      }
     },
 
     delete(key) {
@@ -2639,192 +2915,18 @@ app.get("/api/recent/:type", async (req, res) => {
     // Limit results to the requested count
     const limitedMedia = allMedia.slice(0, requestedCount);
 
-    // Process media with metadata and formatting
-    const processedMedia = await Promise.all(
-      limitedMedia.map(async (media) => {
-        // Try to get metadata from cache
-        const metadataCacheKey = `metadata:${media.rating_key}`;
-        let videoResolution = "Unknown";
-        let cachedMetadata = false;
+    // Process media with batched metadata and formatting
+    logDebug(`[${requestId}] Processing ${limitedMedia.length} media items`);
+    const processedMedia = await processMediaInBatches(
+      limitedMedia,
+      requestId,
+      config,
+      recentlyAddedFormats,
+      type
+    );
 
-        // Check metadata cache
-        if (!forceRefresh && media.rating_key) {
-          const metadata = metadataCache.get(metadataCacheKey);
-          if (metadata) {
-            videoResolution = metadata.video_full_resolution || "Unknown";
-            cachedMetadata = true;
-            logDebug(
-              `[${requestId}] Using cached metadata for ${media.rating_key}`
-            );
-
-            // Apply cached metadata to the media item
-            media.video_full_resolution = videoResolution;
-            media.content_rating = metadata.content_rating || null;
-            media.rating = metadata.rating || null;
-            media.summary = metadata.summary || media.summary;
-
-            // If complete metadata is available, apply additional fields
-            if (metadata.complete_metadata) {
-              const completeData = metadata.complete_metadata;
-              // Apply other important fields that might be needed for display
-              media.genres = completeData.genres || [];
-              media.directors = completeData.directors || [];
-              media.actors = completeData.actors || [];
-            }
-          }
-        }
-
-        // Fetch metadata if not cached
-        if (!cachedMetadata && media.rating_key) {
-          try {
-            logDebug(
-              `[${requestId}] Fetching metadata for ${media.rating_key}`
-            );
-            const metadataResponse = await axios.get(
-              `${config.tautulliUrl}/api/v2`,
-              {
-                params: {
-                  apikey: config.tautulliApiKey,
-                  cmd: "get_metadata",
-                  rating_key: media.rating_key,
-                },
-                timeout: 5000,
-                headers: {
-                  "Cache-Control": "no-cache",
-                  Pragma: "no-cache",
-                },
-              }
-            );
-
-            const responseData = metadataResponse.data?.response?.data;
-
-            if (responseData) {
-              // Extract all metadata rather than just resolution
-              const mediaInfo = responseData.media_info?.[0] || {};
-              videoResolution = mediaInfo.video_full_resolution || "Unknown";
-
-              // Cache the complete metadata
-              metadataCache.set(metadataCacheKey, {
-                // Include important metadata fields explicitly
-                video_full_resolution: videoResolution,
-                content_rating: responseData.content_rating || null,
-                rating: responseData.rating || null,
-                summary: responseData.summary || null,
-                duration: responseData.duration || null,
-                // Store the complete metadata for future use
-                complete_metadata: responseData,
-                media_info: mediaInfo,
-                timestamp: Date.now(),
-              });
-
-              // Update the current media item with critical metadata
-              media.video_full_resolution = videoResolution;
-              media.content_rating = responseData.content_rating || null;
-              media.rating = responseData.rating || null;
-            }
-          } catch (error) {
-            logError(
-              `Failed to fetch metadata for ${media.rating_key}:`,
-              error
-            );
-          }
-        }
-
-        // Calculate formatted duration once
-        const formattedDuration = formatDuration(media.duration || 0);
-
-        // Enhanced media object with both aliases and formatted data
-        const enhancedMedia = {
-          ...media,
-          mediaType: type,
-          media_type: type,
-          formatted_duration: formattedDuration,
-          video_full_resolution: videoResolution,
-          // Ensure content rating is included
-          content_rating: media.content_rating || null,
-          // Add both key variations for timestamps
-          addedAt: media.added_at,
-          added_at: media.added_at,
-        };
-
-        const formattedData = {};
-
-        // Apply formats based on media type
-        recentlyAddedFormats
-          .filter(
-            (format) =>
-              format.type === type &&
-              (format.sectionId === "all" ||
-                format.sectionId === media.section_id.toString())
-          )
-          .forEach((format) => {
-            // Process special variables before template processing
-            let processedTemplate = format.template;
-
-            // Handle added_at:format pattern specifically
-            const dateFormatPattern = /\{added_at:([^}]+)\}/g;
-            processedTemplate = processedTemplate.replace(
-              dateFormatPattern,
-              (match, formatType) => {
-                return formatDate(media.added_at, formatType);
-              }
-            );
-
-            // Same for addedAt:format
-            const dateFormatPattern2 = /\{addedAt:([^}]+)\}/g;
-            processedTemplate = processedTemplate.replace(
-              dateFormatPattern2,
-              (match, formatType) => {
-                return formatDate(media.added_at, formatType);
-              }
-            );
-
-            // Special handling for duration
-            processedTemplate = processedTemplate.replace(
-              /\{duration\}/g,
-              formattedDuration
-            );
-
-            // Now process the template with the enhanced media data
-            formattedData[format.name] = enhancedProcessTemplate(
-              processedTemplate,
-              enhancedMedia
-            );
-          });
-
-        // If no formats were applied, create a default format based on media type
-        if (Object.keys(formattedData).length === 0) {
-          if (type === "movies") {
-            formattedData["Movie Title"] = `${media.title || "Unknown"} (${
-              media.year || ""
-            })`;
-          } else if (type === "shows") {
-            formattedData["Show Title"] = `${
-              media.grandparent_title || media.title || "Unknown"
-            }`;
-            if (media.parent_media_index && media.media_index) {
-              formattedData["Episode"] = `S${String(
-                media.parent_media_index
-              ).padStart(2, "0")}E${String(media.media_index).padStart(
-                2,
-                "0"
-              )} - ${media.title || ""}`;
-            }
-          } else {
-            formattedData["Title"] = media.title || "Unknown";
-          }
-        }
-
-        return {
-          ...formattedData,
-          raw_data: {
-            ...media,
-            formatted_duration: formattedDuration,
-            video_full_resolution: videoResolution,
-            _cached_metadata: cachedMetadata,
-          },
-        };
-      })
+    logDebug(
+      `[${requestId}] Processed ${processedMedia.length} media items successfully`
     );
 
     // Prepare the full response
@@ -2894,6 +2996,208 @@ app.get("/api/recent/:type", async (req, res) => {
       error: "Failed to process recently added media",
       message: error.message,
       details: error.response?.data || error.stack,
+    });
+  }
+});
+
+// Add these diagnostic endpoints at the end of your file
+
+app.get("/api/diagnostic/recent/:type", async (req, res) => {
+  try {
+    const { type } = req.params;
+    const { count = 10 } = req.query;
+    const cacheKey = `media:${type}:all:${count}`;
+
+    // Get the config
+    const config = getConfig();
+
+    // Check if we have a cached entry
+    const cachedData = mediaCache.get(cacheKey);
+
+    // Prepare diagnostic info
+    const diagnosticInfo = {
+      endpoint: `/api/recent/${type}`,
+      cacheKey,
+      hasCachedData: !!cachedData,
+      cachedDataStructure: cachedData
+        ? {
+            hasMedia: !!cachedData.media,
+            mediaLength: cachedData.media?.length || 0,
+            mediaIsArray: Array.isArray(cachedData.media),
+            sectionsCount: cachedData.sections?.length || 0,
+            totalProperty: cachedData.total,
+            timestamp: cachedData._timestamp,
+            age: cachedData._timestamp
+              ? `${Math.floor((Date.now() - cachedData._timestamp) / 1000)}s`
+              : "unknown",
+          }
+        : null,
+      config: {
+        hasTautulliUrl: !!config.tautulliUrl,
+        hasTautulliApiKey: !!config.tautulliApiKey,
+      },
+      cacheStats: {
+        mediaCache: mediaCache.stats().size,
+        metadataCache: metadataCache.stats().size,
+        historyCache: historyCache.stats().size,
+      },
+    };
+
+    // Make a direct test call to Tautulli
+    try {
+      const testResponse = await axios.get(`${config.tautulliUrl}/api/v2`, {
+        params: {
+          apikey: config.tautulliApiKey,
+          cmd: "status",
+        },
+        timeout: 5000,
+      });
+
+      diagnosticInfo.tautulliTest = {
+        success: testResponse.data?.response?.result === "success",
+        status: testResponse.status,
+        data: testResponse.data?.response?.data || null,
+      };
+    } catch (error) {
+      diagnosticInfo.tautulliTest = {
+        success: false,
+        error: error.message,
+        code: error.code,
+      };
+    }
+
+    // Return diagnostic info
+    res.json(diagnosticInfo);
+  } catch (error) {
+    res.status(500).json({
+      error: "Diagnostic error",
+      message: error.message,
+      stack: error.stack,
+    });
+  }
+});
+
+// Add a direct test endpoint that forces a cache refresh
+app.get("/api/test/recent/:type", async (req, res) => {
+  try {
+    // Force clear the cache for this type
+    const { type } = req.params;
+    const { count = 10 } = req.query;
+    const cacheKey = `media:${type}:all:${count}`;
+
+    // Clear this specific cache key
+    mediaCache.delete(cacheKey);
+
+    // Make a request to the regular endpoint
+    const config = getConfig();
+    const requestUrl = `http://localhost:${
+      process.env.PORT || 3006
+    }/api/recent/${type}?count=${count}&refresh=true`;
+
+    // Log that we're making this request
+    logInfo(`Test endpoint making request to: ${requestUrl}`);
+
+    try {
+      // Use axios to make a request to our own endpoint
+      const response = await axios.get(requestUrl);
+
+      // Return the result with diagnostic info
+      res.json({
+        success: true,
+        statusCode: response.status,
+        hasMedia: !!response.data.media,
+        mediaCount: response.data.media?.length || 0,
+        sections: response.data.sections,
+        mediaExample:
+          response.data.media?.length > 0 ? response.data.media[0] : null,
+        originalResponse: response.data,
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: "Test request failed",
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      error: "Test error",
+      message: error.message,
+    });
+  }
+});
+
+// Clear all caches via GET
+app.get("/api/clear-cache-get", (req, res) => {
+  try {
+    const previousSizes = {
+      history: historyCache.stats().size,
+      media: mediaCache.stats().size,
+      metadata: metadataCache.stats().size,
+    };
+
+    const totalSize =
+      previousSizes.history + previousSizes.media + previousSizes.metadata;
+
+    // Clear all caches
+    historyCache.clear();
+    mediaCache.clear();
+    metadataCache.clear();
+
+    res.json({
+      success: true,
+      message: `Successfully cleared all caches with ${totalSize} total entries`,
+      details: previousSizes,
+    });
+  } catch (error) {
+    logError("Failed to clear cache", error);
+    res.status(500).json({
+      error: "Failed to clear cache",
+      message: error.message,
+    });
+  }
+});
+
+// Clear a specific cache via GET
+app.get("/api/clear-cache-get/:type", (req, res) => {
+  try {
+    const { type } = req.params;
+    let message = "";
+    let details = {};
+
+    if (type === "media") {
+      const size = mediaCache.stats().size;
+      mediaCache.clear();
+      message = `Successfully cleared media cache with ${size} entries`;
+      details = { media: size };
+    } else if (type === "metadata") {
+      const size = metadataCache.stats().size;
+      metadataCache.clear();
+      message = `Successfully cleared metadata cache with ${size} entries`;
+      details = { metadata: size };
+    } else if (type === "history") {
+      const size = historyCache.stats().size;
+      historyCache.clear();
+      message = `Successfully cleared history cache with ${size} entries`;
+      details = { history: size };
+    } else {
+      return res.status(400).json({
+        error: "Invalid cache type",
+        message: "Cache type must be one of: media, metadata, history",
+      });
+    }
+
+    res.json({
+      success: true,
+      message,
+      details,
+    });
+  } catch (error) {
+    logError("Failed to clear cache", error);
+    res.status(500).json({
+      error: "Failed to clear cache",
+      message: error.message,
     });
   }
 });
