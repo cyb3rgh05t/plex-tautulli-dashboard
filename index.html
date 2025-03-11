@@ -12,7 +12,7 @@
         const savedTheme = "dark";
 
         // Get saved Accent color
-        const savedAccent = localStorage.getItem("accentColor") || "purple";
+        const savedAccent = localStorage.getItem("accentColor") || "grey";
 
         // Define valid accent colors
         const validAccents = [
@@ -28,7 +28,7 @@
         // Ensure only valid accents are applied
         const accent = validAccents.includes(savedAccent)
           ? savedAccent
-          : "purple";
+          : "grey";
 
         // Apply theme and accent classes immediately
         document.documentElement.classList.add("theme-dark");

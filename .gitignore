@@ -37,3 +37,4 @@ Thumbs.db
 *.backup
 sections.json
 package-lock.json
+/cache

@@ -39,8 +39,8 @@ const ACCENTS = {
 // Theme definitions (new)
 const THEMES = {
   dark: {
-    name: "Darker",
-    description: "Darker version of the default theme",
+    name: "Dark",
+    description: "Dark Default Theme",
     isDefault: true,
   },
   dracula: {
@@ -74,7 +74,7 @@ const THEMES = {
 };
 
 // Default values
-const DEFAULT_ACCENT_COLOR = "purple";
+const DEFAULT_ACCENT_COLOR = "grey";
 const DEFAULT_THEME = "dark";
 const VALID_ACCENTS = Object.keys(ACCENTS);
 const VALID_THEMES = Object.keys(THEMES);
