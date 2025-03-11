@@ -1,0 +1,256 @@
+/* Theme Presets - Custom themes beyond just accent colors 
+ * Adapted from the examples provided (dracula.css, plex.css, etc.)
+ */
+
+/* Default Dark (darker version as requested) */
+.theme-dark {
+  --theme-bg-primary: #0a0c14; /* Darker than original #111827 */
+  --theme-bg-secondary: #141824; /* Darker than original #1f2937 */
+  --theme-bg-tertiary: #252b39; /* Darker than original #374151 */
+
+  --theme-text-primary: #f9fafb;
+  --theme-text-secondary: #d1d5db;
+  --theme-text-muted: #9ca3af;
+}
+
+/* Dracula Theme */
+.theme-dracula {
+  --theme-bg-primary: #282a36; /* Exact background from dracula.css */
+  --theme-bg-secondary: #1e2029;
+  --theme-bg-tertiary: #44475a;
+
+  --theme-text-primary: #f8f8f2;
+  --theme-text-secondary: #e2e4eb;
+  --theme-text-muted: #6272a4;
+
+  /* Theme-specific accent overrides */
+  --button-color: #bd93f9;
+  --button-color-hover: #ff79c6;
+  --button-text: #eee;
+  --button-text-hover: #fff;
+
+  --link-color: #ff79c6;
+  --link-color-hover: #8be9fd;
+
+  /* Dracula-specific accent color */
+  --accent-color: 189, 147, 249; /* BD93F9 - Dracula purple */
+  --accent-color-hover: rgba(var(--accent-color), 0.8);
+  --accent-color-light: rgba(var(--accent-color), 0.2);
+  --accent-color-lighter: rgba(var(--accent-color), 0.1);
+  --accent-color-border: rgba(var(--accent-color), 0.3);
+  --accent-color-border-hover: rgba(var(--accent-color), 0.5);
+}
+
+/* Plex Theme */
+.theme-plex {
+  /* Exact background from plex.css */
+  --theme-bg-primary: radial-gradient(
+      circle farthest-side at 0% 100%,
+      rgb(47, 47, 47) 0%,
+      rgba(47, 47, 47, 0) 100%
+    ),
+    radial-gradient(
+      circle farthest-side at 100% 100%,
+      rgb(63, 63, 63) 0%,
+      rgba(63, 63, 63, 0) 100%
+    ),
+    radial-gradient(
+      circle farthest-side at 100% 0%,
+      rgb(76, 76, 76) 0%,
+      rgba(76, 76, 76, 0) 100%
+    ),
+    radial-gradient(
+      circle farthest-side at 0% 0%,
+      rgb(58, 58, 58) 0%,
+      rgba(58, 58, 58, 0) 100%
+    ),
+    black center center/cover no-repeat fixed;
+  --theme-bg-secondary: #282828;
+  --theme-bg-tertiary: #323232;
+
+  --theme-text-primary: #e0e0e0;
+  --theme-text-secondary: #bbb;
+  --theme-text-muted: #999;
+
+  /* Plex-specific accent overrides */
+  --button-color: #cc7b19;
+  --button-color-hover: #e59029;
+  --button-text: #eee;
+  --button-text-hover: #fff;
+
+  --link-color: #e5a00d;
+  --link-color-hover: #fff;
+
+  /* Plex-specific accent color */
+  --accent-color: 229, 160, 13; /* E5A00D - Plex orange/gold */
+  --accent-color-hover: rgba(var(--accent-color), 0.8);
+  --accent-color-light: rgba(var(--accent-color), 0.2);
+  --accent-color-lighter: rgba(var(--accent-color), 0.1);
+  --accent-color-border: rgba(var(--accent-color), 0.3);
+  --accent-color-border-hover: rgba(var(--accent-color), 0.5);
+}
+
+/* Overseerr Theme */
+.theme-overseerr {
+  /* Exact background from overseerr.css */
+  --theme-bg-primary: linear-gradient(
+    360deg,
+    hsl(221, 39%, 11%) 65%,
+    hsl(215, 28%, 17%) 100%
+  );
+  --theme-bg-secondary: #1f2937;
+  --theme-bg-tertiary: #374151;
+
+  --theme-text-primary: #d1d5db;
+  --theme-text-secondary: #9ca3af;
+  --theme-text-muted: #6b7280;
+
+  /* Overseerr-specific accent overrides */
+  --button-color: #4f46e5;
+  --button-color-hover: #6366f1;
+  --button-text: #e5e7eb;
+  --button-text-hover: #fff;
+
+  --link-color: #6366f1;
+  --link-color-hover: #a78bfa;
+
+  /* Overseerr-specific accent color */
+  --accent-color: 167, 139, 250; /* A78BFA - Purple */
+  --accent-color-hover: rgba(var(--accent-color), 0.8);
+  --accent-color-light: rgba(var(--accent-color), 0.2);
+  --accent-color-lighter: rgba(var(--accent-color), 0.1);
+  --accent-color-border: rgba(var(--accent-color), 0.3);
+  --accent-color-border-hover: rgba(var(--accent-color), 0.5);
+}
+
+/* OneDark Theme */
+.theme-onedark {
+  /* Exact background from onedark.css */
+  --theme-bg-primary: #282c34;
+  --theme-bg-secondary: #1e222a;
+  --theme-bg-tertiary: #333842;
+
+  --theme-text-primary: #abb2bf;
+  --theme-text-secondary: #9da5b4;
+  --theme-text-muted: #565c64;
+
+  /* OneDark-specific accent overrides */
+  --button-color: #61afef;
+  --button-color-hover: #c678dd;
+  --button-text: #e2e4eb;
+  --button-text-hover: #fff;
+
+  --link-color: #61afef;
+  --link-color-hover: #56b6c2;
+
+  /* OneDark-specific accent color */
+  --accent-color: 97, 175, 239; /* 61AFEF - Blue */
+  --accent-color-hover: rgba(var(--accent-color), 0.8);
+  --accent-color-light: rgba(var(--accent-color), 0.2);
+  --accent-color-lighter: rgba(var(--accent-color), 0.1);
+  --accent-color-border: rgba(var(--accent-color), 0.3);
+  --accent-color-border-hover: rgba(var(--accent-color), 0.5);
+}
+
+/* Nord Theme */
+.theme-nord {
+  /* Exact background from nord.css */
+  --theme-bg-primary: #2e3440;
+  --theme-bg-secondary: #3b4252;
+  --theme-bg-tertiary: #434c5e;
+
+  --theme-text-primary: #d8dee9;
+  --theme-text-secondary: #e5e9f0;
+  --theme-text-muted: #81a1c1;
+
+  /* Nord-specific accent overrides */
+  --button-color: #79b8ca;
+  --button-color-hover: #6a9daf;
+  --button-text: #2e3440;
+  --button-text-hover: #d8dee9;
+
+  --link-color: #81a1c1;
+  --link-color-hover: #88c0d0;
+
+  /* Nord-specific accent color */
+  --accent-color: 121, 184, 202; /* 79B8CA - Nord Frost */
+  --accent-color-hover: rgba(var(--accent-color), 0.8);
+  --accent-color-light: rgba(var(--accent-color), 0.2);
+  --accent-color-lighter: rgba(var(--accent-color), 0.1);
+  --accent-color-border: rgba(var(--accent-color), 0.3);
+  --accent-color-border-hover: rgba(var(--accent-color), 0.5);
+}
+
+/* Hotline Theme */
+.theme-hotline {
+  /* Exact background from hotline.css */
+  --theme-bg-primary: linear-gradient(
+      0deg,
+      rgba(247, 101, 184, 1) 0%,
+      rgb(21, 95, 165) 100%
+    )
+    center center/cover no-repeat fixed;
+  --theme-bg-secondary: linear-gradient(
+      -90deg,
+      rgba(247, 101, 184, 1) 0%,
+      rgb(21, 95, 165) 100%
+    )
+    center center/cover no-repeat fixed;
+  --theme-bg-tertiary: #5e61ab;
+
+  --theme-text-primary: #eee;
+  --theme-text-secondary: #ddd;
+  --theme-text-muted: #999;
+
+  /* Hotline-specific accent overrides */
+  --button-color: #f98dc9;
+  --button-color-hover: #ff4cb1;
+  --button-text: #eee;
+  --button-text-hover: #fff;
+
+  --link-color: rgb(255, 179, 222);
+  --link-color-hover: #d7fffe;
+
+  /* Hotline-specific accent color */
+  --accent-color: 249, 141, 201; /* F98DC9 - Hotline pink */
+  --accent-color-hover: rgba(var(--accent-color), 0.8);
+  --accent-color-light: rgba(var(--accent-color), 0.2);
+  --accent-color-lighter: rgba(var(--accent-color), 0.1);
+  --accent-color-border: rgba(var(--accent-color), 0.3);
+  --accent-color-border-hover: rgba(var(--accent-color), 0.5);
+}
+
+/* Aquamarine Theme */
+.theme-aquamarine {
+  /* Exact background from aquamarine.css */
+  --theme-bg-primary: radial-gradient(
+      ellipse at center,
+      #47918a 0%,
+      #0b3161 100%
+    )
+    center center/cover no-repeat fixed;
+  --theme-bg-secondary: linear-gradient(-90deg, #47918a 0%, #0b3161 100%) center
+    center/cover no-repeat fixed;
+  --theme-bg-tertiary: #265c74;
+
+  --theme-text-primary: #eee;
+  --theme-text-secondary: #ddd;
+  --theme-text-muted: #8dcfc9;
+
+  /* Aquamarine-specific accent overrides */
+  --button-color: #009688;
+  --button-color-hover: #12afa0;
+  --button-text: #eee;
+  --button-text-hover: #fff;
+
+  --link-color: #0ed2bf;
+  --link-color-hover: #36e7d6;
+
+  /* Aquamarine-specific accent color */
+  --accent-color: 0, 150, 136; /* 009688 - Teal */
+  --accent-color-hover: rgba(var(--accent-color), 0.8);
+  --accent-color-light: rgba(var(--accent-color), 0.2);
+  --accent-color-lighter: rgba(var(--accent-color), 0.1);
+  --accent-color-border: rgba(var(--accent-color), 0.3);
+  --accent-color-border-hover: rgba(var(--accent-color), 0.5);
+}

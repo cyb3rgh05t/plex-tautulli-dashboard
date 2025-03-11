@@ -1,12 +1,16 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "../../context/ThemeContext";
-import { Palette, Check } from "lucide-react";
+import { Palette, Check, Monitor } from "lucide-react";
+import ThemeSelector from "../common/ThemeSelector";
 
 /**
- * A theme toggle component for the footer that shows accent colors
+ * A theme toggle component for the footer that shows accent colors and theme options
  */
 const ThemeToggleFooter = ({ variant = "simple", showAccent = true }) => {
-  const { accentColor, setAccentColor, allAccents } = useTheme();
+  const { accentColor, setAccentColor, allAccents, themeName } = useTheme();
+
+  // Only show accent picker for dark theme
+  const canCustomizeAccent = themeName === "dark";
   const [showAccentMenu, setShowAccentMenu] = useState(false);
   const menuRef = useRef(null);
 
@@ -92,17 +96,25 @@ const ThemeToggleFooter = ({ variant = "simple", showAccent = true }) => {
   // Simple variant just shows the accent toggle button
   if (variant === "simple") {
     return (
-      <div className="relative">
-        <button
-          onClick={() => setShowAccentMenu(!showAccentMenu)}
-          className="text-gray-400 hover:text-white transition-theme p-2 rounded-lg hover:bg-gray-700/50"
-          title="Change accent color"
-        >
-          <Palette size={20} />
-        </button>
+      <div className="flex items-center gap-2">
+        {/* Theme selector */}
+        <ThemeSelector variant="simple" />
 
-        {/* Accent color dropdown menu */}
-        {showAccentMenu && renderAccentColorMenu()}
+        {/* Accent color selector - only for dark theme */}
+        {canCustomizeAccent && (
+          <div className="relative">
+            <button
+              onClick={() => setShowAccentMenu(!showAccentMenu)}
+              className="text-gray-400 hover:text-white transition-theme p-2 rounded-lg hover:bg-gray-700/50"
+              title="Change accent color"
+            >
+              <Palette size={20} />
+            </button>
+
+            {/* Accent color dropdown menu */}
+            {showAccentMenu && renderAccentColorMenu()}
+          </div>
+        )}
       </div>
     );
   }
@@ -111,8 +123,8 @@ const ThemeToggleFooter = ({ variant = "simple", showAccent = true }) => {
   return (
     <div className="relative" ref={menuRef}>
       <div className="flex items-center gap-2">
-        {/* Accent color selector button */}
-        {showAccent && (
+        {/* Accent color selector button - only for dark theme */}
+        {showAccent && canCustomizeAccent && (
           <button
             onClick={() => setShowAccentMenu(!showAccentMenu)}
             className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 text-gray-300 hover:text-white hover:bg-gray-800 
@@ -130,10 +142,24 @@ const ThemeToggleFooter = ({ variant = "simple", showAccent = true }) => {
             />
           </button>
         )}
+
+        {/* Info indicator when on non-dark theme */}
+        {showAccent && !canCustomizeAccent && (
+          <div
+            className="flex items-center gap-2 px-3 py-2 bg-gray-800/20 text-gray-300 
+            rounded-lg border border-accent/50"
+          >
+            <Palette size={18} className="text-accent-base/50" />
+            <span className="text-xs">Theme-defined accent</span>
+          </div>
+        )}
       </div>
 
       {/* Accent color dropdown menu */}
-      {showAccent && showAccentMenu && renderAccentColorMenu()}
+      {showAccent &&
+        canCustomizeAccent &&
+        showAccentMenu &&
+        renderAccentColorMenu()}
     </div>
   );
 };

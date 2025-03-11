@@ -1,0 +1,66 @@
+/* Theme-specific body backgrounds */
+
+/* Apply theme backgrounds directly to body for better gradient support */
+body.theme-dark {
+  background-color: #0a0c14;
+}
+
+body.theme-dracula {
+  background-color: #282a36;
+}
+
+body.theme-plex {
+  background: radial-gradient(
+      circle farthest-side at 0% 100%,
+      rgb(47, 47, 47) 0%,
+      rgba(47, 47, 47, 0) 100%
+    ),
+    radial-gradient(
+      circle farthest-side at 100% 100%,
+      rgb(63, 63, 63) 0%,
+      rgba(63, 63, 63, 0) 100%
+    ),
+    radial-gradient(
+      circle farthest-side at 100% 0%,
+      rgb(76, 76, 76) 0%,
+      rgba(76, 76, 76, 0) 100%
+    ),
+    radial-gradient(
+      circle farthest-side at 0% 0%,
+      rgb(58, 58, 58) 0%,
+      rgba(58, 58, 58, 0) 100%
+    ),
+    black;
+  background-attachment: fixed;
+}
+
+body.theme-overseerr {
+  background: linear-gradient(
+    360deg,
+    hsl(221, 39%, 11%) 65%,
+    hsl(215, 28%, 17%) 100%
+  );
+  background-attachment: fixed;
+}
+
+body.theme-onedark {
+  background-color: #282c34;
+}
+
+body.theme-nord {
+  background-color: #2e3440;
+}
+
+body.theme-hotline {
+  background: linear-gradient(
+    0deg,
+    rgba(247, 101, 184, 1) 0%,
+    rgb(21, 95, 165) 100%
+  );
+  background-attachment: fixed;
+}
+
+body.theme-aquamarine {
+  background: radial-gradient(ellipse at center, #47918a 0%, #0b3161 100%);
+  background-attachment: fixed;
+}

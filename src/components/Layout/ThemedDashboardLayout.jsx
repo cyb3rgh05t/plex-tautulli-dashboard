@@ -65,7 +65,7 @@ const ConnectionStatusIndicator = ({ status, service }) => {
  * The main dashboard layout with themed components that respond to accent color changes
  */
 const ThemedDashboardLayout = () => {
-  const { accentColor, accentRgb } = useTheme();
+  const { accentColor, accentRgb, themeName } = useTheme();
   const { config } = useConfig();
 
   // Create state variables directly in this component instead of using useConnectionStatus
@@ -156,17 +156,21 @@ const ThemedDashboardLayout = () => {
     return string.charAt(0).toUpperCase() + string.slice(1);
   };
 
+  // No need for getThemeBackgroundStyle anymore since we're using body classes
+
   return (
-    <div className="min-h-screen flex flex-col bg-main theme-dark relative">
-      {/* Enhanced accent gradient effects for background */}
-      <div
-        className="fixed inset-0 pointer-events-none z-0"
-        style={{
-          background: `radial-gradient(circle at 15% 15%, rgba(${accentRgb}, 0.15) 0%, transparent 35%),
+    <div className="min-h-screen flex flex-col relative">
+      {/* Enhanced accent gradient effects for background - only for dark theme */}
+      {themeName === "dark" && (
+        <div
+          className="fixed inset-0 pointer-events-none z-0"
+          style={{
+            background: `radial-gradient(circle at 15% 15%, rgba(${accentRgb}, 0.15) 0%, transparent 35%),
                       radial-gradient(circle at 85% 85%, rgba(${accentRgb}, 0.15) 0%, transparent 35%)`,
-          opacity: 0.8,
-        }}
-      />
+            opacity: 0.8,
+          }}
+        />
+      )}
 
       {/* Subtle noise texture overlay */}
       <div
@@ -200,7 +204,9 @@ const ThemedDashboardLayout = () => {
                   <Icons.Palette size={14} className="text-accent-base" />
                   <span className="text-white">{appVersion}</span>
                   <span className="text-accent-base ml-1 font-medium">
-                    {capitalizeFirstLetter(accentColor)}
+                    {themeName === "dark"
+                      ? capitalizeFirstLetter(accentColor)
+                      : capitalizeFirstLetter(themeName)}
                   </span>
                 </p>
               </div>

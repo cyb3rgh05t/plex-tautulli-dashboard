@@ -2,6 +2,8 @@
 @import "./themes/theme-variables.css";
 @import "./themes/accent-colors.css";
 @import "./themes/theme-utilities.css";
+@import "./themes/theme-presets.css";
+@import "./themes/theme-body.css";
 
 /* Then include Tailwind directives */
 @tailwind base;
