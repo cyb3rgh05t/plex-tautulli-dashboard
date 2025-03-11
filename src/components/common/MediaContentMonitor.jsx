@@ -4,6 +4,7 @@ import { useConfig } from "../../context/ConfigContext";
 import { logInfo, logDebug, logError } from "../../utils/logger";
 import axios from "axios";
 import toast from "react-hot-toast";
+import * as tmdbService from "../../services/tmdbService";
 
 /**
  * This component monitors for newly added media in the background.
@@ -33,6 +34,7 @@ const MediaContentMonitor = () => {
 
     isChecking.current = true;
     let newContentFound = false;
+    let newMediaItems = [];
 
     try {
       // Load sections
@@ -76,7 +78,7 @@ const MediaContentMonitor = () => {
               apikey: config.tautulliApiKey,
               cmd: "get_recently_added",
               section_id: sectionId,
-              count: 1, // Just get the most recent item
+              count: 5, // Just get the most recent items
             },
             timeout: 5000,
           });
@@ -100,8 +102,15 @@ const MediaContentMonitor = () => {
               ) {
                 // We definitely need to update
                 newContentFound = true;
+                newMediaItems.push({
+                  ...newestItem,
+                  apiKey: config.tautulliApiKey,
+                  section_id: sectionId,
+                  section_name: sectionName,
+                  media_type: newestItem.media_type,
+                });
                 logInfo(`New content detected in section "${sectionName}"`);
-                break;
+                continue;
               }
 
               // Compare with cached newest item
@@ -110,10 +119,16 @@ const MediaContentMonitor = () => {
               // Check if this is really a new item
               if (newestItem.rating_key !== cachedNewestItem.rating_key) {
                 newContentFound = true;
+                newMediaItems.push({
+                  ...newestItem,
+                  apiKey: config.tautulliApiKey,
+                  section_id: sectionId,
+                  section_name: sectionName,
+                  media_type: newestItem.media_type,
+                });
                 logInfo(
                   `New content detected in section "${sectionName}": ${newestItem.title}`
                 );
-                break;
               }
             }
           }
@@ -130,6 +145,53 @@ const MediaContentMonitor = () => {
         // Invalidate section queries
         for (const sectionId of sectionIds) {
           queryClient.invalidateQueries([`section:${sectionId}`]);
+        }
+
+        // Pre-cache TMDB posters for new media items
+        if (newMediaItems.length > 0) {
+          logInfo(
+            `Pre-caching TMDB posters for ${newMediaItems.length} new items`
+          );
+
+          // For each new item, try to fetch metadata and get TMDB poster
+          newMediaItems.forEach(async (item) => {
+            try {
+              // Fetch full metadata
+              const metadataResponse = await axios.get(`/api/tautulli/api/v2`, {
+                params: {
+                  apikey: config.tautulliApiKey,
+                  cmd: "get_metadata",
+                  rating_key: item.rating_key,
+                },
+                timeout: 5000,
+              });
+
+              if (metadataResponse.data?.response?.result === "success") {
+                const metadata = metadataResponse.data.response.data;
+
+                // Use metadata to get TMDB poster
+                const posterUrl = await tmdbService.getPosterByMediaType(
+                  item.media_type?.toLowerCase() || "",
+                  metadata
+                );
+
+                if (posterUrl) {
+                  tmdbService.cachePosterUrl(item.rating_key, posterUrl);
+                  logInfo(`Cached TMDB poster for new item: ${item.title}`);
+
+                  // Update cached metadata
+                  queryClient.setQueryData([`media:${item.rating_key}`], {
+                    ...metadata,
+                    tmdb_poster_url: posterUrl,
+                    apiKey: config.tautulliApiKey,
+                    complete_metadata: true,
+                  });
+                }
+              }
+            } catch (err) {
+              logError(`Error pre-caching TMDB poster for ${item.title}:`, err);
+            }
+          });
         }
 
         // Show notification to user
@@ -166,6 +228,11 @@ const MediaContentMonitor = () => {
       checkForNewContent();
     }, 5 * 60 * 1000); // 5 minutes
 
+    // Set up interval to clean expired TMDB poster cache entries every hour
+    const tmdbCacheCleanupInterval = setInterval(() => {
+      tmdbService.clearExpiredPosters();
+    }, 60 * 60 * 1000); // 60 minutes
+
     logInfo("✅ Media content monitor initialized (5 minute interval)");
 
     return () => {
@@ -173,6 +240,7 @@ const MediaContentMonitor = () => {
       if (checkInterval.current) {
         clearInterval(checkInterval.current);
       }
+      clearInterval(tmdbCacheCleanupInterval);
     };
   }, [isConfigured]);
 

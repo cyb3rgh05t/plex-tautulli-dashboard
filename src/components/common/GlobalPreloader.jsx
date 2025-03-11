@@ -4,10 +4,11 @@ import { useConfig } from "../../context/ConfigContext";
 import { logInfo, logError, logDebug, logWarn } from "../../utils/logger";
 import LoadingScreen from "./LoadingScreen";
 import axios from "axios";
+import * as tmdbService from "../../services/tmdbService";
 
 /**
  * Enhanced GlobalPreloader that ensures ALL data is completely loaded
- * before showing the application UI
+ * before showing the application UI, with TMDB poster preloading
  */
 const GlobalPreloader = ({ children }) => {
   const { config, isConfigured, isLoading: configLoading } = useConfig();
@@ -29,6 +30,8 @@ const GlobalPreloader = ({ children }) => {
     activities: false,
     libraries: false,
     images: false,
+    posters: false,
+    metadata: false,
   });
 
   // Main preloading effect
@@ -92,9 +95,12 @@ const GlobalPreloader = ({ children }) => {
           })
           .filter(Boolean);
 
-        // Step 3: Load media for each section COMPLETELY (not just prefetch)
+        // Step 3: Load media for each section and process metadata
         setLoadingMessage("Loading media content...");
         setLoadingDetails(`Processing ${sectionIds.length} libraries`);
+
+        // Clear the poster cache to ensure fresh posters
+        tmdbService.clearExpiredPosters();
 
         let loadedSections = 0;
         // Load each section sequentially to avoid overwhelming the server
@@ -104,7 +110,7 @@ const GlobalPreloader = ({ children }) => {
               `Loading library ${loadedSections + 1} of ${sectionIds.length}`
             );
 
-            // Find section name for better logging
+            // Find section name and type for better logging
             const section = allSections.find((s) => {
               const sectionData = s.raw_data || s;
               return sectionData.section_id === sectionId;
@@ -113,15 +119,20 @@ const GlobalPreloader = ({ children }) => {
               section?.raw_data?.name ||
               section?.name ||
               `Section ${sectionId}`;
+            const sectionType =
+              section?.raw_data?.type ||
+              section?.raw_data?.section_type ||
+              "unknown";
 
-            // Load data for this section
+            // Load recently added media for this section
             const response = await axios.get(`/api/tautulli/api/v2`, {
               params: {
                 apikey: config.tautulliApiKey,
                 cmd: "get_recently_added",
                 section_id: sectionId,
-                count: 12, // Get extra items to ensure we have enough
+                count: 20, // Get extra items to ensure we have enough
               },
+              timeout: 30000, // 30-second timeout for this critical operation
             });
 
             if (response.data?.response?.result === "success") {
@@ -134,30 +145,173 @@ const GlobalPreloader = ({ children }) => {
                 section_id: sectionId,
               }));
 
-              // Cache the data for this section
-              queryClient.setQueryData([`section:${sectionId}`], {
-                media: mediaItems,
-                section: section?.raw_data || section,
-              });
+              if (mediaItems.length > 0) {
+                logInfo(
+                  `Loading metadata and posters for ${mediaItems.length} items in "${sectionName}"`
+                );
 
-              logInfo(
-                `✅ Loaded ${mediaItems.length} items for "${sectionName}"`
-              );
+                // Process and cache metadata for each item (in smaller batches)
+                const BATCH_SIZE = 5;
+                let processedItems = 0;
+
+                for (let i = 0; i < mediaItems.length; i += BATCH_SIZE) {
+                  const batch = mediaItems.slice(i, i + BATCH_SIZE);
+
+                  // Process this batch in parallel
+                  await Promise.all(
+                    batch.map(async (item) => {
+                      try {
+                        // Fetch full metadata for this item
+                        const metadataResponse = await axios.get(
+                          `/api/tautulli/api/v2`,
+                          {
+                            params: {
+                              apikey: config.tautulliApiKey,
+                              cmd: "get_metadata",
+                              rating_key: item.rating_key,
+                            },
+                            timeout: 10000,
+                          }
+                        );
+
+                        if (
+                          metadataResponse.data?.response?.result === "success"
+                        ) {
+                          const metadata = metadataResponse.data.response.data;
+
+                          // Enhance item with full metadata
+                          const enhancedItem = {
+                            ...item,
+                            ...metadata,
+                            complete_metadata: true,
+                          };
+
+                          // Try to get TMDB poster
+                          try {
+                            // Check if we have this poster cached already
+                            let posterUrl = tmdbService.getCachedPosterUrl(
+                              item.rating_key
+                            );
+
+                            if (!posterUrl) {
+                              // Extract TMDB ID from guids
+                              const mediaType = metadata.media_type
+                                ? metadata.media_type.toLowerCase()
+                                : "";
+
+                              // Get poster based on media type
+                              posterUrl =
+                                await tmdbService.getPosterByMediaType(
+                                  mediaType,
+                                  metadata
+                                );
+
+                              // If we got a TMDB poster, cache it
+                              if (posterUrl) {
+                                tmdbService.cachePosterUrl(
+                                  item.rating_key,
+                                  posterUrl
+                                );
+                                enhancedItem.tmdb_poster_url = posterUrl;
+                                logDebug(
+                                  `✅ Cached TMDB poster for ${
+                                    metadata.title || "unknown item"
+                                  }`
+                                );
+                              }
+                            } else {
+                              enhancedItem.tmdb_poster_url = posterUrl;
+                              logDebug(
+                                `✅ Using cached TMDB poster for ${
+                                  metadata.title || "unknown item"
+                                }`
+                              );
+                            }
+                          } catch (posterError) {
+                            logWarn(
+                              `Failed to get TMDB poster for ${metadata.title}:`,
+                              posterError
+                            );
+                          }
+
+                          // Store in query cache for fast access
+                          queryClient.setQueryData(
+                            [`media:${item.rating_key}`],
+                            enhancedItem
+                          );
+
+                          // Store complete item in the section's cache as well
+                          const currentSectionData = queryClient.getQueryData([
+                            `section:${sectionId}`,
+                          ]) || {
+                            media: [],
+                            section: section?.raw_data || section,
+                          };
+
+                          // Replace or add this item in the section cache
+                          const existingItemIndex =
+                            currentSectionData.media.findIndex(
+                              (m) => m.rating_key === item.rating_key
+                            );
+
+                          if (existingItemIndex >= 0) {
+                            currentSectionData.media[existingItemIndex] =
+                              enhancedItem;
+                          } else {
+                            currentSectionData.media.push(enhancedItem);
+                          }
+
+                          // Update the section cache
+                          queryClient.setQueryData(
+                            [`section:${sectionId}`],
+                            currentSectionData
+                          );
+                        }
+                      } catch (itemError) {
+                        logWarn(
+                          `Failed to process item ${item.rating_key}:`,
+                          itemError
+                        );
+                      }
+
+                      // Update processed count
+                      processedItems++;
+                    })
+                  );
+
+                  // Update loading progress based on both sections and items
+                  const sectionWeight = 1 / sectionIds.length; // Each section's weight
+                  const sectionProgress = loadedSections / sectionIds.length; // Progress through sections
+                  const itemProgress = processedItems / mediaItems.length; // Progress through items in this section
+
+                  const combinedProgress =
+                    20 +
+                    Math.floor(
+                      (sectionProgress + itemProgress * sectionWeight) * 40
+                    );
+                  setLoadingProgress(combinedProgress);
+                  setLoadingDetails(
+                    `Processed ${processedItems}/${mediaItems.length} items in ${sectionName}`
+                  );
+
+                  // Small pause between batches to prevent overwhelming the server
+                  await new Promise((resolve) => setTimeout(resolve, 200));
+                }
+              }
             }
 
             // Update progress
             loadedSections++;
-            const sectionProgress =
-              20 + Math.floor((loadedSections / sectionIds.length) * 30);
-            setLoadingProgress(sectionProgress);
-          } catch (error) {
-            logWarn(`Failed to load content for section ${sectionId}:`, error);
-            // Continue loading other sections even if one fails
+          } catch (sectionError) {
+            logWarn(`Failed to process section ${sectionId}:`, sectionError);
+            // Continue with other sections even if one fails
           }
         }
 
         loadingTasks.current.media = true;
-        setLoadingProgress(50);
+        loadingTasks.current.metadata = true;
+        loadingTasks.current.posters = true;
+        setLoadingProgress(60);
 
         // Step 4: Load other essential data in parallel
         setLoadingMessage("Loading application data...");
@@ -186,107 +340,13 @@ const GlobalPreloader = ({ children }) => {
           logWarn("Failed to load libraries:", error);
         }
 
-        setLoadingProgress(70);
+        setLoadingProgress(80);
 
-        // Step 5: Preload critical images
-        setLoadingMessage("Preparing media thumbnails...");
-        setLoadingDetails("Loading poster images");
-
-        // Get a list of all loaded media items
-        const allSectionQueries = sectionIds
-          .map((id) => queryClient.getQueryData([`section:${id}`]))
-          .filter(Boolean);
-
-        let allMediaItems = [];
-        allSectionQueries.forEach((sectionData) => {
-          if (sectionData.media && Array.isArray(sectionData.media)) {
-            // Take only the first 2 items from each section to keep loading fast
-            allMediaItems = [
-              ...allMediaItems,
-              ...sectionData.media.slice(0, 2),
-            ];
-          }
-        });
-
-        // Preload the top media item thumbnails (limited number)
-        const itemsToPreload = allMediaItems.slice(0, 8); // Limit to 8 items total
-
-        if (itemsToPreload.length > 0) {
-          // Clear image cache to ensure fresh images
-          await axios.get("/api/clear-image-cache");
-
-          setLoadingDetails(
-            `Preloading ${itemsToPreload.length} poster images`
-          );
-
-          // Load posters in parallel
-          const imagePromises = itemsToPreload.map((item, index) => {
-            return new Promise((resolve) => {
-              // Generate a suitable thumbnail URL based on media type
-              let thumbPath;
-              const mediaType = (item.media_type || "").toLowerCase();
-
-              switch (mediaType) {
-                case "movie":
-                  thumbPath = item.thumb || item.parent_thumb;
-                  break;
-                case "show":
-                  thumbPath = item.thumb || item.parent_thumb;
-                  break;
-                case "episode":
-                  thumbPath = item.grandparent_thumb || item.thumb;
-                  break;
-                case "season":
-                  thumbPath = item.grandparent_thumb || item.thumb;
-                  break;
-                default:
-                  thumbPath =
-                    item.thumb || item.parent_thumb || item.grandparent_thumb;
-              }
-
-              if (!thumbPath || !item.apiKey) {
-                resolve(false);
-                return;
-              }
-
-              // Create an image object to load it
-              const img = new Image();
-              img.onload = () => resolve(true);
-              img.onerror = () => resolve(false);
-
-              // Use the Tautulli image proxy
-              img.src = `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
-                thumbPath
-              )}&apikey=${item.apiKey}`;
-
-              // Set a timeout in case the image load hangs
-              setTimeout(() => resolve(false), 5000);
-            });
-          });
-
-          // Wait for all images to load (or fail/timeout)
-          const imageResults = await Promise.allSettled(imagePromises);
-          const loadedCount = imageResults.filter(
-            (r) => r.status === "fulfilled" && r.value === true
-          ).length;
-
-          logInfo(
-            `✅ Preloaded ${loadedCount}/${itemsToPreload.length} poster images`
-          );
-        }
-
-        loadingTasks.current.images = true;
-        setLoadingProgress(90);
-
-        // Final preparation step - initialize any data structures
-        setLoadingMessage("Finalizing...");
+        // Step 5: Final preparation - preload remaining critical images
+        setLoadingMessage("Finalizing application...");
         setLoadingDetails("Preparing user interface");
 
-        // Add a small delay for UX smoothness
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
         // Prepare data for monitoring recently added content
-        // Will be used to check for new content later
         window.plexDataTimestamps = {
           lastCheck: Date.now(),
           sections: Object.fromEntries(
@@ -300,7 +360,7 @@ const GlobalPreloader = ({ children }) => {
         setLoadingDetails("");
 
         // Short delay before revealing UI for smooth transition
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
         // Mark preloading as complete
         setIsPreloading(false);

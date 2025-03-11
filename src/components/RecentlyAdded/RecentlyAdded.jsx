@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { useConfig } from "../../context/ConfigContext";
 import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 import * as Icons from "lucide-react";
-import MediaModal from "./MediaModal";
+import MediaCard from "./MediaCard";
 import ThemedButton from "../common/ThemedButton";
 import ThemedCard from "../common/ThemedCard";
 import { useTheme } from "../../context/ThemeContext.jsx";
@@ -11,440 +11,7 @@ import axios from "axios";
 import ThemedTabButton from "../common/ThemedTabButton";
 import { useQuery, useQueryClient, useQueries } from "react-query";
 import toast from "react-hot-toast";
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
-
-const MediaCard = ({ media }) => {
-  // Safety check - if media is not valid, render nothing
-  if (!media || typeof media !== "object") {
-    return null;
-  }
-
-  const [imageError, setImageError] = useState(false);
-  const [imageLoading, setImageLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [resolution, setResolution] = useState(null);
-  const [imageCacheKey, setImageCacheKey] = useState(Date.now());
-  const [isRefreshingPoster, setIsRefreshingPoster] = useState(false);
-
-  // Safely get media type
-  const getMediaType = () => {
-    return media.media_type && typeof media.media_type === "string"
-      ? media.media_type.toLowerCase()
-      : "unknown";
-  };
-
-  // Get thumbnail based on media type
-  const getThumbnailUrl = () => {
-    // Safety check for media object
-    if (!media || !media.apiKey) {
-      logWarn("Media item missing API key:", media?.title || "unknown");
-      return "";
-    }
-
-    let thumbPath;
-    const mediaType = getMediaType();
-
-    // Enhanced thumbnail logic to handle more cases
-    switch (mediaType) {
-      case "movie":
-        thumbPath = media.thumb || media.parent_thumb;
-        break;
-      case "show":
-        thumbPath = media.thumb || media.parent_thumb;
-        break;
-      case "episode":
-        thumbPath = media.grandparent_thumb || media.thumb;
-        break;
-      case "season":
-        thumbPath = media.grandparent_thumb || media.thumb;
-        break;
-      case "artist":
-        thumbPath = media.thumb;
-        break;
-      case "album":
-        thumbPath = media.thumb || media.parent_thumb;
-        break;
-      case "track":
-        thumbPath =
-          media.grandparent_thumb || media.parent_thumb || media.thumb;
-        break;
-      default:
-        thumbPath =
-          media.thumb || media.parent_thumb || media.grandparent_thumb;
-    }
-
-    if (!thumbPath) {
-      return "";
-    }
-
-    // Use pms_image_proxy endpoint for reliability
-    return `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
-      thumbPath
-    )}&apikey=${media.apiKey}&_t=${imageCacheKey}`;
-  };
-
-  // Function to refresh just this poster
-  const refreshPoster = async (e) => {
-    if (e) {
-      e.stopPropagation(); // Prevent triggering the card click event
-    }
-
-    setIsRefreshingPoster(true);
-
-    try {
-      // Force browser to reload image by changing cache key
-      const newCacheKey = Date.now();
-      setImageCacheKey(newCacheKey);
-
-      // Reset image state
-      setImageError(false);
-      setImageLoading(true);
-
-      // If the image is in the metadata cache on the server, refresh it
-      if (media.rating_key) {
-        await axios.post(`/api/refresh-posters`, {
-          mediaId: media.rating_key,
-        });
-
-        // Also request a clear cache from the API
-        await axios.get("/api/clear-image-cache", {
-          params: {
-            source: `media-${media.rating_key}`,
-            t: newCacheKey,
-          },
-        });
-      }
-
-      // Force browser to discard image with this trick
-      const img = new Image();
-      img.src = getThumbnailUrl() + "&forceRefresh=true&" + newCacheKey;
-
-      // Log the refresh
-      logInfo(`Refreshed poster for ${media.title || "media item"}`);
-    } catch (error) {
-      logError("Failed to refresh poster", error);
-    } finally {
-      // After a short delay, turn off the refreshing indicator
-      setTimeout(() => {
-        setIsRefreshingPoster(false);
-      }, 500);
-    }
-  };
-
-  // Generate the image URL once
-  const imageUrl = getThumbnailUrl();
-
-  const getDisplayTitle = () => {
-    // Safety check for media object
-    if (!media) return "Unknown";
-
-    const mediaType = getMediaType();
-
-    switch (mediaType) {
-      case "movie":
-        return media.title || "Unknown Movie";
-      case "episode":
-        return media.grandparent_title || "Unknown Show";
-      case "season":
-        return media.grandparent_title || "Unknown Show";
-      case "show":
-        return media.title || "Unknown Show";
-      case "artist":
-        return media.title || "Unknown Artist";
-      case "album":
-        return media.parent_title || media.title || "Unknown Album";
-      case "track":
-        return media.grandparent_title || media.title || "Unknown Track";
-      default:
-        return media.title || "Unknown";
-    }
-  };
-
-  const getDisplaySubtitle = () => {
-    // Safety check for media object
-    if (!media) return "";
-
-    const mediaType = getMediaType();
-
-    switch (mediaType) {
-      case "movie":
-        return media.year || "";
-      case "episode":
-        return `S${String(media.parent_media_index || "0").padStart(
-          2,
-          "0"
-        )}・E${String(media.media_index || "0").padStart(2, "0")}`;
-      case "season":
-        return `Season ${media.media_index || 1}`;
-      case "show":
-        return `Season ${media.season || 1}`;
-      case "artist":
-        return "Artist";
-      case "album":
-        return media.year || "Album";
-      case "track":
-        return media.parent_title || "Track";
-      default:
-        return "";
-    }
-  };
-
-  // Date formatting helper for relative added time
-  const getRelativeAddedTime = (timestamp) => {
-    if (!timestamp) return "Recently";
-
-    // Convert timestamp to milliseconds if needed
-    const timestampMs =
-      String(timestamp).length === 10 ? timestamp * 1000 : timestamp;
-
-    const now = new Date();
-    const addedDate = new Date(timestampMs);
-    const diffMs = now - addedDate;
-
-    const diffSeconds = Math.floor(diffMs / 1000);
-    const diffMinutes = Math.floor(diffSeconds / 60);
-    const diffHours = Math.floor(diffMinutes / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffSeconds < 60) return "Just now";
-    if (diffMinutes < 60) return `${diffMinutes}m`;
-    if (diffHours < 24) return `${diffHours}h`;
-    return `${diffDays}d`;
-  };
-
-  // Fetch resolution metadata
-  useEffect(() => {
-    if (!media || !media.rating_key || !media.apiKey) return;
-
-    const controller = new AbortController();
-    let isMounted = true;
-
-    // Add a small random delay to spread out API calls
-    const timeoutId = setTimeout(async () => {
-      try {
-        const response = await axios.get(`/api/tautulli/api/v2`, {
-          params: {
-            apikey: media.apiKey,
-            cmd: "get_metadata",
-            rating_key: media.rating_key,
-          },
-          signal: controller.signal,
-        });
-
-        if (!isMounted) return;
-
-        const mediaInfo = response.data?.response?.data?.media_info?.[0];
-        if (mediaInfo) {
-          let videoResolution = mediaInfo.video_full_resolution;
-          // Convert 4K to 2160p for consistent display
-          if (videoResolution === "4k") {
-            videoResolution = "2160p";
-          }
-          setResolution(videoResolution);
-        }
-      } catch (error) {
-        if (!axios.isCancel(error)) {
-          logError("Failed to fetch resolution:", error);
-        }
-      }
-    }, Math.random() * 2000); // Random delay up to 2 seconds
-
-    return () => {
-      isMounted = false;
-      controller.abort();
-      clearTimeout(timeoutId);
-    };
-  }, [media?.rating_key, media?.apiKey]);
-
-  // Check if image is cached in browser
-  useEffect(() => {
-    if (!imageUrl) {
-      setImageLoading(false);
-      setImageError(true);
-      return;
-    }
-
-    const img = new Image();
-    img.onload = () => {
-      setImageLoading(false);
-    };
-    img.onerror = () => {
-      setImageError(true);
-      setImageLoading(false);
-    };
-    img.src = imageUrl;
-
-    // Image is already cached in browser
-    if (img.complete) {
-      setImageLoading(false);
-    }
-
-    return () => {
-      img.onload = null;
-      img.onerror = null;
-    };
-  }, [imageUrl]);
-
-  // Get values for display
-  const displayTitle = getDisplayTitle();
-  const displaySubtitle = getDisplaySubtitle();
-  const relativeAddedTime = getRelativeAddedTime(media.added_at);
-
-  return (
-    <>
-      <div
-        onClick={() => setShowModal(true)}
-        className="group cursor-pointer space-y-2"
-      >
-        <div
-          className="relative aspect-[2/3] rounded-xl overflow-hidden 
-            bg-gray-800/50 border border-accent 
-            group-hover:border-accent-hover group-hover:shadow-accent
-            transition-theme"
-        >
-          {/* Add refresh button in top-left corner */}
-          <button
-            aria-label="Refresh poster"
-            onClick={refreshPoster}
-            className={`absolute top-2 left-2 p-1 rounded-full z-10
-              bg-black/50 backdrop-blur-sm border border-gray-700/50
-              opacity-0 group-hover:opacity-100 transition-opacity duration-200
-              hover:bg-accent-light/50 hover:border-accent/50`}
-          >
-            <Icons.RefreshCw
-              size={14}
-              className={`text-white ${
-                isRefreshingPoster ? "animate-spin" : ""
-              }`}
-            />
-          </button>
-
-          {/* Loading State */}
-          {imageLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-modal backdrop-blur-sm">
-              <div className="animate-spin mr-2">
-                <Icons.Loader2 className="h-8 w-8 text-accent" />
-              </div>
-            </div>
-          )}
-
-          {/* Image */}
-          {!imageError && imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={media.title || "Media"}
-              className={`w-full h-full object-cover transition-all duration-300 
-                  group-hover:scale-105 ${
-                    imageLoading ? "opacity-0" : "opacity-100"
-                  }`}
-              loading="lazy"
-              onLoad={() => setImageLoading(false)}
-              onError={() => {
-                setImageError(true);
-                setImageLoading(false);
-              }}
-            />
-          ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-800/50">
-              <Icons.Film size={32} className="text-gray-500 mb-2" />
-              <span className="text-theme-muted text-sm mb-3">No Preview</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation(); // Prevent the card click event
-                  refreshPoster(e);
-                }}
-                className="px-3 py-1.5 bg-accent-lighter rounded-lg 
-                  border border-accent/20 text-accent text-xs font-medium 
-                  hover:bg-accent-light transition-theme flex items-center gap-1.5"
-              >
-                <Icons.RefreshCw
-                  size={14}
-                  className={`text-accent ${
-                    isRefreshingPoster ? "animate-spin" : ""
-                  }`}
-                />
-                Refresh
-              </button>
-            </div>
-          )}
-
-          {/* Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <div className="absolute bottom-0 left-0 right-0 p-4">
-              <div className="flex items-center gap-2 text-sm text-white">
-                <Icons.Play size={16} />
-                <span>View Details</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Badges */}
-          <div className="absolute top-2 right-2 flex flex-col gap-1">
-            {/* Added Time Badge */}
-            <div
-              className="px-2 py-1 bg-gray-900/70 backdrop-blur-sm rounded-lg 
-                border border-accent text-theme-muted text-xs font-medium 
-                flex items-center gap-1"
-            >
-              <Icons.Clock3 size={12} />
-              {relativeAddedTime}
-            </div>
-
-            {/* Resolution Badge */}
-            {resolution && (
-              <div
-                className="px-2 py-1 bg-gray-900/70 backdrop-blur-sm rounded-lg 
-                  border border-accent/20 text-accent text-xs font-medium"
-              >
-                {resolution}
-              </div>
-            )}
-
-            {media.rating && (
-              <div
-                className="px-2 py-1 bg-yellow-500/20 backdrop-blur-sm rounded-lg 
-                  border border-yellow-500/20 text-yellow-400 text-xs font-medium 
-                  flex items-center gap-1"
-              >
-                <Icons.Star size={12} />
-                {media.rating}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Metadata */}
-        <div className="space-y-1 px-1">
-          <h3 className="text-white font-medium truncate">
-            {getDisplayTitle()}
-          </h3>
-          <div className="flex items-center gap-2 text-sm">
-            {getDisplaySubtitle() && (
-              <span className="text-accent">{getDisplaySubtitle()}</span>
-            )}
-            {media.duration && (
-              <div className="flex items-center gap-1 text-gray-400">
-                <Icons.Clock3 size={14} />
-                <span>{Math.round((media.duration || 0) / 60000)}m</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Modal is now rendered through a portal */}
-      {showModal && (
-        <MediaModal
-          media={media}
-          onClose={() => setShowModal(false)}
-          apiKey={media.apiKey}
-        />
-      )}
-    </>
-  );
-};
+import * as tmdbService from "../../services/tmdbService.js";
 
 const LoadingCard = () => (
   <div className="space-y-3">
@@ -674,14 +241,20 @@ const RecentlyAdded = () => {
         if (!config?.tautulliApiKey) return { media: [], section: null };
 
         try {
+          // Check if we have data in cache already from preloading
+          const cachedData = queryClient.getQueryData([`section:${sectionId}`]);
+          if (cachedData && cachedData.media && cachedData.media.length > 0) {
+            logDebug(`Using cached data for section ${sectionId}`);
+            return cachedData;
+          }
+
           // Direct API call to get recently added for this specific section
-          // IMPORTANT: Strictly requesting exactly 6 items
           const response = await axios.get(`/api/tautulli/api/v2`, {
             params: {
               apikey: config.tautulliApiKey,
               cmd: "get_recently_added",
               section_id: sectionId,
-              count: 6, // STRICTLY 6 items per section
+              count: 12, // Request enough items to show
             },
           });
 
@@ -694,19 +267,32 @@ const RecentlyAdded = () => {
             (s) => s.section_id === sectionId
           );
 
-          // Process each media item to ensure it has API key
-          const mediaItems = (
-            response.data?.response?.data?.recently_added || []
-          ).map((item) => ({
-            ...item,
-            apiKey: config.tautulliApiKey, // Ensure API key is set for image loading
-            section_id: sectionId,
-            section_type: section?.type || "unknown",
-          }));
+          // Process each media item
+          const mediaItems = await Promise.all(
+            (response.data?.response?.data?.recently_added || []).map(
+              async (item) => {
+                const enhancedItem = {
+                  ...item,
+                  apiKey: config.tautulliApiKey,
+                  section_id: sectionId,
+                  section_type: section?.type || "unknown",
+                };
 
-          // IMPORTANT: Ensure we only return exactly 6 items
+                // Check if we have TMDB poster in cache
+                const cachedPosterUrl = tmdbService.getCachedPosterUrl(
+                  item.rating_key
+                );
+                if (cachedPosterUrl) {
+                  enhancedItem.tmdb_poster_url = cachedPosterUrl;
+                }
+
+                return enhancedItem;
+              }
+            )
+          );
+
           return {
-            media: mediaItems.slice(0, 6),
+            media: mediaItems,
             section,
           };
         } catch (error) {
@@ -849,6 +435,9 @@ const RecentlyAdded = () => {
     try {
       // Notify user
       toast.success("Refreshing media content...");
+
+      // Clear TMDB poster cache
+      tmdbService.clearExpiredPosters();
 
       // Clear image cache
       await axios.get("/api/clear-image-cache");
@@ -1159,11 +748,6 @@ const RecentlyAdded = () => {
               const sectionType = mapSectionType(sectionData.section);
               const formattedType =
                 sectionType.charAt(0).toUpperCase() + sectionType.slice(1);
-
-              // Log section details for debugging
-              logDebug(
-                `Rendering section ${sectionName} (${sectionType}) with ${sectionData.media.length} items`
-              );
 
               return (
                 <div

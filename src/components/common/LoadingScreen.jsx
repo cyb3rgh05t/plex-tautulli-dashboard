@@ -3,7 +3,8 @@ import { useTheme } from "../../context/ThemeContext";
 import * as Icons from "lucide-react";
 
 /**
- * Enhanced loading screen component with progress bar and detailed information
+ * Enhanced loading screen component with improved progress bar and detailed information
+ * specifically optimized for showing the preloading process of the Recently Added content
  */
 const LoadingScreen = ({
   progress = 0,
@@ -20,6 +21,18 @@ const LoadingScreen = ({
 
   // Choose proper loading icon based on progress
   const LoadingIcon = progress >= 100 ? Icons.CheckCircle : Icons.Loader2;
+
+  // Determine which section icon to show based on loading message
+  let SectionIcon = Icons.Library;
+  if (message.includes("metadata") || message.includes("TMDB")) {
+    SectionIcon = Icons.FileText;
+  } else if (message.includes("media")) {
+    SectionIcon = Icons.Film;
+  } else if (message.includes("poster") || message.includes("thumbnail")) {
+    SectionIcon = Icons.Image;
+  } else if (message.includes("configuration")) {
+    SectionIcon = Icons.Settings;
+  }
 
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 z-50">
@@ -41,6 +54,15 @@ const LoadingScreen = ({
             <Icons.FilmIcon size={32} />
           </div>
           <h1 className="text-white text-2xl font-bold">Plex Dashboard</h1>
+        </div>
+
+        {/* Current operation icon - dynamic based on loading message */}
+        <div className="mb-3">
+          <SectionIcon
+            className="text-accent-base"
+            size={24}
+            strokeWidth={1.5}
+          />
         </div>
 
         {/* Loading spinner */}
@@ -65,7 +87,7 @@ const LoadingScreen = ({
           )}
         </div>
 
-        {/* Progress bar */}
+        {/* Progress bar with enhanced styling */}
         <div className="w-full h-2 bg-gray-800 rounded-full mb-4 overflow-hidden">
           <div
             className="h-full rounded-full transition-all duration-300 ease-out"
@@ -87,15 +109,30 @@ const LoadingScreen = ({
           <p className="text-gray-400 text-sm text-center mb-4">{details}</p>
         )}
 
-        {/* Additional loading message */}
-        <div className="flex items-center mt-4 bg-gray-800 bg-opacity-40 px-4 py-2 rounded-lg border border-accent/20">
+        {/* Additional loading message with helpful info */}
+        <div className="flex items-center mt-6 bg-gray-800 bg-opacity-40 px-4 py-2 rounded-lg border border-accent/20">
           <Icons.Info size={16} className="text-accent-base mr-2" />
           <p className="text-gray-300 text-sm">
-            {progress < 100
-              ? "Loading all libraries for a faster experience..."
-              : "Loading complete, preparing interface..."}
+            {progress < 25
+              ? "Initializing dashboard and checking configuration..."
+              : progress < 50
+              ? "Loading library sections and recently added media..."
+              : progress < 75
+              ? "Fetching enhanced metadata and TMDB posters..."
+              : progress < 100
+              ? "Finalizing and preparing interface..."
+              : "Loading complete! Preparing dashboard..."}
           </p>
         </div>
+
+        {/* Tip for a better experience with more emphasis on poster loading */}
+        {progress > 20 && progress < 90 && (
+          <div className="mt-3 text-xs text-accent-base/80 text-center max-w-xs">
+            {progress >= 70 && progress < 90
+              ? "Fetching high-quality TMDB posters to replace default Plex thumbnails for a better visual experience."
+              : "The dashboard is preloading all library content and metadata for instant browsing. This may take a moment but only happens once."}
+          </div>
+        )}
       </div>
     </div>
   );

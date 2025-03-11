@@ -12,9 +12,8 @@ import { QueryClient, QueryClientProvider, useQueryClient } from "react-query";
 import { Toaster } from "react-hot-toast";
 import { ConfigProvider, useConfig } from "./context/ConfigContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext.jsx";
-import ImagePreloader from "./components/common/ImagePreloader.jsx";
-import GlobalPreloader from "./components/common/GlobalPreloader.jsx"; // Import the enhanced GlobalPreloader
-import MediaContentMonitor from "./components/common/MediaContentMonitor.jsx"; // Import the new content monitor
+import GlobalPreloader from "./components/common/GlobalPreloader.jsx";
+import MediaContentMonitor from "./components/common/MediaContentMonitor.jsx";
 import SetupWizard from "./components/SetupWizard/SetupWizard";
 import ThemedDashboardLayout from "./components/Layout/ThemedDashboardLayout";
 import LoadingScreen from "./components/common/LoadingScreen";
@@ -63,59 +62,37 @@ const queryClient = new QueryClient({
 try {
   // Function to handle persistence setup
   const setupPersistence = async () => {
+    // Completely disable React Query persistence to prevent cache size errors
+    logInfo("Query persistence disabled to prevent cache size issues");
+
+    // Keep TMDB poster cache functionality which is essential for image display
     try {
-      // Dynamically import persistence modules
-      const { persistQueryClient } = await import(
-        "react-query/persistQueryClient-experimental"
-      );
-      const { createWebStoragePersistor } = await import(
-        "react-query/createWebStoragePersistor-experimental"
+      // Create a simple cache for just TMDB poster URLs
+      const tmdbCache = JSON.parse(
+        localStorage.getItem("tmdbPosterCache") || "{}"
       );
 
-      // Create a local storage persistor
-      const localStoragePersistor = createWebStoragePersistor({
-        storage: window.localStorage,
-        key: "PLEX_DASHBOARD_QUERY_CACHE",
-        throttleTime: 1000, // Only persist at most once per second
-        serialize: (data) => {
-          try {
-            // Custom serialization with size limits to prevent quota issues
-            const serialized = JSON.stringify(data);
-            // Only store if reasonably sized to avoid localStorage quota issues
-            if (serialized.length < 2000000) {
-              // ~2MB limit
-              return serialized;
-            }
-            console.warn(
-              "Query cache too large to persist, skipping persistence"
-            );
-            return null;
-          } catch (err) {
-            console.error("Error serializing query cache:", err);
-            return null;
-          }
-        },
-        deserialize: (data) => {
-          try {
-            return JSON.parse(data);
-          } catch (err) {
-            console.error("Error deserializing query cache:", err);
-            return {};
-          }
-        },
+      // Clean up any expired items
+      const now = Date.now();
+      let expiredCount = 0;
+
+      Object.keys(tmdbCache).forEach((key) => {
+        if (tmdbCache[key].expires < now) {
+          delete tmdbCache[key];
+          expiredCount++;
+        }
       });
 
-      // Set up the persistence
-      persistQueryClient({
-        queryClient,
-        persistor: localStoragePersistor,
-        maxAge: 1000 * 60 * 60 * 12, // 12 hours
-        buster: "v1", // Update this when making breaking changes
-      });
+      // Save back cleaned cache
+      localStorage.setItem("tmdbPosterCache", JSON.stringify(tmdbCache));
 
-      logInfo("Query persistence enabled");
+      if (expiredCount > 0) {
+        logInfo(
+          `TMDB poster cache cleaned up (removed ${expiredCount} expired items)`
+        );
+      }
     } catch (e) {
-      logWarn("Optional query persistence setup failed:", e);
+      logWarn("TMDB cache cleanup failed:", e);
     }
   };
 
@@ -286,13 +263,9 @@ const App = () => {
       <ConfigProvider>
         <ThemeProvider>
           <ThemeWrapper>
-            {/* Enhanced GlobalPreloader to ensure all data is completely loaded before showing UI */}
             <GlobalPreloader>
               <Router>
-                {/* MediaContentMonitor watches for newly added content */}
                 <MediaContentMonitor />
-                {/* ImagePreloader is still useful for background loading additional images */}
-                <ImagePreloader />
                 <AppRoutes />
                 <Toaster
                   position="top-right"

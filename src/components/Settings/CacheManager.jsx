@@ -2,11 +2,12 @@ import React, { useState, useEffect } from "react";
 import * as Icons from "lucide-react";
 import toast from "react-hot-toast";
 import axios from "axios";
-import ThemedButton from "../common/ThemedButton";
-import ThemedCard from "../common/ThemedCard";
-import ThemedTabButton from "../common/ThemedTabButton";
+import ThemedButton from "../../components/common/ThemedButton";
+import ThemedCard from "../../components/common/ThemedCard";
+import ThemedTabButton from "../../components/common/ThemedTabButton";
 import { useTheme } from "../../context/ThemeContext";
 import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
+import * as tmdbService from "../../services/tmdbService";
 
 // Enhanced cache stats card with theme integration
 const CacheStatCard = ({
@@ -58,6 +59,7 @@ const CacheManager = () => {
     history: { size: 0, label: "User History", ttl: "10 minutes" },
     media: { size: 0, label: "Recently Added", ttl: "5 minutes" },
     metadata: { size: 0, label: "Metadata", ttl: "30 minutes" },
+    tmdb: { size: 0, label: "TMDB Posters", ttl: "7 days" },
     totalSize: 0,
     lastRefreshed: null,
     lastCleared: null,
@@ -76,6 +78,7 @@ const CacheManager = () => {
       let historyCacheSize = 0;
       let mediaCacheSize = 0;
       let metadataCacheSize = 0;
+      let tmdbCacheSize = 0;
 
       // 1. Get user history cache stats from the users endpoint
       try {
@@ -85,8 +88,7 @@ const CacheManager = () => {
         logError("Failed to fetch user history cache stats:", error);
       }
 
-      // 2. For media cache, try different media types (movies, shows, music)
-      // as they're likely to be cached separately
+      // 2. For media cache, try different media types
       try {
         // Try to get information about the media cache from multiple endpoints
         const mediaTypes = ["movies", "shows", "music"];
@@ -130,7 +132,6 @@ const CacheManager = () => {
       }
 
       // 3. For metadata cache, we can estimate based on typical usage patterns
-      // Metadata is usually cached for each recently viewed item
       try {
         // Try to get an indirect indicator of metadata cache size from health endpoint
         const healthResponse = await axios.get(`/api/health?check=true`);
@@ -150,8 +151,20 @@ const CacheManager = () => {
         metadataCacheSize = 10;
       }
 
+      // 4. Get TMDB poster cache size from localStorage
+      try {
+        const tmdbCache = JSON.parse(
+          localStorage.getItem("tmdbPosterCache") || "{}"
+        );
+        tmdbCacheSize = Object.keys(tmdbCache).length;
+      } catch (err) {
+        logError("Failed to read TMDB poster cache:", err);
+        tmdbCacheSize = 0;
+      }
+
       // Update state with combined stats
-      const totalSize = historyCacheSize + mediaCacheSize + metadataCacheSize;
+      const totalSize =
+        historyCacheSize + mediaCacheSize + metadataCacheSize + tmdbCacheSize;
 
       setCacheStats({
         history: {
@@ -168,6 +181,11 @@ const CacheManager = () => {
           size: metadataCacheSize,
           label: "Metadata",
           ttl: "30 minutes",
+        },
+        tmdb: {
+          size: tmdbCacheSize,
+          label: "TMDB Posters",
+          ttl: "7 days",
         },
         totalSize,
         lastRefreshed: new Date().toISOString(),
@@ -202,6 +220,9 @@ const CacheManager = () => {
         await axios.get("/api/clear-image-cache").catch((error) => {
           logWarn("Failed to clear image cache:", error);
         });
+
+        // Clear TMDB poster cache
+        tmdbService.clearPosterCache();
       } else if (type === "history") {
         // Use the backward-compatible endpoint specifically for user history cache
         endpoint = `/api/users/clear-cache`;
@@ -215,6 +236,13 @@ const CacheManager = () => {
         await axios.get("/api/clear-image-cache").catch((error) => {
           logWarn("Failed to clear image cache for media cache:", error);
         });
+      } else if (type === "tmdb") {
+        // Clear TMDB poster cache
+        tmdbService.clearPosterCache();
+        // Set a successful response
+        response = {
+          data: { success: true, message: "TMDB poster cache cleared" },
+        };
       } else {
         // Use type-specific endpoint for other cache types
         endpoint = `/api/clear-cache/${type}`;
@@ -228,6 +256,7 @@ const CacheManager = () => {
             history: { ...prev.history, size: 0 },
             media: { ...prev.media, size: 0 },
             metadata: { ...prev.metadata, size: 0 },
+            tmdb: { ...prev.tmdb, size: 0 },
             totalSize: 0,
             lastCleared: new Date().toISOString(),
             lastRefreshed: prev.lastRefreshed,
@@ -239,6 +268,17 @@ const CacheManager = () => {
               detail: { timestamp: Date.now() },
             })
           );
+        } else if (type === "tmdb") {
+          setCacheStats((prev) => {
+            const newStats = { ...prev };
+            newStats.tmdb.size = 0;
+            newStats.totalSize =
+              newStats.history.size +
+              newStats.media.size +
+              newStats.metadata.size;
+            newStats.lastCleared = new Date().toISOString();
+            return newStats;
+          });
         } else if (type === "media") {
           setCacheStats((prev) => {
             const newStats = { ...prev };
@@ -246,7 +286,8 @@ const CacheManager = () => {
             newStats.totalSize =
               newStats.history.size +
               newStats.media.size +
-              newStats.metadata.size;
+              newStats.metadata.size +
+              newStats.tmdb.size;
             newStats.lastCleared = new Date().toISOString();
             return newStats;
           });
@@ -264,7 +305,8 @@ const CacheManager = () => {
             newStats.totalSize =
               newStats.history.size +
               newStats.media.size +
-              newStats.metadata.size;
+              newStats.metadata.size +
+              newStats.tmdb.size;
             newStats.lastCleared = new Date().toISOString();
             return newStats;
           });
@@ -307,6 +349,7 @@ const CacheManager = () => {
       history: Icons.Users,
       media: Icons.Film,
       metadata: Icons.FileText,
+      tmdb: Icons.Image,
     };
 
     return {
@@ -327,6 +370,8 @@ const CacheManager = () => {
         return "Caches recently added media lists to improve dashboard performance";
       case "metadata":
         return "Stores media metadata like resolution, quality, and other attributes";
+      case "tmdb":
+        return "Stores TMDB poster URLs for improved image quality and faster loading";
       default:
         return "Combined caching system for all data types";
     }
@@ -407,6 +452,17 @@ const CacheManager = () => {
             Metadata
             <span className="ml-2 px-1.5 py-0.5 text-xs bg-accent-light/30 rounded-full">
               {cacheStats.metadata.size}
+            </span>
+          </ThemedTabButton>
+
+          <ThemedTabButton
+            active={activeTab === "tmdb"}
+            onClick={() => setActiveTab("tmdb")}
+            icon={Icons.Image}
+          >
+            TMDB Posters
+            <span className="ml-2 px-1.5 py-0.5 text-xs bg-accent-light/30 rounded-full">
+              {cacheStats.tmdb.size}
             </span>
           </ThemedTabButton>
         </div>
@@ -512,12 +568,12 @@ const CacheManager = () => {
 
           <div className="space-y-3 text-sm text-theme-muted">
             <p>
-              The dashboard uses three different caching systems to improve
+              The dashboard uses multiple caching systems to improve
               performance:
             </p>
 
             {/* Cache type cards with accent colors */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-3">
               <div className="bg-gray-800/40 border border-accent/10 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <Icons.Users size={14} className="text-accent-base" />
@@ -558,6 +614,19 @@ const CacheManager = () => {
                   TTL: 30 minutes
                 </div>
               </div>
+
+              <div className="bg-gray-800/40 border border-accent/10 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icons.Image size={14} className="text-accent-base" />
+                  <span className="text-white font-medium">
+                    TMDB Poster Cache
+                  </span>
+                </div>
+                <p className="text-xs text-theme-muted">
+                  Stores high-quality movie and TV show posters from TMDB
+                </p>
+                <div className="mt-2 text-xs text-accent-base">TTL: 7 days</div>
+              </div>
             </div>
 
             <p className="mt-3">
@@ -591,7 +660,8 @@ const CacheManager = () => {
               <p className="text-xs text-gray-400">
                 Note: For media and metadata caches, the displayed counts are
                 estimates since the API doesn't provide exact counts. History
-                cache size is accurate.
+                cache size is accurate. TMDB poster cache is stored locally in
+                your browser.
               </p>
             </div>
           </div>
