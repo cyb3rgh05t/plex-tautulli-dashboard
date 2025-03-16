@@ -5,6 +5,7 @@ import MediaModal from "./MediaModal";
 import axios from "axios";
 import { useQueryClient } from "react-query";
 import * as posterCacheService from "../../services/posterCacheService";
+import toast from "react-hot-toast";
 
 // Global cache for in-memory poster URLs to prevent flickering on tab changes
 const posterUrlCache = new Map();
@@ -140,75 +141,74 @@ const MediaCard = ({ media }) => {
     }
 
     setIsRefreshingPoster(true);
+    setImageLoading(true);
 
     try {
-      // Force browser to reload image by changing cache key
+      // Generate a new cache key to force a reload
       const newCacheKey = Date.now();
       setImageCacheKey(newCacheKey);
 
       // Reset image state
       setImageError(false);
-      setImageLoading(true);
 
-      // Get metadata to find thumb path
+      // Step 1: Clear poster from all caches
+      try {
+        // Clear from local in-memory cache
+        posterUrlCache.delete(cacheKey);
+
+        // Clear from server-side cache - this will delete the actual file
+        await axios.post(`/api/posters/cache/clear/${media.rating_key}`);
+        logInfo(`Deleted cached poster file for ${media.rating_key}`);
+      } catch (clearError) {
+        // If this fails, log warning but continue
+        logWarn(`Failed to delete cached poster file: ${clearError.message}`);
+      }
+
+      // Step 2: Get fresh metadata from Tautulli to ensure we have the latest thumb path
       let thumbPath = null;
 
       try {
-        // First check if we can get it from current data
-        thumbPath = posterCacheService.getAppropriateThumbPath(media);
+        const response = await axios.get(`/api/tautulli/api/v2`, {
+          params: {
+            apikey: media.apiKey,
+            cmd: "get_metadata",
+            rating_key: media.rating_key,
+            _t: newCacheKey, // Add cache-busting parameter
+          },
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
+        });
 
-        if (!thumbPath) {
-          // If not, fetch metadata from API
-          const response = await axios.get(`/api/tautulli/api/v2`, {
-            params: {
-              apikey: media.apiKey,
-              cmd: "get_metadata",
-              rating_key: media.rating_key,
-            },
-          });
+        if (response.data?.response?.result === "success") {
+          const metadata = response.data.response.data;
 
-          if (response.data?.response?.result === "success") {
-            const metadata = response.data.response.data;
+          // Update the query cache with fresh metadata
+          queryClient.setQueryData(
+            [`media:${media.rating_key}`],
+            createMinimalMetadata(metadata)
+          );
 
-            // Update the cached metadata
-            queryClient.setQueryData(
-              [`media:${media.rating_key}`],
-              createMinimalMetadata(metadata)
-            );
-
-            // Get appropriate thumb path
-            thumbPath = posterCacheService.getAppropriateThumbPath(metadata);
-          }
+          // Extract the thumb path from metadata
+          thumbPath = posterCacheService.getAppropriateThumbPath(metadata);
+          logInfo(`Got fresh thumb path from Tautulli: ${thumbPath}`);
         }
       } catch (metadataError) {
-        logError(`Error fetching metadata for poster refresh:`, metadataError);
+        logWarn(`Failed to get fresh metadata: ${metadataError.message}`);
       }
 
-      if (thumbPath && media.apiKey) {
-        // Clear existing cache
-        await axios.post(`/api/posters/cache/clear/${media.rating_key}`);
+      // Fallback: If we couldn't get a fresh thumb path, use the existing one
+      if (!thumbPath) {
+        thumbPath = posterCacheService.getAppropriateThumbPath(media);
+        logInfo(`Using existing thumb path: ${thumbPath}`);
+      }
 
-        // Cache new poster
-        await posterCacheService.cachePoster(
-          media.rating_key,
-          thumbPath,
-          media.apiKey,
-          getMediaType()
-        );
-
-        // Get new cached URL
-        const newPosterUrl = posterCacheService.getCachedPosterUrl(
-          media.rating_key
-        );
-        setPosterUrl(newPosterUrl);
-        posterUrlCache.set(cacheKey, newPosterUrl);
-
-        logInfo(`Refreshed poster for ${media.title || "media item"}`);
-      } else {
-        // Fallback to Tautulli proxy if cache fails
+      // Additional fallback based on media type if no thumb path is found
+      if (!thumbPath) {
         const mediaType = getMediaType();
 
-        // Get appropriate thumb path based on media type
         switch (mediaType) {
           case "movie":
             thumbPath = media.thumb || media.parent_thumb;
@@ -217,35 +217,94 @@ const MediaCard = ({ media }) => {
             thumbPath = media.thumb || media.parent_thumb;
             break;
           case "episode":
-            thumbPath = media.grandparent_thumb || media.thumb;
+            thumbPath = media.grandparent_thumb || media.parent_thumb;
             break;
           case "season":
-            thumbPath = media.grandparent_thumb || media.thumb;
+            thumbPath =
+              media.grandparent_thumb || media.parent_thumb || media.thumb;
             break;
           default:
             thumbPath =
               media.thumb || media.parent_thumb || media.grandparent_thumb;
         }
 
-        if (thumbPath && media.apiKey) {
-          const fallbackUrl = `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
-            thumbPath
-          )}&apikey=${media.apiKey}&_t=${newCacheKey}`;
+        logInfo(`Using fallback thumb path by media type: ${thumbPath}`);
+      }
 
-          setPosterUrl(fallbackUrl);
-          setImageLoading(false);
-        } else {
-          setImageError(true);
+      // Step 3: Generate a direct URL to the Tautulli image
+      if (thumbPath && media.apiKey) {
+        // First try to request the server to cache the new poster
+        try {
+          // This will download the poster to the server cache
+          await posterCacheService.cachePoster(
+            media.rating_key,
+            thumbPath,
+            media.apiKey,
+            getMediaType()
+          );
+
+          // Get the URL to the newly cached poster
+          const cachedPosterUrl = posterCacheService.getCachedPosterUrl(
+            media.rating_key
+          );
+
+          if (cachedPosterUrl) {
+            // Update UI with the new poster URL
+            setPosterUrl(`${cachedPosterUrl}?t=${newCacheKey}`);
+            posterUrlCache.set(cacheKey, cachedPosterUrl);
+
+            logInfo(
+              `Successfully refreshed poster for ${media.title || "media item"}`
+            );
+
+            // Show success toast
+            toast.success("Poster refreshed successfully", {
+              duration: 3000,
+              icon: "🖼️",
+            });
+
+            return; // Success! Exit early
+          }
+        } catch (cacheError) {
+          logWarn(`Server caching failed: ${cacheError.message}`);
+          // Continue to direct proxy approach
         }
+
+        // If server caching failed, use direct proxy to Tautulli
+        const directProxyUrl = `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
+          thumbPath
+        )}&apikey=${media.apiKey}&_t=${newCacheKey}`;
+
+        setPosterUrl(directProxyUrl);
+        posterUrlCache.set(cacheKey, directProxyUrl);
+
+        logInfo(
+          `Using direct Tautulli proxy URL for ${media.title || "media item"}`
+        );
+
+        // Show success toast with different message
+        toast.success("Using direct image from Tautulli", {
+          duration: 3000,
+        });
+      } else {
+        // No valid thumb path found
+        throw new Error("Could not find a valid poster path");
       }
     } catch (error) {
+      // Handle errors
       logError("Failed to refresh poster", error);
       setImageError(true);
+
+      // Show error toast to user
+      toast.error(`Failed to refresh poster: ${error.message}`, {
+        duration: 4000,
+      });
     } finally {
       // After a short delay, turn off the refreshing indicator
       setTimeout(() => {
         setIsRefreshingPoster(false);
-      }, 500);
+        setImageLoading(false);
+      }, 800);
     }
   };
 
@@ -425,25 +484,29 @@ const MediaCard = ({ media }) => {
           {/* Image */}
           {!imageError && posterUrl ? (
             <>
-              {/* Add refresh button in top-left corner */}
+              {/* Refresh button in top-left corner with improved visibility */}
               <button
                 aria-label="Refresh poster"
                 onClick={(e) => refreshPoster(e)}
-                className={`absolute top-2 left-2 p-1 rounded-full z-10
-                  bg-black/50 backdrop-blur-sm border border-gray-700/50
+                className={`absolute top-2 left-2 p-1.5 rounded-full z-10
+                  bg-black/70 backdrop-blur-sm border border-accent/50
                   opacity-0 group-hover:opacity-100 transition-opacity duration-200
-                  hover:bg-accent-light/50 hover:border-accent/50`}
+                  hover:bg-accent-light/30 hover:border-accent hover:scale-110
+                  focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-accent/50`}
+                title="Refresh poster from Tautulli"
               >
                 <Icons.RefreshCw
-                  size={14}
+                  size={16}
                   className={`text-white ${
-                    isRefreshingPoster ? "animate-spin" : ""
+                    isRefreshingPoster ? "animate-spin text-accent" : ""
                   }`}
                 />
               </button>
 
               <img
-                src={posterUrl}
+                src={`${posterUrl}${
+                  posterUrl.includes("?") ? "&" : "?"
+                }_t=${imageCacheKey}`}
                 alt={media.title || "Media"}
                 className={`w-full h-full object-cover transition-all duration-300 
                     group-hover:scale-105 ${
@@ -451,12 +514,27 @@ const MediaCard = ({ media }) => {
                     }`}
                 loading="lazy"
                 onLoad={() => setImageLoading(false)}
-                onError={() => {
+                onError={(e) => {
+                  logWarn(
+                    `Image load error for ${media.title || "unknown media"}:`,
+                    e
+                  );
                   setImageError(true);
                   setImageLoading(false);
 
-                  // If poster fails to load, try refreshing it
-                  refreshPoster();
+                  // If poster fails to load, try refreshing it after a short delay
+                  // This prevents infinite refresh loops
+                  if (!isRefreshingPoster) {
+                    const retryDelay = setTimeout(() => {
+                      logInfo(
+                        "Automatically attempting poster refresh after error"
+                      );
+                      refreshPoster();
+                    }, 500);
+
+                    // Clear timeout if component unmounts
+                    return () => clearTimeout(retryDelay);
+                  }
                 }}
               />
 
@@ -481,7 +559,9 @@ const MediaCard = ({ media }) => {
                 }}
                 className="px-3 py-1.5 bg-accent-lighter rounded-lg 
                   border border-accent/20 text-accent text-xs font-medium 
-                  hover:bg-accent-light transition-theme flex items-center gap-1.5"
+                  hover:bg-accent-light hover:border-accent/50 hover:scale-105
+                  active:scale-95 transition-all duration-150 flex items-center gap-1.5"
+                title="Get poster from Tautulli"
               >
                 <Icons.RefreshCw
                   size={14}
@@ -489,8 +569,13 @@ const MediaCard = ({ media }) => {
                     isRefreshingPoster ? "animate-spin" : ""
                   }`}
                 />
-                Refresh
+                {isRefreshingPoster ? "Refreshing..." : "Refresh Poster"}
               </button>
+              <p className="text-xs text-accent-light/70 mt-2 max-w-[150px] text-center">
+                {isRefreshingPoster
+                  ? "Loading from Tautulli..."
+                  : "Poster may need to be updated in Tautulli first"}
+              </p>
             </div>
           )}
 
@@ -515,7 +600,7 @@ const MediaCard = ({ media }) => {
                 {resolution}
               </div>
             )}
-            */}
+            
 
             {media.rating && (
               <div
@@ -527,6 +612,7 @@ const MediaCard = ({ media }) => {
                 {media.rating}
               </div>
             )}
+            */}
           </div>
         </div>
 

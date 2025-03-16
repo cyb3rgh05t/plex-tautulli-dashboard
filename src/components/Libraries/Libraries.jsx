@@ -1,7 +1,5 @@
-// with theme styling applied
-
 import React, { useState, useEffect, useRef } from "react";
-import { useQuery } from "react-query";
+import { useQuery, useQueryClient } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
 import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 import * as Icons from "lucide-react";
@@ -22,11 +20,11 @@ const LibraryTypeIcon = ({ type }) => {
     case "movie":
       return <Icons.Film className="text-accent" />;
     case "show":
-      return <Icons.Tv className="text-green-400" />;
+      return <Icons.Tv className="text-accent" />;
     case "artist":
-      return <Icons.Music className="text-purple-400" />;
+      return <Icons.Music className="text-accent" />;
     default:
-      return <Icons.Book className="text-yellow-400" />;
+      return <Icons.Book className="text-accent" />;
   }
 };
 
@@ -94,6 +92,7 @@ const LibraryCard = ({ library, isSelected, onToggleSelect }) => {
 
 const Libraries = () => {
   const { config } = useConfig();
+  const queryClient = useQueryClient(); // Get React Query client for cache invalidation
   const [selectedLibraries, setSelectedLibraries] = useState(new Set());
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -227,6 +226,44 @@ const Libraries = () => {
     }
   };
 
+  // Trigger global preload after section changes
+  const triggerGlobalPreload = () => {
+    try {
+      // Since the GlobalPreloader decides fast path vs full preload based on:
+      // 1. fastPathReady flag
+      // 2. configHash
+      // We can force a full preload by manipulating these localStorage values
+
+      // Mark fast path as not ready to force full preload next time
+      localStorage.setItem("fastPathReady", "false");
+
+      // Remove the config hash to force a hash check failure
+      localStorage.removeItem("configHash");
+
+      // Set forceFullPreload ref to true via direct ref manipulation
+      if (window.forceGlobalPreload) {
+        window.forceGlobalPreload = true;
+      }
+
+      // Invalidate all caches using React Query
+      queryClient.invalidateQueries(["sections"]);
+
+      // Invalidate all section-specific caches
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          typeof query.queryKey[0] === "string" &&
+          query.queryKey[0].startsWith("section:"),
+      });
+
+      // Force refresh on next load
+      localStorage.setItem("forceRefreshOnLoad", Date.now().toString());
+
+      logInfo("Triggered global preload after saving sections");
+    } catch (error) {
+      logError("Failed to trigger global preload:", error);
+    }
+  };
+
   // Add a ref to detect initial render vs page reload
   const isFirstRender = useRef(true);
 
@@ -340,6 +377,19 @@ const Libraries = () => {
       }
 
       toast.success(`Successfully saved ${selectedData.length} sections`);
+
+      // Show loading toast for preload
+      toast.loading("Preloading dashboard with new sections...", {
+        duration: 3000,
+      });
+
+      // Trigger global preload to refresh all dashboard data with new sections
+      triggerGlobalPreload();
+
+      // Navigate to Recently Added page after a short delay
+      setTimeout(() => {
+        window.location.href = "/#/recent";
+      }, 1500);
     } catch (error) {
       toast.error(`Failed to save sections: ${error.message}`);
       logError("Detailed save error:", error);

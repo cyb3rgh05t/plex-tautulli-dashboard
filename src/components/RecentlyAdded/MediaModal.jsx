@@ -11,7 +11,7 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
 
 const MediaModal = ({ media, onClose, apiKey }) => {
-  const { accentRgb } = useTheme();
+  const { accentColor, accentRgb } = useTheme();
   const [isExpanded, setIsExpanded] = useState(false);
   const [showCast, setShowCast] = useState(false);
   const [mediaDetails, setMediaDetails] = useState(null);
@@ -180,27 +180,27 @@ const MediaModal = ({ media, onClose, apiKey }) => {
     if (resolution.includes("4k") || resolution.includes("2160")) {
       return {
         label: "2160p",
-        icon: Icons.CircleDot,
-        className: "bg-accent-lighter text-accent border-accent",
+        icon: Icons.TvMinimalPlay,
+        className: "bg-accent-light text-accent border-accent/20",
       };
     }
     if (resolution.includes("1080")) {
       return {
         label: "1080p",
-        icon: Icons.Circle,
+        icon: Icons.TvMinimalPlay,
         className: "bg-green-500/20 text-green-400 border-green-500/30",
       };
     }
     if (resolution.includes("720")) {
       return {
         label: "720p",
-        icon: Icons.Circle,
+        icon: Icons.TvMinimalPlay,
         className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
       };
     }
     return {
       label: "480p",
-      icon: Icons.CircleDashed,
+      icon: Icons.TvMinimalPlay,
       className: "bg-gray-500/20 text-gray-400 border-gray-500/30",
     };
   };
@@ -245,7 +245,7 @@ const MediaModal = ({ media, onClose, apiKey }) => {
                   {displayData.genres.map((genre) => (
                     <span
                       key={genre}
-                      className="px-2 py-1 rounded-lg border border-accent bg-accent-lighter text-accent text-sm"
+                      className="px-2 py-1 rounded-lg border border-accent bg-accent-light text-accent text-sm"
                     >
                       {genre}
                     </span>
@@ -294,12 +294,7 @@ const MediaModal = ({ media, onClose, apiKey }) => {
                   {displayData.genres.map((genre) => (
                     <span
                       key={genre}
-                      className="px-2 py-1 rounded-lg border text-sm"
-                      style={{
-                        backgroundColor: `rgba(${accentRgb}, 0.1)`,
-                        color: `rgb(${accentRgb})`,
-                        borderColor: `rgba(${accentRgb}, 0.3)`,
-                      }}
+                      className="px-2 py-1 rounded-lg border border-accent/30 bg-accent-light text-accent text-sm"
                     >
                       {genre}
                     </span>
@@ -325,7 +320,7 @@ const MediaModal = ({ media, onClose, apiKey }) => {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-medium text-white">Cast</h3>
           {displayData.actors.length > 6 && (
-            <span
+            <button
               onClick={() => setShowCast(!showCast)}
               className="text-sm flex items-center gap-1 cursor-pointer text-accent hover:text-accent-hover transition-theme"
             >
@@ -340,7 +335,7 @@ const MediaModal = ({ media, onClose, apiKey }) => {
                   Show All
                 </>
               )}
-            </span>
+            </button>
           )}
         </div>
 
@@ -350,9 +345,9 @@ const MediaModal = ({ media, onClose, apiKey }) => {
             .map((actor, index) => (
               <div
                 key={`${actor.name || actor}-${index}`}
-                className="flex items-center gap-3 p-3 rounded-lg border border-accent bg-accent-lighter"
+                className="flex items-center gap-3 p-3 rounded-lg border border-accent/20 bg-accent-light"
               >
-                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-accent-light">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-accent-lighter">
                   <Icons.User className="text-accent" size={16} />
                 </div>
                 <div>
@@ -380,14 +375,14 @@ const MediaModal = ({ media, onClose, apiKey }) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* Black Backdrop with a hint of accent color */}
-      <div className="fixed inset-0 backdrop-blur-sm bg-black/80 bg-accent-lighter/5" />
+      {/* Black Backdrop with accent color */}
+      <div className="fixed inset-0 backdrop-blur-sm bg-black/80" />
 
       {/* Modal Content */}
       <div
         className="relative w-full max-w-4xl bg-theme-modal rounded-xl overflow-hidden shadow-accent 
-      border border-accent animate-in fade-in duration-200
-      max-h-[90vh] flex flex-col"
+        border border-accent animate-in fade-in duration-200
+        max-h-[90vh] flex flex-col"
       >
         {/* Loading state */}
         {isLoading && (
@@ -421,9 +416,9 @@ const MediaModal = ({ media, onClose, apiKey }) => {
             <div className="relative h-full flex flex-col justify-end p-6">
               {/* Media Type Badge */}
               <div className="flex items-center gap-2 mb-4">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 backdrop-blur-sm rounded-lg border border-accent bg-accent-lighter">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 backdrop-blur-sm rounded-lg border border-accent/20 bg-accent-light">
                   <MediaTypeIcon size={14} className="text-accent" />
-                  <span className="text-sm">
+                  <span className="text-sm text-accent">
                     {displayData.media_type.charAt(0).toUpperCase() +
                       displayData.media_type.slice(1).toLowerCase()}
                   </span>
@@ -438,14 +433,14 @@ const MediaModal = ({ media, onClose, apiKey }) => {
               {/* Metadata */}
               <div className="flex flex-wrap items-center gap-3 text-sm">
                 {displayData.year && (
-                  <div className="flex items-center gap-1.5 px-2 py-1 backdrop-blur-sm rounded-lg border border-accent bg-accent-lighter">
+                  <div className="flex items-center gap-1.5 px-2 py-1 backdrop-blur-sm rounded-lg border border-accent/20 bg-accent-light">
                     <Icons.Calendar size={14} className="text-accent" />
                     <span className="text-white">{displayData.year}</span>
                   </div>
                 )}
 
                 {displayData.duration && (
-                  <div className="flex items-center gap-1.5 px-2 py-1 backdrop-blur-sm rounded-lg border border-accent bg-accent-lighter">
+                  <div className="flex items-center gap-1.5 px-2 py-1 backdrop-blur-sm rounded-lg border border-accent/20 bg-accent-light">
                     <Icons.Clock size={14} className="text-accent" />
                     <span className="text-white">
                       {formatDuration(displayData.duration)}
@@ -463,7 +458,7 @@ const MediaModal = ({ media, onClose, apiKey }) => {
                 )}
 
                 {displayData.content_rating && (
-                  <div className="px-2 py-1 backdrop-blur-sm rounded-lg border border-accent bg-accent-lighter text-white">
+                  <div className="px-2 py-1 backdrop-blur-sm rounded-lg border border-accent/20 bg-accent-light text-white">
                     {displayData.content_rating}
                   </div>
                 )}
@@ -472,7 +467,7 @@ const MediaModal = ({ media, onClose, apiKey }) => {
                   displayData.stream_video_full_resolution) && (
                   <div
                     className={`flex items-center gap-1.5 px-2 py-1 backdrop-blur-sm rounded-lg border ${
-                      quality.className || "border-accent bg-accent-lighter"
+                      quality.className || "border-accent/20 bg-accent-light"
                     }`}
                   >
                     <quality.icon
@@ -508,7 +503,7 @@ const MediaModal = ({ media, onClose, apiKey }) => {
                 {displayData.summary.split(" ").length > 60 && (
                   <button
                     onClick={() => setIsExpanded(!isExpanded)}
-                    className="text-sm mt-2 flex items-center gap-1 bg-transparent border-none px-2 py-1 rounded text-accent hover:bg-accent-lighter transition-theme"
+                    className="text-sm mt-2 flex items-center gap-1 bg-transparent border-none px-2 py-1 rounded text-accent hover:text-accent-hover hover:bg-accent-light transition-theme"
                   >
                     {isExpanded ? (
                       <>
@@ -530,7 +525,7 @@ const MediaModal = ({ media, onClose, apiKey }) => {
             {getCastSection()}
 
             {/* Details Grid with accent bg */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-6 p-5 rounded-lg border border-accent bg-accent-lighter">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-6 p-5 rounded-lg border border-accent/20 bg-accent-light">
               {/* Media Specific Info */}
               {getMediaSpecificInfo()}
 
@@ -552,7 +547,7 @@ const MediaModal = ({ media, onClose, apiKey }) => {
         <button
           onClick={onClose}
           className="absolute top-4 right-4 p-2 rounded-full bg-black/40 text-white border border-transparent 
-    hover:bg-accent-light hover:text-accent hover:border-accent transition-theme"
+          hover:bg-accent-light hover:text-accent hover:border-accent/20 transition-theme"
           aria-label="Close"
         >
           <Icons.X size={20} />

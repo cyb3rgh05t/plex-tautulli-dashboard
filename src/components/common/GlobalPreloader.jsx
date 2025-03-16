@@ -7,8 +7,8 @@ import axios from "axios";
 import * as posterCacheService from "../../services/posterCacheService";
 
 /**
- * Improved GlobalPreloader with simplified fast path determination
- * and more reliable data verification
+ * Enhanced GlobalPreloader with strict fast path determination
+ * and exactly 10 items per section in the cache
  */
 const GlobalPreloader = ({ children }) => {
   const { config, isConfigured, isLoading: configLoading } = useConfig();
@@ -25,165 +25,173 @@ const GlobalPreloader = ({ children }) => {
   const preloadComplete = useRef(false);
   const forceFullPreload = useRef(false);
 
-  // Store key timestamps in localStorage
-  const getLastPreloadTime = () => {
-    return parseInt(localStorage.getItem("lastFullPreloadTime") || "0", 10);
+  // Store loading tasks completion state
+  const loadingTasks = useRef({
+    config: false,
+    sections: false,
+    media: false,
+    activities: false,
+    libraries: false,
+    posters: false,
+    metadata: false,
+  });
+
+  // Expose forceFullPreload ref through window for external triggering
+  useEffect(() => {
+    // Expose force preload function globally for external components
+    window.forceGlobalPreload = false;
+
+    return () => {
+      delete window.forceGlobalPreload;
+    };
+  }, []);
+
+  // Check if fast path is enabled - this is controlled by localStorage
+  const isFastPathEnabled = () => {
+    // Only return true if we've explicitly stored that fast path is ready
+    return localStorage.getItem("fastPathReady") === "true";
   };
 
-  const setLastPreloadTime = () => {
-    localStorage.setItem("lastFullPreloadTime", Date.now().toString());
-  };
+  // Check if poster cache exists and has content
+  const checkPosterCache = async () => {
+    try {
+      // Try to fetch cached poster stats using multiple methods
+      try {
+        // Method 1: Use the poster cache stats API
+        const stats = await posterCacheService.getPosterCacheStats();
 
-  // Check if a full preload is needed based on multiple factors
-  const isFullPreloadNeeded = async () => {
-    // Always do a full preload if explicitly forced
-    if (forceFullPreload.current) {
-      logInfo("Full preload forced by application");
-      return true;
+        // If poster count is 0, consider the cache empty
+        if (!stats.count || stats.count === 0) {
+          logInfo("Poster cache is empty, forcing full preload");
+          return false;
+        }
+
+        logInfo(
+          `Poster cache has ${stats.count} posters, fast path can be used`
+        );
+        return true;
+      } catch (apiError) {
+        // If the API call fails, try a different approach
+        logWarn("Error checking poster cache through API:", apiError);
+
+        // Method 2: Check if FastPathReady is set in localStorage
+        if (isFastPathEnabled()) {
+          // Look for the "lastPostersCount" value that might have been stored
+          const lastCount = localStorage.getItem("lastPostersCount");
+          if (lastCount && parseInt(lastCount) > 0) {
+            logInfo(
+              `Using cached poster count (${lastCount}) from localStorage`
+            );
+            return true;
+          }
+
+          // If fast path is ready but no count, we'll assume posters exist
+          // since a successful preload would have occurred previously
+          logInfo(
+            "Fast path is ready but no poster count, assuming posters exist"
+          );
+          return true;
+        }
+      }
+
+      // If we reach here, we couldn't confirm poster cache exists
+      logInfo(
+        "Could not verify poster cache status, defaulting to full preload"
+      );
+      return false;
+    } catch (error) {
+      // Catch-all for any other errors
+      logWarn("Error checking poster cache status:", error);
+      return false;
     }
+  };
 
-    // 1. Check if we have a valid configuration
-    if (!isConfigured()) {
-      logInfo("Application not configured, no preload needed");
+  // Fast path should be used if:
+  // 1. Fast path is enabled in localStorage
+  // 2. Config hasn't changed since last load
+  // 3. We're not forcing a full preload
+  // 4. We can determine that poster cache likely exists
+  const shouldUseFastPath = async () => {
+    // Check if force refresh is requested via window object
+    if (window.forceGlobalPreload) {
+      // Reset the flag
+      window.forceGlobalPreload = false;
+      logInfo(
+        "Bypassing fast path due to forced global preload via window object"
+      );
       return false;
     }
 
-    // 2. Check if config has changed
+    // Check if force refresh is requested via localStorage
+    const forceRefresh = localStorage.getItem("forceRefreshOnLoad");
+    if (forceRefresh) {
+      // Remove the flag
+      localStorage.removeItem("forceRefreshOnLoad");
+      logInfo("Bypassing fast path due to forced refresh from localStorage");
+      return false;
+    }
+
+    if (forceFullPreload.current) {
+      logInfo("Bypassing fast path due to forced full preload");
+      return false;
+    }
+
+    if (!isFastPathEnabled()) {
+      logInfo("Fast path not enabled yet");
+      return false;
+    }
+
+    // Check if config has changed
     const storedConfigHash = localStorage.getItem("configHash");
     const currentConfigHash = JSON.stringify(config);
+
     if (storedConfigHash !== currentConfigHash) {
-      logInfo("Configuration has changed, full preload needed");
-      return true;
+      logInfo("Config has changed, cannot use fast path");
+      return false;
     }
 
-    // 3. Check if sections data is already available
-    let sectionsData = null;
-    try {
-      // Try to get sections from query cache first
-      sectionsData = queryClient.getQueryData(["sections"]);
-
-      // If not in cache, try a quick API check
-      if (!sectionsData) {
-        const sectionsResponse = await axios.get("/api/sections", {
-          timeout: 2000,
-        });
-        sectionsData = sectionsResponse.data;
-        // Cache the sections data
-        if (sectionsData?.sections?.length > 0) {
-          queryClient.setQueryData(["sections"], sectionsData);
-        }
-      }
-
-      // If no sections found, we need a full preload
-      if (
-        !sectionsData ||
-        !sectionsData.sections ||
-        sectionsData.sections.length === 0
-      ) {
-        logInfo("No sections data found, full preload needed");
-        return true;
-      }
-
-      logInfo(`Found ${sectionsData.sections.length} sections in cache`);
-    } catch (error) {
-      logWarn("Error checking sections data:", error);
-      return true; // If we can't verify sections, do a full preload to be safe
+    // Check if poster cache exists and has content
+    const posterCacheExists = await checkPosterCache();
+    if (!posterCacheExists) {
+      logInfo("Poster cache is empty or missing, cannot use fast path");
+      return false;
     }
 
-    // Note: We've removed the 24-hour check to avoid forced reloads based on time
-    // The preload will only happen when config changes or data is missing
-
-    // 5. Try to verify that we have some media data cached
-    try {
-      // Get a sample section to check if we have media data
-      const sectionId =
-        sectionsData.sections[0]?.raw_data?.section_id ||
-        sectionsData.sections[0]?.section_id;
-
-      if (sectionId) {
-        const sectionCache = queryClient.getQueryData([`section:${sectionId}`]);
-
-        // If we have media data for this section, we can probably skip full preload
-        if (
-          sectionCache &&
-          sectionCache.media &&
-          sectionCache.media.length > 0
-        ) {
-          logInfo(
-            "Found cached media data, quick preload should be sufficient"
-          );
-          return false;
-        }
-      }
-    } catch (error) {
-      logWarn("Error checking section media cache:", error);
-      // Continue checking other indicators
-    }
-
-    // 6. Check if poster cache is empty without relying on the API
-    // Instead, we'll use localStorage as an indicator
-    const posterCacheIndicator = localStorage.getItem("posterCacheIndicator");
-    if (posterCacheIndicator !== "populated") {
-      logInfo("Poster cache indicator not found, full preload needed");
-      return true;
-    }
-
-    // Default to quick preload if none of the above conditions trigger a full preload
-    logInfo("All checks passed, quick preload should be sufficient");
-    return false;
+    logInfo("Using fast path for preloading");
+    return true;
   };
 
-  // Quick preload - just verify essential data availability
-  const performQuickPreload = async () => {
-    logInfo("Starting quick preload process");
-    setLoadingMessage("Verifying application data...");
+  // Fast path preloading - just verify essential data is in cache
+  const performFastPathPreload = async () => {
+    logInfo("Starting fast path preloading");
+    setLoadingMessage("Checking application data...");
     setLoadingProgress(30);
 
     try {
-      // 1. Verify sections data is available
-      let sectionsData = queryClient.getQueryData(["sections"]);
-
-      if (!sectionsData) {
-        // Quick fetch of sections
-        const sectionsResponse = await axios.get("/api/sections");
-        sectionsData = sectionsResponse.data;
-
-        // Cache the sections data
-        if (sectionsData?.sections?.length > 0) {
-          queryClient.setQueryData(["sections"], sectionsData);
-        }
-      }
+      // 1. Verify sections data
+      const sectionsResponse = await axios.get("/api/sections");
+      const sectionsData = sectionsResponse.data;
 
       if (
         !sectionsData ||
         !sectionsData.sections ||
         sectionsData.sections.length === 0
       ) {
-        logWarn(
-          "No sections found during quick preload, switching to full preload"
-        );
+        logInfo("No sections found, switching to full preload");
+        // Fall back to full preload if sections data is missing
         forceFullPreload.current = true;
-        return performFullPreload();
+        performFullPreload();
+        return;
       }
 
+      // Cache the sections data
+      queryClient.setQueryData(["sections"], sectionsData);
       setLoadingProgress(50);
+
+      // 2. Get minimal data needed for the UI
       setLoadingMessage("Loading essential data...");
 
-      // 2. Get section IDs
-      const sectionIds = sectionsData.sections
-        .map((section) => {
-          const sectionData = section.raw_data || section;
-          return sectionData.section_id;
-        })
-        .filter(Boolean);
-
-      // 3. Initialize media monitoring timestamps
-      window.plexDataTimestamps = {
-        lastCheck: Date.now(),
-        sections: Object.fromEntries(sectionIds.map((id) => [id, Date.now()])),
-      };
-
-      // 4. Quick load of activities for the dashboard
+      // Fast load of activities
       try {
         const activitiesResponse = await axios.get("/api/downloads");
         queryClient.setQueryData(
@@ -191,20 +199,36 @@ const GlobalPreloader = ({ children }) => {
           activitiesResponse.data.activities || []
         );
       } catch (error) {
-        logWarn("Failed to load activities in quick preload:", error);
+        logWarn("Failed to load activities in fast path:", error);
       }
 
-      // 5. Load minimal libraries data
+      setLoadingProgress(70);
+
+      // 3. Libraries data (needed for most screens)
       try {
         const librariesResponse = await axios.get("/api/libraries");
         queryClient.setQueryData(["libraries"], librariesResponse.data);
       } catch (error) {
-        logWarn("Failed to load libraries in quick preload:", error);
+        logWarn("Failed to load libraries in fast path:", error);
       }
+
+      // Set up timestamps for media monitoring
+      const allSections = sectionsData?.sections || [];
+      const sectionIds = allSections
+        .map((section) => {
+          const sectionData = section.raw_data || section;
+          return sectionData.section_id;
+        })
+        .filter(Boolean);
+
+      window.plexDataTimestamps = {
+        lastCheck: Date.now(),
+        sections: Object.fromEntries(sectionIds.map((id) => [id, Date.now()])),
+      };
 
       setLoadingProgress(100);
       setLoadingMessage("Application ready");
-      logInfo("Quick preload completed successfully");
+      logInfo("Fast path preloading complete");
 
       // Brief delay for smooth transition
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -213,19 +237,19 @@ const GlobalPreloader = ({ children }) => {
       setIsPreloading(false);
       preloadComplete.current = true;
     } catch (error) {
-      logError("Error during quick preload:", error);
+      logError("Error during fast path preloading:", error);
 
-      // If quick preload fails, try full preload
-      logInfo("Quick preload failed, falling back to full preload");
+      // If fast path fails, try full preload
+      logInfo("Fast path failed, falling back to full preload");
       forceFullPreload.current = true;
       performFullPreload();
     }
   };
 
-  // Full preloading - download all data, metadata, posters, etc.
+  // Full preloading path - download all posters, metadata, etc.
   const performFullPreload = async () => {
-    logInfo("Starting full preload process");
-    setLoadingMessage("Starting data preload...");
+    logInfo("Starting full preloading process");
+    setLoadingMessage("Starting full preload...");
     setLoadingDetails("This may take a few minutes");
     setLoadingProgress(5);
 
@@ -236,13 +260,14 @@ const GlobalPreloader = ({ children }) => {
 
       // If not configured, skip preloading
       if (!isConfigured()) {
-        logInfo("Application not configured, skipping preload");
+        logInfo("Application not configured, skipping preloading");
         setLoadingProgress(100);
         setIsPreloading(false);
         preloadComplete.current = true;
         return;
       }
 
+      loadingTasks.current.config = true;
       setLoadingProgress(10);
 
       // Step 2: Load sections data
@@ -260,7 +285,7 @@ const GlobalPreloader = ({ children }) => {
           !sectionsData.sections ||
           sectionsData.sections.length === 0
         ) {
-          logInfo("No sections found, skipping media preload");
+          logInfo("No sections found, skipping media preloading");
           setLoadingProgress(100);
           setIsPreloading(false);
           preloadComplete.current = true;
@@ -269,9 +294,11 @@ const GlobalPreloader = ({ children }) => {
 
         // Cache the sections data
         queryClient.setQueryData(["sections"], sectionsData);
+
+        loadingTasks.current.sections = true;
         setLoadingProgress(20);
         logInfo(
-          `Loaded ${sectionsData.sections?.length || 0} library sections`
+          `✅ Loaded ${sectionsData.sections?.length || 0} library sections`
         );
       } catch (error) {
         logError("Failed to load sections:", error);
@@ -304,23 +331,26 @@ const GlobalPreloader = ({ children }) => {
             const sectionData = s.raw_data || s;
             return sectionData.section_id === sectionId;
           });
-
           const sectionName =
             section?.raw_data?.name || section?.name || `Section ${sectionId}`;
+          const sectionType =
+            section?.raw_data?.type ||
+            section?.raw_data?.section_type ||
+            "unknown";
 
-          // Load recently added items for this section
+          // Load exactly 10 recently added items for this section
           const response = await axios.get(`/api/tautulli/api/v2`, {
             params: {
               apikey: config.tautulliApiKey,
               cmd: "get_recently_added",
               section_id: sectionId,
-              count: 10, // Limit to 10 items per section
+              count: 10, // Exactly 10 items per section
             },
             timeout: 30000,
           });
 
           if (response.data?.response?.result === "success") {
-            // Process media items
+            // Process media items - limit to exactly 10
             const mediaItems = (
               response.data?.response?.data?.recently_added || []
             )
@@ -336,22 +366,24 @@ const GlobalPreloader = ({ children }) => {
                 `Loading metadata and posters for ${mediaItems.length} items in "${sectionName}"`
               );
 
-              // Create the section cache
+              // Process and cache metadata for each item (in smaller batches)
+              const BATCH_SIZE = 5;
+              let processedItems = 0;
+
+              // Create the section cache object early to ensure all items go to the same place
               const sectionCache = {
                 media: [],
                 section: section?.raw_data || section,
               };
 
-              // Process items in batches of 5
-              const BATCH_SIZE = 5;
               for (let i = 0; i < mediaItems.length; i += BATCH_SIZE) {
                 const batch = mediaItems.slice(i, i + BATCH_SIZE);
 
-                // Process batch in parallel
+                // Process this batch in parallel
                 await Promise.all(
                   batch.map(async (item) => {
                     try {
-                      // Fetch metadata
+                      // Fetch full metadata for this item
                       const metadataResponse = await axios.get(
                         `/api/tautulli/api/v2`,
                         {
@@ -369,29 +401,35 @@ const GlobalPreloader = ({ children }) => {
                       ) {
                         const metadata = metadataResponse.data.response.data;
 
-                        // Enhance item with metadata
+                        // Enhance item with full metadata
                         const enhancedItem = {
                           ...item,
                           ...metadata,
                           complete_metadata: true,
                         };
 
-                        // Cache poster
+                        // Download poster to cache
                         try {
-                          // Get appropriate thumb path
+                          // Get appropriate thumb path based on media type
                           const thumbPath =
                             posterCacheService.getAppropriateThumbPath(
                               enhancedItem
                             );
 
                           if (thumbPath) {
-                            // Cache poster in background
+                            // Cache the poster (this is async but we don't wait)
                             posterCacheService.cachePoster(
                               item.rating_key,
                               thumbPath,
                               config.tautulliApiKey,
                               enhancedItem.media_type
                             );
+
+                            // Set the cached poster URL
+                            enhancedItem.cached_poster_url =
+                              posterCacheService.getCachedPosterUrl(
+                                item.rating_key
+                              );
                           }
                         } catch (posterError) {
                           logWarn(
@@ -400,13 +438,13 @@ const GlobalPreloader = ({ children }) => {
                           );
                         }
 
-                        // Store in query cache
+                        // Store in query cache for fast access
                         queryClient.setQueryData(
                           [`media:${item.rating_key}`],
                           enhancedItem
                         );
 
-                        // Add to section cache
+                        // Add to the section cache array
                         sectionCache.media.push(enhancedItem);
                       }
                     } catch (itemError) {
@@ -415,48 +453,55 @@ const GlobalPreloader = ({ children }) => {
                         itemError
                       );
                     }
+
+                    // Update processed count
+                    processedItems++;
                   })
                 );
 
-                // Update loading progress
-                const sectionProgress = loadedSections / sectionIds.length;
-                const itemProgress = (i + batch.length) / mediaItems.length;
+                // Update loading progress based on both sections and items
+                const sectionWeight = 1 / sectionIds.length; // Each section's weight
+                const sectionProgress = loadedSections / sectionIds.length; // Progress through sections
+                const itemProgress = processedItems / mediaItems.length; // Progress through items in this section
+
                 const combinedProgress =
                   20 +
                   Math.floor(
-                    (sectionProgress + itemProgress / sectionIds.length) * 40
+                    (sectionProgress + itemProgress * sectionWeight) * 40
                   );
-
                 setLoadingProgress(combinedProgress);
                 setLoadingDetails(
-                  `Processed ${i + batch.length}/${
-                    mediaItems.length
-                  } items in ${sectionName}`
+                  `Processed ${processedItems}/${mediaItems.length} items in ${sectionName}`
                 );
 
                 // Small pause between batches
-                await new Promise((resolve) => setTimeout(resolve, 100));
+                await new Promise((resolve) => setTimeout(resolve, 200));
               }
 
-              // Limit section cache to exactly 10 items
+              // Update the section cache - ensure we have exactly 10 items maximum
               if (sectionCache.media.length > 10) {
                 sectionCache.media = sectionCache.media.slice(0, 10);
               }
 
-              // Store section cache
+              // Store the entire section cache
               queryClient.setQueryData([`section:${sectionId}`], sectionCache);
             }
           }
 
+          // Update progress
           loadedSections++;
         } catch (sectionError) {
           logWarn(`Failed to process section ${sectionId}:`, sectionError);
+          // Continue with other sections even if one fails
         }
       }
 
+      loadingTasks.current.media = true;
+      loadingTasks.current.metadata = true;
+      loadingTasks.current.posters = true;
       setLoadingProgress(60);
 
-      // Step 4: Load other essential data
+      // Step 4: Load other essential data in parallel
       setLoadingMessage("Loading application data...");
       setLoadingDetails("Getting activities and libraries");
 
@@ -467,6 +512,7 @@ const GlobalPreloader = ({ children }) => {
           ["plexActivities"],
           activitiesResponse.data.activities || []
         );
+        loadingTasks.current.activities = true;
         logInfo("✅ Loaded activities data");
       } catch (error) {
         logWarn("Failed to load activities:", error);
@@ -476,6 +522,7 @@ const GlobalPreloader = ({ children }) => {
         // Libraries data
         const librariesResponse = await axios.get("/api/libraries");
         queryClient.setQueryData(["libraries"], librariesResponse.data);
+        loadingTasks.current.libraries = true;
         logInfo("✅ Loaded libraries data");
       } catch (error) {
         logWarn("Failed to load libraries:", error);
@@ -487,43 +534,54 @@ const GlobalPreloader = ({ children }) => {
       setLoadingMessage("Finalizing application...");
       setLoadingDetails("Preparing user interface");
 
-      // Set up data for monitoring
+      // Prepare data for monitoring recently added content
       window.plexDataTimestamps = {
         lastCheck: Date.now(),
         sections: Object.fromEntries(sectionIds.map((id) => [id, Date.now()])),
       };
 
-      // Set poster cache indicator
-      localStorage.setItem("posterCacheIndicator", "populated");
+      // Get poster cache stats
+      try {
+        const cacheStatsResponse = await axios.get("/api/posters/cache/stats");
+        const postersCount = cacheStatsResponse.data.count || 0;
+        logInfo(`✅ Poster cache contains ${postersCount} posters`);
 
-      // Store current config hash
+        // Store poster count for future fast path decisions
+        localStorage.setItem("lastPostersCount", postersCount.toString());
+      } catch (error) {
+        logWarn("Failed to get poster cache stats:", error);
+      }
+
+      // Store current config hash to detect changes
       localStorage.setItem("configHash", JSON.stringify(config));
 
-      // Update last preload time
-      setLastPreloadTime();
+      // Mark fast path as ready for next time
+      localStorage.setItem("fastPathReady", "true");
 
       // Complete loading
       setLoadingProgress(100);
       setLoadingMessage("Loading complete!");
       setLoadingDetails("");
 
-      // Short delay before showing UI
+      // Short delay before revealing UI
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // Done preloading
+      // Mark preloading as complete
       setIsPreloading(false);
       preloadComplete.current = true;
-      logInfo("✅ Full preload completed successfully");
+      logInfo("✅ Application full preloading completed successfully");
     } catch (error) {
-      logError("❌ Error during full preload:", error);
+      logError("❌ Error during application preloading:", error);
 
-      // Show error message
+      // Show error message in loading screen
       setLoadingMessage("Error during loading");
       setLoadingDetails(error.message || "An unexpected error occurred");
+
+      // Even on error, continue to show app after a delay
       setLoadingProgress(100);
 
-      // Continue after a delay
       await new Promise((resolve) => setTimeout(resolve, 2000));
+
       setIsPreloading(false);
       preloadComplete.current = true;
     }
@@ -536,55 +594,80 @@ const GlobalPreloader = ({ children }) => {
       return;
     }
 
-    // Start preloading process
+    // Start the preloading process
     const runPreload = async () => {
       preloadStarted.current = true;
       setIsPreloading(true);
 
       try {
-        // Check if app is configured
+        // First check if we're even configured
         if (!isConfigured()) {
-          logInfo("Application not configured, skipping preload");
+          logInfo("Application not configured, skipping preloading");
           setLoadingProgress(100);
           setIsPreloading(false);
           preloadComplete.current = true;
           return;
         }
 
-        // Determine if we need a full preload
-        const needsFullPreload = await isFullPreloadNeeded();
-
-        if (needsFullPreload) {
-          await performFullPreload();
+        // Decide which path to take
+        const useFastPath = await shouldUseFastPath();
+        if (useFastPath) {
+          await performFastPathPreload();
         } else {
-          await performQuickPreload();
+          await performFullPreload();
         }
       } catch (error) {
-        logError("Error during preload decision:", error);
+        logError("❌ Error during preload decision:", error);
 
-        // Default to full preload on error
-        try {
-          await performFullPreload();
-        } catch (fullPreloadError) {
-          logError("Error during fallback full preload:", fullPreloadError);
+        // Show error message in loading screen
+        setLoadingMessage("Error during loading");
+        setLoadingDetails(error.message || "An unexpected error occurred");
 
-          // Show error and continue
-          setLoadingMessage("Error during loading");
-          setLoadingDetails(
-            fullPreloadError.message || "An unexpected error occurred"
-          );
-          setLoadingProgress(100);
+        // Even on error, continue to show app after a delay
+        setLoadingProgress(100);
 
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          setIsPreloading(false);
-          preloadComplete.current = true;
-        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        setIsPreloading(false);
+        preloadComplete.current = true;
       }
     };
 
     // Start preloading
     runPreload();
   }, [queryClient, isConfigured, configLoading, config]);
+
+  // Listen for route changes to detect when to preload
+  useEffect(() => {
+    const handleRouteChange = () => {
+      // If preload is complete and force refresh is requested
+      if (
+        preloadComplete.current &&
+        localStorage.getItem("forceRefreshOnLoad")
+      ) {
+        logInfo("Detected forced refresh request on route change");
+
+        // Reset the preload state
+        preloadComplete.current = false;
+        preloadStarted.current = false;
+
+        // Remove the flag
+        localStorage.removeItem("forceRefreshOnLoad");
+
+        // Force screen to reload and show loading screen
+        window.location.reload();
+      }
+    };
+
+    // Listen for events that might indicate route change
+    window.addEventListener("popstate", handleRouteChange);
+    window.addEventListener("hashchange", handleRouteChange);
+
+    return () => {
+      window.removeEventListener("popstate", handleRouteChange);
+      window.removeEventListener("hashchange", handleRouteChange);
+    };
+  }, []);
 
   // Show loading screen while preloading
   if (isPreloading) {
@@ -597,7 +680,7 @@ const GlobalPreloader = ({ children }) => {
     );
   }
 
-  // Once preloading is complete, render children
+  // Once preloading is complete, render the application
   return children;
 };
 

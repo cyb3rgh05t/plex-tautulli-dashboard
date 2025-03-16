@@ -246,17 +246,6 @@ const MediaContentMonitor = () => {
           }
         }
 
-        // Show notification to user
-        toast.success(
-          `New content added: ${newMediaItems
-            .map((item) => item.title)
-            .join(", ")}`,
-          {
-            duration: 5000,
-            icon: "🎬",
-          }
-        );
-
         // Dispatch event to notify components
         window.dispatchEvent(new CustomEvent("newMediaDetected"));
       }

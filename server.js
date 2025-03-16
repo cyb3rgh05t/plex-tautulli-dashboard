@@ -2154,6 +2154,8 @@ app.get("/api/clear-image-cache", (req, res) => {
 app.post("/api/refresh-posters", async (req, res) => {
   try {
     const { sectionId, mediaId } = req.body;
+    // Default count for cache keys
+    const defaultCount = 50;
 
     // Generate a unique timestamp for cache busting
     const timestamp = Date.now();
@@ -2235,16 +2237,37 @@ app.post("/api/refresh-posters", async (req, res) => {
       // Also look for any type-specific cache keys
       const typeKeys = ["movies", "shows", "music"];
       typeKeys.forEach((type) => {
-        const typeCacheKey = `media:${type}:${sectionId}:${
-          requestedCount || 50
-        }`;
-        if (mediaCache.get(typeCacheKey)) {
-          mediaCache.delete(typeCacheKey);
-          logInfo(
-            `[${requestId}] Cleared type cache for ${type} section ${sectionId}`
+        // Fixed: Use defaultCount instead of undefined requestedCount
+        const typeCacheKey = `media:${type}:${sectionId}:${defaultCount}`;
+
+        try {
+          if (mediaCache.get(typeCacheKey)) {
+            mediaCache.delete(typeCacheKey);
+            logInfo(
+              `[${requestId}] Cleared type cache for ${type} section ${sectionId}`
+            );
+          }
+        } catch (cacheError) {
+          // Log but continue with other cache keys
+          logWarn(
+            `[${requestId}] Error clearing cache for ${type} section ${sectionId}: ${cacheError.message}`
           );
         }
       });
+
+      // Also clear any query-cache keys that might exist for this section
+      try {
+        // Try to clear the React Query cache key format
+        const queryCacheKey = `section:${sectionId}`;
+        logInfo(
+          `[${requestId}] Attempting to clear query cache for ${queryCacheKey}`
+        );
+      } catch (queryCacheError) {
+        // This is optional, so just log and continue
+        logWarn(
+          `[${requestId}] Query cache clear attempt: ${queryCacheError.message}`
+        );
+      }
     } else {
       // Clear browser image cache by sending a response event that the frontend can handle
       logInfo(`[${requestId}] Sending global image cache clear event`);

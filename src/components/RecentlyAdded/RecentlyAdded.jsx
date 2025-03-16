@@ -723,14 +723,125 @@ const RecentlyAdded = () => {
                   }`}
                   className="space-y-4"
                 >
-                  <div className="flex items-center gap-3 pb-2 border-b border-accent">
-                    <h3 className="text-xl font-medium text-white">
-                      {sectionName}
-                    </h3>
-                    <div className="px-2 py-1 bg-gray-800/50 rounded-lg border border-accent">
-                      <span className="text-theme-muted text-sm">
-                        {formattedType}
-                      </span>
+                  <div className="flex items-center justify-between pb-2 border-b border-accent">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-xl font-medium text-white">
+                        {sectionName}
+                      </h3>
+                      <div className="px-2 py-1 bg-gray-800/50 rounded-lg border border-accent">
+                        <span className="text-theme-muted text-sm">
+                          {formattedType}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Section Actions */}
+                    <div>
+                      <ThemedButton
+                        onClick={async () => {
+                          try {
+                            // Show loading toast
+                            toast.loading(
+                              `Refreshing posters for ${sectionName}...`,
+                              {
+                                id: `section-${sectionData.section.section_id}`,
+                              }
+                            );
+
+                            try {
+                              // First try using the API endpoint
+                              await axios.post("/api/refresh-posters", {
+                                sectionId: sectionData.section.section_id,
+                              });
+                            } catch (apiError) {
+                              // If the server-side endpoint fails, we'll use a fallback approach
+                              logWarn(
+                                `API endpoint for refreshing section failed: ${apiError.message}`
+                              );
+
+                              // Alternative approach: clear cache and invalidate queries
+                              // 1. Clear image cache first
+                              await axios.get("/api/clear-image-cache");
+
+                              // 2. If section has media items, try to refresh their posters individually
+                              const refreshPromises = sortedMedia
+                                .slice(0, 6)
+                                .map(async (mediaItem) => {
+                                  try {
+                                    if (mediaItem.rating_key) {
+                                      // Clear the cache for this specific poster
+                                      await axios.post(
+                                        `/api/posters/cache/clear/${mediaItem.rating_key}`
+                                      );
+
+                                      // Re-cache the poster with fresh data
+                                      const thumbPath =
+                                        posterCacheService.getAppropriateThumbPath(
+                                          mediaItem
+                                        );
+                                      if (thumbPath && mediaItem.apiKey) {
+                                        return posterCacheService.cachePoster(
+                                          mediaItem.rating_key,
+                                          thumbPath,
+                                          mediaItem.apiKey,
+                                          mediaItem.media_type
+                                        );
+                                      }
+                                    }
+                                    return Promise.resolve();
+                                  } catch (itemError) {
+                                    // Log but continue with other items
+                                    logWarn(
+                                      `Failed to refresh poster for ${mediaItem.title}: ${itemError.message}`
+                                    );
+                                    return Promise.resolve();
+                                  }
+                                });
+
+                              // Wait for all the individual refresh operations to complete
+                              await Promise.allSettled(refreshPromises);
+                            }
+
+                            // Force cache refresh regardless of which method was used
+                            queryClient.invalidateQueries([
+                              `section:${sectionData.section.section_id}`,
+                            ]);
+
+                            // Success toast
+                            toast.success(
+                              `Refreshed ${sectionName} posters. Changes may take a moment to appear.`,
+                              {
+                                id: `section-${sectionData.section.section_id}`,
+                                duration: 5000,
+                              }
+                            );
+
+                            // Trigger a global refresh event
+                            window.dispatchEvent(
+                              new CustomEvent("posterCacheCleared", {
+                                detail: { timestamp: Date.now() },
+                              })
+                            );
+                          } catch (error) {
+                            console.error(
+                              `Failed to refresh section ${sectionName}:`,
+                              error
+                            );
+                            toast.error(
+                              `Failed to refresh ${sectionName} posters: ${error.message}`,
+                              {
+                                id: `section-${sectionData.section.section_id}`,
+                              }
+                            );
+                          }
+                        }}
+                        variant="ghost"
+                        size="sm"
+                        title="Refresh all posters in this section"
+                        icon={Icons.RefreshCw}
+                      >
+                        Refresh Posters
+                      </ThemedButton>
                     </div>
                   </div>
 
