@@ -155,11 +155,47 @@ const CacheManager = () => {
       // 4. Get poster cache stats from the API
       try {
         const posterStatsResponse = await axios.get("/api/posters/cache/stats");
-        posterCacheSize = posterStatsResponse.data.count || 0;
-        posterCacheSizeBytes = posterStatsResponse.data.size || 0;
+        // Check that the response has the required fields
+        if (
+          posterStatsResponse.data &&
+          typeof posterStatsResponse.data.count !== "undefined"
+        ) {
+          posterCacheSize = posterStatsResponse.data.count || 0;
+          posterCacheSizeBytes = posterStatsResponse.data.size || 0;
+          logInfo(
+            `Retrieved poster cache stats: ${posterCacheSize} posters (${
+              posterStatsResponse.data.sizeFormatted || "0 Bytes"
+            })`
+          );
+        } else {
+          // Handle incomplete data
+          logWarn(
+            "Poster cache stats response incomplete:",
+            posterStatsResponse.data
+          );
+          posterCacheSize = 0;
+          posterCacheSizeBytes = 0;
+        }
       } catch (error) {
-        logError("Failed to fetch poster cache stats:", error);
+        // Provide more details in the log
+        logError("Failed to fetch poster cache stats:", {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data,
+        });
+        // Set default values
         posterCacheSize = 0;
+        posterCacheSizeBytes = 0;
+
+        // Check for specific error conditions
+        if (error.response?.status === 500 && error.response?.data?.error) {
+          logWarn(`Poster cache error details: ${error.response.data.error}`);
+
+          // If directory issue, try to log the path
+          if (error.response.data.directory) {
+            logWarn(`Poster cache directory: ${error.response.data.directory}`);
+          }
+        }
       }
 
       // Update state with combined stats

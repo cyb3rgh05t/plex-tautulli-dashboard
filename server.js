@@ -2146,6 +2146,10 @@ app.get("/api/clear-image-cache", (req, res) => {
   }
 });
 
+// =======================================================
+// POster Cache Api Routes
+// =======================================================
+
 // Refresh posters endpoint - used to clear specific cached images
 app.post("/api/refresh-posters", async (req, res) => {
   try {
@@ -2285,10 +2289,6 @@ app.post("/api/refresh-posters", async (req, res) => {
     });
   }
 });
-
-// =======================================================
-// POster Cache Api Routes
-// =======================================================
 
 // Route to serve cached posters
 app.get("/api/posters/:ratingKey", (req, res) => {
@@ -2729,9 +2729,10 @@ app.get("/api/posters/cache/stats", (req, res) => {
 
     // After ensuring directory exists, try to read its contents
     try {
+      // Use readdirSync with error handling
       const files = fs.readdirSync(POSTER_CACHE_DIR);
 
-      // Calculate total size
+      // Calculate total size with better error handling
       let totalSize = 0;
       if (files.length > 0) {
         for (const file of files) {
@@ -2746,7 +2747,16 @@ app.get("/api/posters/cache/stats", (req, res) => {
         }
       }
 
+      // Helper function to format file size
+      const formatFileSize = (bytes) => {
+        if (!bytes || bytes === 0) return "0 Bytes";
+        const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
+      };
+
       res.json({
+        success: true,
         count: files.length,
         size: totalSize,
         sizeFormatted: totalSize > 0 ? formatFileSize(totalSize) : "0 Bytes",
