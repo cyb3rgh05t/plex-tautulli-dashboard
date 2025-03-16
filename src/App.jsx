@@ -269,44 +269,66 @@ const App = () => {
                 <AppRoutes />
                 <Toaster
                   position="top-right"
+                  gutter={12}
+                  containerStyle={{
+                    top: 60,
+                  }}
                   toastOptions={{
-                    duration: 4000, // Increased for better visibility
+                    duration: 5000,
+                    className: "toast-theme",
                     style: {
-                      background: `rgba(var(--accent-color), 0.55)`,
+                      background: "rgba(17, 24, 39, 0.85)",
                       color: "#fff",
-                      border: `1px solid rgba(var(--accent-color), 0.5)`,
-                      backdropFilter: "blur(10px)",
-                      boxShadow: `0 0 10px rgba(var(--accent-color), 0.5), 0 0 20px rgba(var(--accent-color), 0.3)`,
-                      textShadow:
-                        "1px 1px 2px rgba(0,0,0,0.5), 0 0 5px rgba(0,0,0,0.3)",
+                      maxWidth: "380px",
+                      padding: "10px 16px",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      fontWeight: "500",
+                      border: "1px solid rgba(var(--accent-color), 0.3)",
+                      backdropFilter: "blur(8px)",
+                      boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
                     },
+                    // Default toast styling
                     success: {
-                      style: {
-                        background: `rgba(var(--accent-color), 0.55)`,
-                        border: `1px solid rgba(var(--accent-color), 0.7)`,
-                        backdropFilter: "blur(10px)",
-                        boxShadow: `0 0 10px rgba(var(--accent-color), 0.5), 0 0 20px rgba(var(--accent-color), 0.3)`,
-                        textShadow:
-                          "1px 1px 2px rgba(0,0,0,0.5), 0 0 5px rgba(0,0,0,0.3)",
-                      },
+                      duration: 5000,
                       iconTheme: {
                         primary: "#10B981",
-                        secondary: "#fff",
+                        secondary: "#FFFFFF",
+                      },
+                      style: {
+                        background: "rgba(17, 24, 39, 0.9)",
+                        borderLeft: "4px solid #10B981", // Green accent
                       },
                     },
                     error: {
-                      style: {
-                        background: "rgba(232, 12, 11, 0.85)",
-                        border: "1px solid rgba(232, 12, 11, 0.7)",
-                        backdropFilter: "blur(10px)",
-                        boxShadow:
-                          "0 0 10px rgba(232, 12, 11, 0.5), 0 0 20px rgba(232, 12, 11, 0.3)",
-                        textShadow:
-                          "1px 1px 2px rgba(0,0,0,0.5), 0 0 5px rgba(0,0,0,0.3)",
-                      },
+                      duration: 6000, // Longer duration for errors
                       iconTheme: {
                         primary: "#EF4444",
-                        secondary: "#fff",
+                        secondary: "#FFFFFF",
+                      },
+                      style: {
+                        background: "rgba(17, 24, 39, 0.9)",
+                        borderLeft: "4px solid #EF4444", // Red accent
+                      },
+                    },
+                    info: {
+                      iconTheme: {
+                        primary: "rgb(var(--accent-color))",
+                        secondary: "#FFFFFF",
+                      },
+                      style: {
+                        background: "rgba(17, 24, 39, 0.9)",
+                        borderLeft: "4px solid rgba(var(--accent-color), 1)",
+                      },
+                    },
+                    loading: {
+                      iconTheme: {
+                        primary: "rgb(var(--accent-color))",
+                        secondary: "#FFFFFF",
+                      },
+                      style: {
+                        background: "rgba(17, 24, 39, 0.9)",
+                        borderLeft: "4px solid rgba(var(--accent-color), 1)",
                       },
                     },
                   }}

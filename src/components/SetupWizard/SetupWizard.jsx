@@ -13,6 +13,7 @@ import LoadingScreen from "../common/LoadingScreen";
 import ThemedButton from "../common/ThemedButton";
 import ThemeToggle from "../common/ThemeToggle";
 import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
+import axios from "axios";
 
 const API_BASE_URL = "";
 
@@ -54,6 +55,41 @@ const SetupWizard = () => {
   const [isRestoreMode, setIsRestoreMode] = useState(false);
   const [isRestoreLoading, setIsRestoreLoading] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Check for existing sections on mount
+  useEffect(() => {
+    const checkExistingSections = async () => {
+      try {
+        // Check if sections already exist - if they do, we can skip setup
+        const sectionsResponse = await axios.get("/api/sections");
+        const sections = sectionsResponse.data.sections || [];
+
+        if (sections.length > 0) {
+          logInfo(`Found ${sections.length} existing sections`);
+
+          // Check if we already have poster cache
+          try {
+            const posterStatsResponse = await axios.get(
+              "/api/posters/cache/stats"
+            );
+            const posterCount = posterStatsResponse.data.count || 0;
+
+            if (posterCount > 0) {
+              logInfo(`Found ${posterCount} cached posters`);
+            }
+          } catch (error) {
+            logWarn("Error checking poster cache stats:", error);
+          }
+        } else {
+          logInfo("No existing sections found. Setup will be required.");
+        }
+      } catch (error) {
+        logWarn("Error checking existing sections:", error);
+      }
+    };
+
+    checkExistingSections();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -103,19 +139,44 @@ const SetupWizard = () => {
       // Update config to trigger the app to recognize we're configured
       await updateConfig(formData);
 
-      // Start preloading dashboard data
+      // Check for saved sections
+      let hasSavedSections = false;
       try {
-        await Promise.all([
-          queryClient.prefetchQuery("plexActivities"),
-          queryClient.prefetchQuery("recentlyAdded"),
-          queryClient.prefetchQuery("libraries"),
-        ]);
+        const sectionsResponse = await axios.get("/api/sections");
+        if (
+          sectionsResponse.data.sections &&
+          sectionsResponse.data.sections.length > 0
+        ) {
+          hasSavedSections = true;
+        }
       } catch (error) {
-        logError("Error preloading data:", error);
+        logWarn("Error checking for saved sections:", error);
       }
 
-      // Navigate to the main dashboard
-      navigate("/activities");
+      // If we have saved sections, we can start the application with preloading
+      // otherwise we need to navigate to the libraries page to let the user configure sections
+      if (hasSavedSections) {
+        // Start preloading dashboard data
+        try {
+          await Promise.all([
+            queryClient.prefetchQuery("plexActivities"),
+            queryClient.prefetchQuery("recentlyAdded"),
+            queryClient.prefetchQuery("libraries"),
+          ]);
+        } catch (error) {
+          logError("Error preloading data:", error);
+        }
+
+        // Navigate to the main dashboard
+        navigate("/activities");
+      } else {
+        // Go to the libraries page to set up sections
+        toast.success("Please select library sections to display", {
+          duration: 4000,
+        });
+
+        navigate("/libraries");
+      }
     } catch (err) {
       toast.error(err.message || "Setup failed. Please check your settings.", {
         style: {

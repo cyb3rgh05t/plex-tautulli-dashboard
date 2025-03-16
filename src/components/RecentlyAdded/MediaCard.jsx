@@ -4,7 +4,7 @@ import * as Icons from "lucide-react";
 import MediaModal from "./MediaModal";
 import axios from "axios";
 import { useQueryClient } from "react-query";
-import * as tmdbService from "../../services/tmdbService";
+import * as posterCacheService from "../../services/posterCacheService";
 
 // Global cache for in-memory poster URLs to prevent flickering on tab changes
 const posterUrlCache = new Map();
@@ -22,7 +22,6 @@ const MediaCard = ({ media }) => {
   const [imageCacheKey, setImageCacheKey] = useState(Date.now());
   const [isRefreshingPoster, setIsRefreshingPoster] = useState(false);
   const [posterUrl, setPosterUrl] = useState("");
-  const [useTmdbPoster, setUseTmdbPoster] = useState(false);
   const queryClient = useQueryClient();
   const posterUrlInitialized = useRef(false);
   const isMounted = useRef(true);
@@ -37,34 +36,6 @@ const MediaCard = ({ media }) => {
       : "unknown";
   }, [media.media_type]);
 
-  // Check if we have this image pre-cached in the DOM
-  const isImageCached = useCallback(
-    (url) => {
-      // First check our in-memory cache
-      if (
-        posterUrlCache.has(cacheKey) &&
-        posterUrlCache.get(cacheKey) === url
-      ) {
-        return true;
-      }
-
-      // Then check if the browser has cached the image
-      if (!url) return false;
-
-      // For TMDB URLs, we can be confident they're cached
-      if (url.includes("image.tmdb.org")) {
-        return true;
-      }
-
-      // For other URLs, we can check if the browser has them cached
-      const img = new Image();
-      const isCached = img.complete;
-      img.src = "";
-      return isCached;
-    },
-    [cacheKey]
-  );
-
   // Initialize poster URL on mount - with improved initialization flag
   useEffect(() => {
     // Set up cleanup
@@ -74,7 +45,6 @@ const MediaCard = ({ media }) => {
     if (posterUrlCache.has(cacheKey)) {
       const cachedUrl = posterUrlCache.get(cacheKey);
       setPosterUrl(cachedUrl);
-      setUseTmdbPoster(cachedUrl.includes("image.tmdb.org"));
       setImageLoading(false);
       posterUrlInitialized.current = true;
       return;
@@ -86,163 +56,67 @@ const MediaCard = ({ media }) => {
     // Mark as initialized
     posterUrlInitialized.current = true;
 
-    let initialPosterUrl = "";
-    let usesTmdb = false;
+    // Use the cached poster URL from our service
+    const posterPath = posterCacheService.getCachedPosterUrl(media.rating_key);
 
-    // Initialize with TMDB poster if available
-    if (media.tmdb_poster_url) {
-      initialPosterUrl = media.tmdb_poster_url;
-      usesTmdb = true;
-    }
-    // Check local TMDB cache next
-    else if (media.rating_key) {
-      const cachedTmdbPoster = tmdbService.getCachedPosterUrl(media.rating_key);
-      if (cachedTmdbPoster) {
-        initialPosterUrl = cachedTmdbPoster;
-        usesTmdb = true;
-      }
-    }
-
-    // Fall back to Tautulli poster if no TMDB poster is available
-    if (!initialPosterUrl) {
-      let thumbPath = null;
-      const mediaType = getMediaType();
-
-      // Get appropriate thumb path based on media type
-      switch (mediaType) {
-        case "movie":
-          thumbPath = media.thumb || media.parent_thumb;
-          break;
-        case "show":
-          thumbPath = media.thumb || media.parent_thumb;
-          break;
-        case "episode":
-          thumbPath = media.grandparent_thumb || media.thumb;
-          break;
-        case "season":
-          thumbPath = media.grandparent_thumb || media.thumb;
-          break;
-        case "artist":
-          thumbPath = media.thumb;
-          break;
-        case "album":
-          thumbPath = media.thumb || media.parent_thumb;
-          break;
-        case "track":
-          thumbPath =
-            media.grandparent_thumb || media.parent_thumb || media.thumb;
-          break;
-        default:
-          thumbPath =
-            media.thumb || media.parent_thumb || media.grandparent_thumb;
-      }
+    if (posterPath) {
+      setPosterUrl(posterPath);
+      // Also update our in-memory cache
+      posterUrlCache.set(cacheKey, posterPath);
+      setImageLoading(false);
+    } else {
+      // If no cached poster, try to get thumb path and cache it
+      const thumbPath = posterCacheService.getAppropriateThumbPath(media);
 
       if (thumbPath && media.apiKey) {
-        initialPosterUrl = `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
+        // Set temporary URL to Tautulli proxy while we cache it
+        const tempUrl = `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
           thumbPath
         )}&apikey=${media.apiKey}&_t=${imageCacheKey}`;
+
+        setPosterUrl(tempUrl);
+
+        // Also request server to cache this poster for next time
+        posterCacheService
+          .cachePoster(
+            media.rating_key,
+            thumbPath,
+            media.apiKey,
+            getMediaType()
+          )
+          .then((success) => {
+            if (success && isMounted.current) {
+              // Update with the cached URL
+              const cachedUrl = posterCacheService.getCachedPosterUrl(
+                media.rating_key
+              );
+              setPosterUrl(cachedUrl);
+              posterUrlCache.set(cacheKey, cachedUrl);
+            }
+          })
+          .catch((error) => {
+            logWarn(
+              `Failed to cache poster for ${media.title || "unknown"}:`,
+              error
+            );
+          });
       } else {
         // No valid poster source
         setImageError(true);
       }
     }
 
-    // Update state with our findings
-    if (initialPosterUrl) {
-      setPosterUrl(initialPosterUrl);
-      setUseTmdbPoster(usesTmdb);
-
-      // Also store in our global cache
-      posterUrlCache.set(cacheKey, initialPosterUrl);
-
-      // For TMDB URLs we can confidently set loading to false immediately
-      if (usesTmdb && isImageCached(initialPosterUrl)) {
-        setImageLoading(false);
-      } else {
-        // Pre-load the image to check if it's valid
-        const img = new Image();
-        img.onload = () => {
-          if (isMounted.current) {
-            setImageLoading(false);
-          }
-        };
-        img.onerror = () => {
-          if (isMounted.current) {
-            setImageError(true);
-            setImageLoading(false);
-            // If initial poster fails, try fallback immediately
-            if (usesTmdb) {
-              // TMDB poster failed, try Tautulli
-              fetchFallbackPoster();
-            } else {
-              // Try fetching TMDB as fallback
-              fetchTmdbPoster();
-            }
-          }
-        };
-        img.src = initialPosterUrl;
-
-        // Quick check - if image is already complete, handle immediately
-        if (img.complete) {
-          setImageLoading(false);
-        }
-      }
-    } else {
-      setImageError(true);
-    }
-
     // Cleanup function
     return () => {
       isMounted.current = false;
     };
-  }, [media, getMediaType, cacheKey, isImageCached]);
-
-  // Fallback to Tautulli poster if TMDB fails
-  const fetchFallbackPoster = useCallback(() => {
-    let thumbPath = null;
-    const mediaType = getMediaType();
-
-    // Get appropriate thumb path based on media type
-    switch (mediaType) {
-      case "movie":
-        thumbPath = media.thumb || media.parent_thumb;
-        break;
-      case "show":
-        thumbPath = media.thumb || media.parent_thumb;
-        break;
-      case "episode":
-        thumbPath = media.grandparent_thumb || media.thumb;
-        break;
-      case "season":
-        thumbPath = media.grandparent_thumb || media.thumb;
-        break;
-      default:
-        thumbPath =
-          media.thumb || media.parent_thumb || media.grandparent_thumb;
-    }
-
-    if (thumbPath && media.apiKey) {
-      const tautulliUrl = `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
-        thumbPath
-      )}&apikey=${media.apiKey}&_t=${Date.now()}`;
-
-      setPosterUrl(tautulliUrl);
-      setUseTmdbPoster(false);
-      setImageError(false);
-      setImageLoading(true);
-
-      // Update our cache
-      posterUrlCache.set(cacheKey, tautulliUrl);
-    }
-  }, [media, getMediaType, cacheKey]);
+  }, [media, getMediaType, cacheKey, media.apiKey, imageCacheKey]);
 
   // Function to create minimal metadata for caching
   const createMinimalMetadata = (metadata) => {
     // Only store essential fields to keep cache size small
     return {
       rating_key: metadata.rating_key,
-      guids: metadata.guids,
-      grandparent_guids: metadata.grandparent_guids,
       media_type: metadata.media_type,
       parent_media_index: metadata.parent_media_index,
       media_index: metadata.media_index,
@@ -255,98 +129,9 @@ const MediaCard = ({ media }) => {
       thumb: metadata.thumb,
       parent_thumb: metadata.parent_thumb,
       grandparent_thumb: metadata.grandparent_thumb,
-      tmdb_poster_url: metadata.tmdb_poster_url,
       // Don't include large properties like summary, full metadata, etc.
     };
   };
-
-  // Function to fetch TMDB poster if not already cached
-  const fetchTmdbPoster = useCallback(async () => {
-    try {
-      // Skip if we already have a TMDB poster or no rating key
-      if (useTmdbPoster || !media.rating_key) return;
-
-      // Check if we have the full metadata already
-      let metadata = media;
-      let needsMetadata = !media.guids && !media.grandparent_guids;
-
-      // If we don't have full metadata, fetch it
-      if (needsMetadata) {
-        // Check if we have cached metadata in the query client
-        const cachedItem = queryClient.getQueryData([
-          `media:${media.rating_key}`,
-        ]);
-
-        if (cachedItem && (cachedItem.guids || cachedItem.grandparent_guids)) {
-          metadata = cachedItem;
-        } else {
-          // Fetch metadata from API
-          const response = await axios.get(`/api/tautulli/api/v2`, {
-            params: {
-              apikey: media.apiKey,
-              cmd: "get_metadata",
-              rating_key: media.rating_key,
-            },
-            timeout: 5000,
-          });
-
-          if (response.data?.response?.result === "success") {
-            metadata = response.data.response.data;
-
-            // Cache the metadata - limiting size to avoid cache issues
-            queryClient.setQueryData(
-              [`media:${media.rating_key}`],
-              createMinimalMetadata(metadata)
-            );
-          }
-        }
-      }
-
-      // Get poster based on media type
-      const tmdbPoster = await tmdbService.getPosterByMediaType(
-        getMediaType(),
-        metadata
-      );
-
-      if (tmdbPoster && isMounted.current) {
-        // Cache the poster URL
-        tmdbService.cachePosterUrl(media.rating_key, tmdbPoster);
-        setPosterUrl(tmdbPoster);
-        setUseTmdbPoster(true);
-        setImageError(false);
-        setImageLoading(false); // Set loading to false immediately for TMDB posters
-
-        // Update our cache
-        posterUrlCache.set(cacheKey, tmdbPoster);
-
-        // Update the cached metadata to include TMDB poster
-        const cachedItem = queryClient.getQueryData([
-          `media:${media.rating_key}`,
-        ]);
-        if (cachedItem) {
-          queryClient.setQueryData([`media:${media.rating_key}`], {
-            ...createMinimalMetadata(cachedItem),
-            tmdb_poster_url: tmdbPoster,
-          });
-        }
-
-        logDebug(`Found TMDB poster for ${media.title || "unknown item"}`);
-      }
-    } catch (error) {
-      logWarn(
-        `Failed to fetch TMDB poster for ${media.title || "unknown"}:`,
-        error
-      );
-    }
-  }, [media, getMediaType, queryClient, useTmdbPoster, cacheKey]);
-
-  // Try to fetch TMDB poster if we're not using one already
-  useEffect(() => {
-    // Only try to fetch a TMDB poster if we have a rating key and aren't already using a TMDB poster
-    if (!useTmdbPoster && media.rating_key) {
-      fetchTmdbPoster();
-    }
-  }, [fetchTmdbPoster, media.rating_key, useTmdbPoster]);
 
   // Function to refresh just this poster
   const refreshPoster = async (e) => {
@@ -365,93 +150,97 @@ const MediaCard = ({ media }) => {
       setImageError(false);
       setImageLoading(true);
 
-      // Remove cached TMDB poster
-      if (media.rating_key) {
-        // Clear local TMDB cache for this item
-        const cachedPoster = tmdbService.getCachedPosterUrl(media.rating_key);
-        if (cachedPoster) {
-          // Clear just this poster from cache
-          const cache = JSON.parse(
-            localStorage.getItem("tmdbPosterCache") || "{}"
-          );
-          delete cache[media.rating_key];
-          localStorage.setItem("tmdbPosterCache", JSON.stringify(cache));
-        }
+      // Get metadata to find thumb path
+      let thumbPath = null;
 
-        // Clear cached TMDB poster in any cached metadata
-        const cachedItem = queryClient.getQueryData([
-          `media:${media.rating_key}`,
-        ]);
-        if (cachedItem && cachedItem.tmdb_poster_url) {
-          queryClient.setQueryData([`media:${media.rating_key}`], {
-            ...createMinimalMetadata(cachedItem),
-            tmdb_poster_url: null,
+      try {
+        // First check if we can get it from current data
+        thumbPath = posterCacheService.getAppropriateThumbPath(media);
+
+        if (!thumbPath) {
+          // If not, fetch metadata from API
+          const response = await axios.get(`/api/tautulli/api/v2`, {
+            params: {
+              apikey: media.apiKey,
+              cmd: "get_metadata",
+              rating_key: media.rating_key,
+            },
           });
+
+          if (response.data?.response?.result === "success") {
+            const metadata = response.data.response.data;
+
+            // Update the cached metadata
+            queryClient.setQueryData(
+              [`media:${media.rating_key}`],
+              createMinimalMetadata(metadata)
+            );
+
+            // Get appropriate thumb path
+            thumbPath = posterCacheService.getAppropriateThumbPath(metadata);
+          }
         }
-
-        // Reset our state
-        setUseTmdbPoster(false);
-
-        // Remove from our cache
-        posterUrlCache.delete(cacheKey);
-      }
-
-      // If the image is in the metadata cache on the server, refresh it
-      if (media.rating_key) {
-        await axios.post(`/api/refresh-posters`, {
-          mediaId: media.rating_key,
-        });
-
-        // Also request a clear cache from the API
-        await axios.get("/api/clear-image-cache", {
-          params: {
-            source: `media-${media.rating_key}`,
-            t: newCacheKey,
-          },
-        });
-      }
-
-      // Re-initialize with Tautulli URL first
-      const mediaType = getMediaType();
-      let thumbPath;
-
-      // Get appropriate thumb path based on media type
-      switch (mediaType) {
-        case "movie":
-          thumbPath = media.thumb || media.parent_thumb;
-          break;
-        case "show":
-          thumbPath = media.thumb || media.parent_thumb;
-          break;
-        case "episode":
-          thumbPath = media.grandparent_thumb || media.thumb;
-          break;
-        case "season":
-          thumbPath = media.grandparent_thumb || media.thumb;
-          break;
-        default:
-          thumbPath =
-            media.thumb || media.parent_thumb || media.grandparent_thumb;
+      } catch (metadataError) {
+        logError(`Error fetching metadata for poster refresh:`, metadataError);
       }
 
       if (thumbPath && media.apiKey) {
-        const tautulliUrl = `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
-          thumbPath
-        )}&apikey=${media.apiKey}&_t=${newCacheKey}`;
+        // Clear existing cache
+        await axios.post(`/api/posters/cache/clear/${media.rating_key}`);
 
-        setPosterUrl(tautulliUrl);
-        posterUrlCache.set(cacheKey, tautulliUrl);
+        // Cache new poster
+        await posterCacheService.cachePoster(
+          media.rating_key,
+          thumbPath,
+          media.apiKey,
+          getMediaType()
+        );
+
+        // Get new cached URL
+        const newPosterUrl = posterCacheService.getCachedPosterUrl(
+          media.rating_key
+        );
+        setPosterUrl(newPosterUrl);
+        posterUrlCache.set(cacheKey, newPosterUrl);
+
+        logInfo(`Refreshed poster for ${media.title || "media item"}`);
+      } else {
+        // Fallback to Tautulli proxy if cache fails
+        const mediaType = getMediaType();
+
+        // Get appropriate thumb path based on media type
+        switch (mediaType) {
+          case "movie":
+            thumbPath = media.thumb || media.parent_thumb;
+            break;
+          case "show":
+            thumbPath = media.thumb || media.parent_thumb;
+            break;
+          case "episode":
+            thumbPath = media.grandparent_thumb || media.thumb;
+            break;
+          case "season":
+            thumbPath = media.grandparent_thumb || media.thumb;
+            break;
+          default:
+            thumbPath =
+              media.thumb || media.parent_thumb || media.grandparent_thumb;
+        }
+
+        if (thumbPath && media.apiKey) {
+          const fallbackUrl = `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
+            thumbPath
+          )}&apikey=${media.apiKey}&_t=${newCacheKey}`;
+
+          setPosterUrl(fallbackUrl);
+          setImageLoading(false);
+        } else {
+          setImageError(true);
+        }
       }
-
-      // Try to get a fresh TMDB poster
-      setTimeout(() => {
-        fetchTmdbPoster();
-      }, 500);
-
-      // Log the refresh
-      logInfo(`Refreshed poster for ${media.title || "media item"}`);
     } catch (error) {
       logError("Failed to refresh poster", error);
+      setImageError(true);
     } finally {
       // After a short delay, turn off the refreshing indicator
       setTimeout(() => {
@@ -476,7 +265,7 @@ const MediaCard = ({ media }) => {
       return;
     }
 
-    // If not already fetching metadata for TMDB, fetch it for resolution
+    // If not already fetching metadata for resolution
     if (!media.guids && !media.grandparent_guids) {
       const controller = new AbortController();
       let isComponentMounted = true;
@@ -665,12 +454,9 @@ const MediaCard = ({ media }) => {
                 onError={() => {
                   setImageError(true);
                   setImageLoading(false);
-                  // Try fallback if image fails to load
-                  if (useTmdbPoster) {
-                    fetchFallbackPoster();
-                  } else {
-                    fetchTmdbPoster();
-                  }
+
+                  // If poster fails to load, try refreshing it
+                  refreshPoster();
                 }}
               />
 
@@ -720,17 +506,7 @@ const MediaCard = ({ media }) => {
               {relativeAddedTime}
             </div>
 
-            {/* TMDB Source Badge - only show for TMDB posters */}
-            {useTmdbPoster && !imageError && (
-              <div
-                className="px-2 py-1 bg-gray-900/70 backdrop-blur-sm rounded-lg 
-                  border border-accent/20 text-gray-300 text-xs font-medium"
-              >
-                TMDB
-              </div>
-            )}
-
-            {/* Resolution Badge */}
+            {/* Resolution Badge
             {resolution && (
               <div
                 className="px-2 py-1 bg-gray-900/70 backdrop-blur-sm rounded-lg 
@@ -739,6 +515,7 @@ const MediaCard = ({ media }) => {
                 {resolution}
               </div>
             )}
+            */}
 
             {media.rating && (
               <div

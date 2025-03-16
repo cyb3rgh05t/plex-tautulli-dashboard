@@ -7,7 +7,7 @@ import ThemedCard from "../../components/common/ThemedCard";
 import ThemedTabButton from "../../components/common/ThemedTabButton";
 import { useTheme } from "../../context/ThemeContext";
 import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
-import * as tmdbService from "../../services/tmdbService";
+import * as posterCacheService from "../../services/posterCacheService";
 
 // Enhanced cache stats card with theme integration
 const CacheStatCard = ({
@@ -59,7 +59,7 @@ const CacheManager = () => {
     history: { size: 0, label: "User History", ttl: "10 minutes" },
     media: { size: 0, label: "Recently Added", ttl: "5 minutes" },
     metadata: { size: 0, label: "Metadata", ttl: "30 minutes" },
-    tmdb: { size: 0, label: "TMDB Posters", ttl: "7 days" },
+    posters: { size: 0, label: "Media Posters", ttl: "Indefinite" },
     totalSize: 0,
     lastRefreshed: null,
     lastCleared: null,
@@ -78,7 +78,8 @@ const CacheManager = () => {
       let historyCacheSize = 0;
       let mediaCacheSize = 0;
       let metadataCacheSize = 0;
-      let tmdbCacheSize = 0;
+      let posterCacheSize = 0;
+      let posterCacheSizeBytes = 0;
 
       // 1. Get user history cache stats from the users endpoint
       try {
@@ -151,20 +152,19 @@ const CacheManager = () => {
         metadataCacheSize = 10;
       }
 
-      // 4. Get TMDB poster cache size from localStorage
+      // 4. Get poster cache stats from the API
       try {
-        const tmdbCache = JSON.parse(
-          localStorage.getItem("tmdbPosterCache") || "{}"
-        );
-        tmdbCacheSize = Object.keys(tmdbCache).length;
-      } catch (err) {
-        logError("Failed to read TMDB poster cache:", err);
-        tmdbCacheSize = 0;
+        const posterStatsResponse = await axios.get("/api/posters/cache/stats");
+        posterCacheSize = posterStatsResponse.data.count || 0;
+        posterCacheSizeBytes = posterStatsResponse.data.size || 0;
+      } catch (error) {
+        logError("Failed to fetch poster cache stats:", error);
+        posterCacheSize = 0;
       }
 
       // Update state with combined stats
       const totalSize =
-        historyCacheSize + mediaCacheSize + metadataCacheSize + tmdbCacheSize;
+        historyCacheSize + mediaCacheSize + metadataCacheSize + posterCacheSize;
 
       setCacheStats({
         history: {
@@ -182,10 +182,12 @@ const CacheManager = () => {
           label: "Metadata",
           ttl: "30 minutes",
         },
-        tmdb: {
-          size: tmdbCacheSize,
-          label: "TMDB Posters",
-          ttl: "7 days",
+        posters: {
+          size: posterCacheSize,
+          label: "Media Posters",
+          ttl: "Indefinite",
+          sizeBytes: posterCacheSizeBytes,
+          sizeFormatted: formatFileSize(posterCacheSizeBytes),
         },
         totalSize,
         lastRefreshed: new Date().toISOString(),
@@ -203,6 +205,15 @@ const CacheManager = () => {
     }
   };
 
+  // Helper function to format file size
+  const formatFileSize = (bytes) => {
+    if (!bytes || bytes === 0) return "0 Bytes";
+
+    const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
+  };
+
   // Clear cache using the proper API endpoints
   const clearCache = async (type = "all") => {
     setLoading(true);
@@ -216,13 +227,15 @@ const CacheManager = () => {
         endpoint = `/api/clear-cache`;
         response = await axios.post(endpoint);
 
+        // Also clear poster cache
+        await axios.post("/api/posters/cache/clear").catch((error) => {
+          logWarn("Failed to clear poster cache:", error);
+        });
+
         // Also clear image cache for all cache types
         await axios.get("/api/clear-image-cache").catch((error) => {
           logWarn("Failed to clear image cache:", error);
         });
-
-        // Clear TMDB poster cache
-        tmdbService.clearPosterCache();
       } else if (type === "history") {
         // Use the backward-compatible endpoint specifically for user history cache
         endpoint = `/api/users/clear-cache`;
@@ -236,13 +249,15 @@ const CacheManager = () => {
         await axios.get("/api/clear-image-cache").catch((error) => {
           logWarn("Failed to clear image cache for media cache:", error);
         });
-      } else if (type === "tmdb") {
-        // Clear TMDB poster cache
-        tmdbService.clearPosterCache();
+      } else if (type === "posters") {
+        // Clear poster cache
+        response = await axios.post("/api/posters/cache/clear");
         // Set a successful response
-        response = {
-          data: { success: true, message: "TMDB poster cache cleared" },
-        };
+        if (!response.data) {
+          response = {
+            data: { success: true, message: "Poster cache cleared" },
+          };
+        }
       } else {
         // Use type-specific endpoint for other cache types
         endpoint = `/api/clear-cache/${type}`;
@@ -256,7 +271,12 @@ const CacheManager = () => {
             history: { ...prev.history, size: 0 },
             media: { ...prev.media, size: 0 },
             metadata: { ...prev.metadata, size: 0 },
-            tmdb: { ...prev.tmdb, size: 0 },
+            posters: {
+              ...prev.posters,
+              size: 0,
+              sizeBytes: 0,
+              sizeFormatted: "0 Bytes",
+            },
             totalSize: 0,
             lastCleared: new Date().toISOString(),
             lastRefreshed: prev.lastRefreshed,
@@ -268,10 +288,12 @@ const CacheManager = () => {
               detail: { timestamp: Date.now() },
             })
           );
-        } else if (type === "tmdb") {
+        } else if (type === "posters") {
           setCacheStats((prev) => {
             const newStats = { ...prev };
-            newStats.tmdb.size = 0;
+            newStats.posters.size = 0;
+            newStats.posters.sizeBytes = 0;
+            newStats.posters.sizeFormatted = "0 Bytes";
             newStats.totalSize =
               newStats.history.size +
               newStats.media.size +
@@ -279,6 +301,13 @@ const CacheManager = () => {
             newStats.lastCleared = new Date().toISOString();
             return newStats;
           });
+
+          // Invalidate poster cache URLs
+          window.dispatchEvent(
+            new CustomEvent("posterCacheCleared", {
+              detail: { timestamp: Date.now() },
+            })
+          );
         } else if (type === "media") {
           setCacheStats((prev) => {
             const newStats = { ...prev };
@@ -287,7 +316,7 @@ const CacheManager = () => {
               newStats.history.size +
               newStats.media.size +
               newStats.metadata.size +
-              newStats.tmdb.size;
+              newStats.posters.size;
             newStats.lastCleared = new Date().toISOString();
             return newStats;
           });
@@ -306,7 +335,7 @@ const CacheManager = () => {
               newStats.history.size +
               newStats.media.size +
               newStats.metadata.size +
-              newStats.tmdb.size;
+              newStats.posters.size;
             newStats.lastCleared = new Date().toISOString();
             return newStats;
           });
@@ -349,7 +378,7 @@ const CacheManager = () => {
       history: Icons.Users,
       media: Icons.Film,
       metadata: Icons.FileText,
-      tmdb: Icons.Image,
+      posters: Icons.Image,
     };
 
     return {
@@ -358,6 +387,8 @@ const CacheManager = () => {
       size: cacheData?.size || 0,
       ttl: cacheData?.ttl || "Unknown",
       icon: cacheIcons[activeTab] || Icons.HelpCircle,
+      sizeFormatted: cacheData?.sizeFormatted,
+      sizeBytes: cacheData?.sizeBytes,
     };
   };
 
@@ -370,8 +401,8 @@ const CacheManager = () => {
         return "Caches recently added media lists to improve dashboard performance";
       case "metadata":
         return "Stores media metadata like resolution, quality, and other attributes";
-      case "tmdb":
-        return "Stores TMDB poster URLs for improved image quality and faster loading";
+      case "posters":
+        return "Stores media posters locally for faster loading and reduced server load";
       default:
         return "Combined caching system for all data types";
     }
@@ -456,13 +487,13 @@ const CacheManager = () => {
           </ThemedTabButton>
 
           <ThemedTabButton
-            active={activeTab === "tmdb"}
-            onClick={() => setActiveTab("tmdb")}
+            active={activeTab === "posters"}
+            onClick={() => setActiveTab("posters")}
             icon={Icons.Image}
           >
-            TMDB Posters
+            Posters
             <span className="ml-2 px-1.5 py-0.5 text-xs bg-accent-light/30 rounded-full">
-              {cacheStats.tmdb.size}
+              {cacheStats.posters.size}
             </span>
           </ThemedTabButton>
         </div>
@@ -490,6 +521,11 @@ const CacheManager = () => {
               {activeCache.size}
             </div>
             <div className="text-sm text-theme-muted">Items cached</div>
+            {activeCache.sizeFormatted && (
+              <div className="mt-1 text-xs text-accent-base/80">
+                {activeCache.sizeFormatted}
+              </div>
+            )}
           </div>
         </div>
 
@@ -618,21 +654,23 @@ const CacheManager = () => {
               <div className="bg-gray-800/40 border border-accent/10 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <Icons.Image size={14} className="text-accent-base" />
-                  <span className="text-white font-medium">
-                    TMDB Poster Cache
-                  </span>
+                  <span className="text-white font-medium">Poster Cache</span>
                 </div>
                 <p className="text-xs text-theme-muted">
-                  Stores high-quality movie and TV show posters from TMDB
+                  Stores media posters locally for faster loading and better
+                  performance
                 </p>
-                <div className="mt-2 text-xs text-accent-base">TTL: 7 days</div>
+                <div className="mt-2 text-xs text-accent-base">
+                  TTL: Indefinite
+                </div>
               </div>
             </div>
 
             <p className="mt-3">
               Caches automatically expire after their TTL (Time To Live), but
-              you can manually clear them to ensure the freshest data. Active
-              users always bypass the cache to ensure real-time data.
+              you can manually clear them to ensure the freshest data. Poster
+              cache is stored permanently but unused posters are cleaned up
+              automatically.
             </p>
           </div>
         </div>
@@ -651,7 +689,7 @@ const CacheManager = () => {
                   /api/clear-image-cache
                 </code>
                 <code className="bg-gray-900/50 px-2 py-1 rounded text-accent-base font-mono text-xs inline-block border border-accent/10">
-                  /api/clear-cache/:type
+                  /api/posters/cache/clear
                 </code>
                 <code className="bg-gray-900/50 px-2 py-1 rounded text-accent-base font-mono text-xs inline-block border border-accent/10">
                   /api/users/clear-cache
@@ -660,8 +698,8 @@ const CacheManager = () => {
               <p className="text-xs text-gray-400">
                 Note: For media and metadata caches, the displayed counts are
                 estimates since the API doesn't provide exact counts. History
-                cache size is accurate. TMDB poster cache is stored locally in
-                your browser.
+                cache size is accurate. Poster cache is stored on the server and
+                improves load times significantly.
               </p>
             </div>
           </div>

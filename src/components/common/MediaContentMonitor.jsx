@@ -4,7 +4,7 @@ import { useConfig } from "../../context/ConfigContext";
 import { logInfo, logDebug, logError } from "../../utils/logger";
 import axios from "axios";
 import toast from "react-hot-toast";
-import * as tmdbService from "../../services/tmdbService";
+import * as posterCacheService from "../../services/posterCacheService";
 
 /**
  * This component monitors for newly added media in the background.
@@ -24,6 +24,9 @@ const MediaContentMonitor = () => {
       sections: {},
     }
   );
+
+  // Keep track of already processed item rating keys to avoid duplicates
+  const processedItems = useRef(new Set());
 
   // Function to check sections for new content
   const checkForNewContent = async () => {
@@ -78,7 +81,7 @@ const MediaContentMonitor = () => {
               apikey: config.tautulliApiKey,
               cmd: "get_recently_added",
               section_id: sectionId,
-              count: 5, // Just get the most recent items
+              count: 10, // Get extra items to ensure we have enough
             },
             timeout: 5000,
           });
@@ -90,17 +93,16 @@ const MediaContentMonitor = () => {
             // Update the timestamp for this section
             timestamps.current.sections[sectionId] = Date.now();
 
-            // If we have new items
+            // If we have new items, check for genuinely new content
             if (recentItems.length > 0) {
               const newestItem = recentItems[0];
 
-              // If we don't have any cached data or this is newer than our cached data
+              // If we don't have any cached data, everything is new
               if (
                 !cachedData ||
                 !cachedData.media ||
                 cachedData.media.length === 0
               ) {
-                // We definitely need to update
                 newContentFound = true;
                 newMediaItems.push({
                   ...newestItem,
@@ -113,22 +115,41 @@ const MediaContentMonitor = () => {
                 continue;
               }
 
-              // Compare with cached newest item
-              const cachedNewestItem = cachedData.media[0];
+              // Build a set of existing rating keys for faster lookup
+              const existingRatingKeys = new Set(
+                cachedData.media.map((item) => item.rating_key)
+              );
 
-              // Check if this is really a new item
-              if (newestItem.rating_key !== cachedNewestItem.rating_key) {
+              // Find truly new items by checking if they exist in the cache
+              const genuinelyNewItems = recentItems.filter(
+                (item) => !existingRatingKeys.has(item.rating_key)
+              );
+
+              // Only process items we haven't seen in this session
+              const itemsToProcess = genuinelyNewItems.filter(
+                (item) => !processedItems.current.has(item.rating_key)
+              );
+
+              // Add these to our processed set so we don't create duplicates
+              itemsToProcess.forEach((item) => {
+                processedItems.current.add(item.rating_key);
+              });
+
+              // If we found genuinely new items, add them to our list
+              if (itemsToProcess.length > 0) {
                 newContentFound = true;
-                newMediaItems.push({
-                  ...newestItem,
-                  apiKey: config.tautulliApiKey,
-                  section_id: sectionId,
-                  section_name: sectionName,
-                  media_type: newestItem.media_type,
-                });
-                logInfo(
-                  `New content detected in section "${sectionName}": ${newestItem.title}`
-                );
+                for (const newItem of itemsToProcess) {
+                  newMediaItems.push({
+                    ...newItem,
+                    apiKey: config.tautulliApiKey,
+                    section_id: sectionId,
+                    section_name: sectionName,
+                    media_type: newItem.media_type,
+                  });
+                  logInfo(
+                    `New content detected in section "${sectionName}": ${newItem.title}`
+                  );
+                }
               }
             }
           }
@@ -140,65 +161,101 @@ const MediaContentMonitor = () => {
         }
       }
 
-      // If new content was found, invalidate queries and notify user
-      if (newContentFound) {
-        // Invalidate section queries
-        for (const sectionId of sectionIds) {
-          queryClient.invalidateQueries([`section:${sectionId}`]);
-        }
+      // If new content was found, update cache and notify user
+      if (newContentFound && newMediaItems.length > 0) {
+        // Process each section that has new content
+        for (const newItem of newMediaItems) {
+          try {
+            // Add section ID to the new item
+            const sectionId = newItem.section_id;
 
-        // Pre-cache TMDB posters for new media items
-        if (newMediaItems.length > 0) {
-          logInfo(
-            `Pre-caching TMDB posters for ${newMediaItems.length} new items`
-          );
+            // Get the section cache
+            const sectionCache = queryClient.getQueryData([
+              `section:${sectionId}`,
+            ]);
 
-          // For each new item, try to fetch metadata and get TMDB poster
-          newMediaItems.forEach(async (item) => {
-            try {
-              // Fetch full metadata
-              const metadataResponse = await axios.get(`/api/tautulli/api/v2`, {
-                params: {
-                  apikey: config.tautulliApiKey,
-                  cmd: "get_metadata",
-                  rating_key: item.rating_key,
+            if (sectionCache && sectionCache.media) {
+              // IMPORTANT: Filter out any existing items with the same rating_key
+              // to prevent duplicates
+              const existingItems = sectionCache.media.filter(
+                (item) => item.rating_key !== newItem.rating_key
+              );
+
+              // Create a new media array with the new item first, then the existing items (minus the last one)
+              const updatedMedia = [
+                // Add the new item with apiKey
+                {
+                  ...newItem,
+                  apiKey: config.tautulliApiKey,
                 },
-                timeout: 5000,
+                // Add all existing items except the last one, and filter out any duplicates
+                ...existingItems.slice(0, -1),
+              ];
+
+              // Update the query cache with the new media array
+              queryClient.setQueryData([`section:${sectionId}`], {
+                ...sectionCache,
+                media: updatedMedia,
               });
 
-              if (metadataResponse.data?.response?.result === "success") {
-                const metadata = metadataResponse.data.response.data;
+              logInfo(
+                `Updated section ${sectionId} cache with new item ${newItem.title}`
+              );
+            } else {
+              // If no section cache exists, just invalidate the query to force a refetch
+              queryClient.invalidateQueries([`section:${sectionId}`]);
+            }
 
-                // Use metadata to get TMDB poster
-                const posterUrl = await tmdbService.getPosterByMediaType(
-                  item.media_type?.toLowerCase() || "",
-                  metadata
+            // Get full metadata for the new item
+            const metadataResponse = await axios.get(`/api/tautulli/api/v2`, {
+              params: {
+                apikey: config.tautulliApiKey,
+                cmd: "get_metadata",
+                rating_key: newItem.rating_key,
+              },
+              timeout: 5000,
+            });
+
+            if (metadataResponse.data?.response?.result === "success") {
+              const metadata = metadataResponse.data.response.data;
+
+              // Cache the metadata
+              queryClient.setQueryData([`media:${newItem.rating_key}`], {
+                ...metadata,
+                apiKey: config.tautulliApiKey,
+                complete_metadata: true,
+              });
+
+              // Download poster to cache
+              const thumbPath =
+                posterCacheService.getAppropriateThumbPath(metadata);
+
+              if (thumbPath) {
+                await posterCacheService.cachePoster(
+                  newItem.rating_key,
+                  thumbPath,
+                  config.tautulliApiKey,
+                  newItem.media_type
                 );
 
-                if (posterUrl) {
-                  tmdbService.cachePosterUrl(item.rating_key, posterUrl);
-                  logInfo(`Cached TMDB poster for new item: ${item.title}`);
-
-                  // Update cached metadata
-                  queryClient.setQueryData([`media:${item.rating_key}`], {
-                    ...metadata,
-                    tmdb_poster_url: posterUrl,
-                    apiKey: config.tautulliApiKey,
-                    complete_metadata: true,
-                  });
-                }
+                logInfo(`Cached poster for new item: ${newItem.title}`);
               }
-            } catch (err) {
-              logError(`Error pre-caching TMDB poster for ${item.title}:`, err);
             }
-          });
+          } catch (error) {
+            logError(`Error processing new item ${newItem.title}:`, error);
+          }
         }
 
         // Show notification to user
-        toast.success("New content has been added to your libraries!", {
-          duration: 5000,
-          icon: "🎬",
-        });
+        toast.success(
+          `New content added: ${newMediaItems
+            .map((item) => item.title)
+            .join(", ")}`,
+          {
+            duration: 5000,
+            icon: "🎬",
+          }
+        );
 
         // Dispatch event to notify components
         window.dispatchEvent(new CustomEvent("newMediaDetected"));
@@ -218,6 +275,9 @@ const MediaContentMonitor = () => {
   useEffect(() => {
     if (!isConfigured()) return;
 
+    // Clear the processed items set when component mounts
+    processedItems.current = new Set();
+
     // Initial check after 30 seconds (let the app load first)
     const initialCheckTimeout = setTimeout(() => {
       checkForNewContent();
@@ -228,9 +288,12 @@ const MediaContentMonitor = () => {
       checkForNewContent();
     }, 5 * 60 * 1000); // 5 minutes
 
-    // Set up interval to clean expired TMDB poster cache entries every hour
-    const tmdbCacheCleanupInterval = setInterval(() => {
-      tmdbService.clearExpiredPosters();
+    // Set up interval to clean up unused poster cache files every hour
+    const posterCacheCleanupInterval = setInterval(() => {
+      // This will trigger a server-side cleanup of unused poster cache files
+      axios.post("/api/posters/cache/cleanup").catch((error) => {
+        logError("Failed to trigger poster cache cleanup:", error);
+      });
     }, 60 * 60 * 1000); // 60 minutes
 
     logInfo("✅ Media content monitor initialized (5 minute interval)");
@@ -240,7 +303,7 @@ const MediaContentMonitor = () => {
       if (checkInterval.current) {
         clearInterval(checkInterval.current);
       }
-      clearInterval(tmdbCacheCleanupInterval);
+      clearInterval(posterCacheCleanupInterval);
     };
   }, [isConfigured]);
 

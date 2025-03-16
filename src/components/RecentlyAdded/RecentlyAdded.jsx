@@ -11,7 +11,7 @@ import axios from "axios";
 import ThemedTabButton from "../common/ThemedTabButton";
 import { useQuery, useQueryClient, useQueries } from "react-query";
 import toast from "react-hot-toast";
-import * as tmdbService from "../../services/tmdbService.js";
+import * as posterCacheService from "../../services/posterCacheService";
 
 const LoadingCard = () => (
   <div className="space-y-3">
@@ -174,8 +174,6 @@ const RecentlyAdded = () => {
   const [activeMediaTypeFilter, setActiveMediaTypeFilter] = useState("all");
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastRefreshTime, setLastRefreshTime] = useState(0);
-  const REFRESH_INTERVAL = 600000; // 10 minutes in milliseconds
   const location = useLocation();
   const prevPathRef = useRef(location.pathname);
 
@@ -267,7 +265,7 @@ const RecentlyAdded = () => {
             (s) => s.section_id === sectionId
           );
 
-          // Process each media item
+          // Process each media item to ensure it has a cached poster
           const mediaItems = await Promise.all(
             (response.data?.response?.data?.recently_added || []).map(
               async (item) => {
@@ -278,12 +276,29 @@ const RecentlyAdded = () => {
                   section_type: section?.type || "unknown",
                 };
 
-                // Check if we have TMDB poster in cache
-                const cachedPosterUrl = tmdbService.getCachedPosterUrl(
-                  item.rating_key
-                );
-                if (cachedPosterUrl) {
-                  enhancedItem.tmdb_poster_url = cachedPosterUrl;
+                // Check if this item has a thumb path we can use for the poster
+                const thumbPath =
+                  posterCacheService.getAppropriateThumbPath(enhancedItem);
+
+                if (thumbPath) {
+                  // Request to cache this poster (but don't wait for completion)
+                  posterCacheService
+                    .cachePoster(
+                      item.rating_key,
+                      thumbPath,
+                      config.tautulliApiKey,
+                      enhancedItem.media_type
+                    )
+                    .catch((err) => {
+                      logWarn(
+                        `Background caching failed for ${item.rating_key}:`,
+                        err
+                      );
+                    });
+
+                  // Get the cached poster URL
+                  enhancedItem.cached_poster_url =
+                    posterCacheService.getCachedPosterUrl(item.rating_key);
                 }
 
                 return enhancedItem;
@@ -353,52 +368,18 @@ const RecentlyAdded = () => {
 
   // Handler for new media detection and automatic update
   useEffect(() => {
-    // Set up a check for new media every minute
-    const newMediaCheckInterval = setInterval(async () => {
-      if (!config?.tautulliApiKey || allSectionIds.length === 0) return;
+    // Listen for 'newMediaDetected' event
+    const handleNewMediaDetected = () => {
+      logInfo("New media detected event received, refreshing data");
+      handleRefresh();
+    };
 
-      try {
-        // Check if there's any new activity in the last 5 minutes
-        const response = await axios.get(`/api/tautulli/api/v2`, {
-          params: {
-            apikey: config.tautulliApiKey,
-            cmd: "get_recently_added",
-            count: 1,
-          },
-        });
+    window.addEventListener("newMediaDetected", handleNewMediaDetected);
 
-        if (response.data?.response?.result !== "success") return;
-
-        const latestItem = response.data?.response?.data?.recently_added?.[0];
-        if (!latestItem) return;
-
-        // Check if this item was added in the last 5 minutes
-        const addedAt = latestItem.added_at;
-        const now = Math.floor(Date.now() / 1000);
-        const fiveMinutesAgo = now - 5 * 60;
-
-        if (addedAt && addedAt > fiveMinutesAgo) {
-          // New media detected! Refresh all sections
-          logInfo("New media detected, refreshing all sections");
-          toast.success("New media detected! Refreshing...");
-
-          // Invalidate all section queries
-          await queryClient.invalidateQueries(["sections"]);
-          for (const sectionId of allSectionIds) {
-            await queryClient.invalidateQueries([`section:${sectionId}`]);
-          }
-
-          // Update refresh time
-          setLastRefreshTime(Date.now());
-        }
-      } catch (error) {
-        // Silent failure - just log the error but don't show to user
-        logError("Error checking for new media:", error);
-      }
-    }, 60000); // Check every minute
-
-    return () => clearInterval(newMediaCheckInterval);
-  }, [config?.tautulliApiKey, allSectionIds, queryClient]);
+    return () => {
+      window.removeEventListener("newMediaDetected", handleNewMediaDetected);
+    };
+  }, []);
 
   // Log state to aid debugging
   useEffect(() => {
@@ -436,9 +417,6 @@ const RecentlyAdded = () => {
       // Notify user
       toast.success("Refreshing media content...");
 
-      // Clear TMDB poster cache
-      tmdbService.clearExpiredPosters();
-
       // Clear image cache
       await axios.get("/api/clear-image-cache");
 
@@ -449,9 +427,6 @@ const RecentlyAdded = () => {
       for (const sectionId of allSectionIds) {
         await queryClient.invalidateQueries([`section:${sectionId}`]);
       }
-
-      // Update refresh time
-      setLastRefreshTime(Date.now());
 
       // Success notification
       toast.success("Media content refreshed!");
@@ -464,7 +439,7 @@ const RecentlyAdded = () => {
     }
   };
 
-  // Effect for handling route changes and auto-refresh
+  // Effect for handling route changes and refreshing data when navigating to this tab
   useEffect(() => {
     // Check if we're navigating TO the recent tab
     if (location.pathname === "/recent" && prevPathRef.current !== "/recent") {
@@ -498,21 +473,7 @@ const RecentlyAdded = () => {
 
     // Update ref for next comparison
     prevPathRef.current = location.pathname;
-
-    // Set up auto-refresh interval
-    const refreshInterval = setInterval(() => {
-      if (Date.now() - lastRefreshTime > REFRESH_INTERVAL) {
-        logInfo("Auto-refreshing recently added data");
-        // Silently refresh in background
-        for (const sectionId of allSectionIds) {
-          queryClient.invalidateQueries([`section:${sectionId}`]);
-        }
-        setLastRefreshTime(Date.now());
-      }
-    }, 60000); // Check every minute
-
-    return () => clearInterval(refreshInterval);
-  }, [location.pathname, queryClient, lastRefreshTime, allSectionIds]);
+  }, [location.pathname, queryClient, allSectionIds, sectionQueries]);
 
   // Listen for image cache cleared events
   useEffect(() => {
@@ -526,20 +487,25 @@ const RecentlyAdded = () => {
 
     window.addEventListener("imageCacheCleared", handleImageCacheCleared);
 
+    // Also listen for poster cache cleared events
+    const handlePosterCacheCleared = () => {
+      logInfo("Poster cache cleared event received, refreshing data");
+      // Force refresh all section queries
+      for (const sectionId of allSectionIds) {
+        queryClient.invalidateQueries([`section:${sectionId}`]);
+      }
+    };
+
+    window.addEventListener("posterCacheCleared", handlePosterCacheCleared);
+
     return () => {
       window.removeEventListener("imageCacheCleared", handleImageCacheCleared);
+      window.removeEventListener(
+        "posterCacheCleared",
+        handlePosterCacheCleared
+      );
     };
   }, [allSectionIds, queryClient]);
-
-  // Calculate time until next refresh
-  const timeUntilNextRefresh = Math.max(
-    0,
-    REFRESH_INTERVAL - (Date.now() - lastRefreshTime)
-  );
-
-  const secondsUntilRefresh = Math.ceil(timeUntilNextRefresh / 1000);
-  const minutesUntilRefresh = Math.floor(secondsUntilRefresh / 60);
-  const formattedTimeUntilRefresh = `${minutesUntilRefresh}`;
 
   // Check if there are any sections for the current media type filter
   const hasSectionsForCurrentFilter = () => {
@@ -596,12 +562,8 @@ const RecentlyAdded = () => {
                 {processedSections.length} Sections
               </span>
             </div>
-            {isRefreshing ? (
+            {isRefreshing && (
               <span className="text-xs text-theme-muted">Refreshing...</span>
-            ) : (
-              <span className="text-xs text-theme-muted">
-                Auto-refresh in {formattedTimeUntilRefresh}min
-              </span>
             )}
           </div>
         </div>
@@ -749,6 +711,11 @@ const RecentlyAdded = () => {
               const formattedType =
                 sectionType.charAt(0).toUpperCase() + sectionType.slice(1);
 
+              // Sort the media items by added_at date (newest first)
+              const sortedMedia = [...sectionData.media].sort(
+                (a, b) => parseInt(b.added_at || 0) - parseInt(a.added_at || 0)
+              );
+
               return (
                 <div
                   key={`section-${
@@ -767,20 +734,20 @@ const RecentlyAdded = () => {
                     </div>
                   </div>
 
-                  {sectionData.media.length === 0 ? (
+                  {sortedMedia.length === 0 ? (
                     <EmptySection type={sectionType} />
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                      {sectionData.media
-                        .slice(0, 6)
-                        .map((media, mediaIndex) => (
-                          <MediaCard
-                            key={`${sectionData.section.section_id}-${
-                              media.rating_key || mediaIndex
-                            }-${lastRefreshTime}`}
-                            media={media}
-                          />
-                        ))}
+                      {sortedMedia.slice(0, 6).map((media, mediaIndex) => (
+                        <MediaCard
+                          key={`${sectionData.section.section_id}-${
+                            media.rating_key || "unknown"
+                          }-${mediaIndex}-${Math.random()
+                            .toString(36)
+                            .substr(2, 5)}`}
+                          media={media}
+                        />
+                      ))}
                     </div>
                   )}
                 </div>

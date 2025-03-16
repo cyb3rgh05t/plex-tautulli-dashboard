@@ -5,6 +5,7 @@ import ThemedButton from "../common/ThemedButton";
 import { useTheme } from "../../context/ThemeContext.jsx";
 import axios from "axios";
 import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
+import * as posterCacheService from "../../services/posterCacheService";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
@@ -15,6 +16,8 @@ const MediaModal = ({ media, onClose, apiKey }) => {
   const [showCast, setShowCast] = useState(false);
   const [mediaDetails, setMediaDetails] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [posterUrl, setPosterUrl] = useState(null);
+  const [backdropUrl, setBackdropUrl] = useState(null);
 
   // Fetch additional media details when modal opens
   useEffect(() => {
@@ -44,6 +47,41 @@ const MediaModal = ({ media, onClose, apiKey }) => {
             ...(response.data.response.data?.media_info?.[0] || {}),
           };
           setMediaDetails(enhancedMedia);
+
+          // Get poster URL from cache
+          const cachedPosterUrl = posterCacheService.getCachedPosterUrl(
+            media.rating_key
+          );
+          if (cachedPosterUrl) {
+            setPosterUrl(cachedPosterUrl);
+          } else {
+            // If not cached, get appropriate thumb path and cache it
+            const thumbPath =
+              posterCacheService.getAppropriateThumbPath(enhancedMedia);
+            if (thumbPath) {
+              // Request to cache the poster
+              await posterCacheService.cachePoster(
+                media.rating_key,
+                thumbPath,
+                apiKey,
+                enhancedMedia.media_type
+              );
+
+              // Now get the cached URL
+              setPosterUrl(
+                posterCacheService.getCachedPosterUrl(media.rating_key)
+              );
+            }
+          }
+
+          // For art/backdrop, we'll use Tautulli directly since these are less frequently used
+          if (enhancedMedia.art) {
+            setBackdropUrl(
+              `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
+                enhancedMedia.art
+              )}&apikey=${apiKey}`
+            );
+          }
         } else {
           setMediaDetails(media); // Use original media data as fallback
         }
@@ -103,13 +141,6 @@ const MediaModal = ({ media, onClose, apiKey }) => {
 
   // Use mediaDetails if available, otherwise fall back to the original media object
   const displayData = mediaDetails || media;
-
-  const getBackgroundUrl = () => {
-    if (!displayData.art) return null;
-    return `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
-      displayData.art
-    )}&apikey=${apiKey}`;
-  };
 
   const formatDuration = (ms) => {
     if (!ms) return "";
@@ -372,11 +403,11 @@ const MediaModal = ({ media, onClose, apiKey }) => {
         <div className="relative">
           {/* Background Image */}
           <div className="aspect-video relative overflow-hidden">
-            {getBackgroundUrl() ? (
+            {backdropUrl ? (
               <div
                 className="absolute inset-0 bg-cover bg-center scale-105"
                 style={{
-                  backgroundImage: `url(${getBackgroundUrl()})`,
+                  backgroundImage: `url(${backdropUrl})`,
                 }}
               >
                 {/* Black gradient overlay for readability */}

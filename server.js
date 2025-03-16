@@ -36,11 +36,15 @@ const __dirname = path.dirname(__filename);
 // ======================================================================
 // Constants and Configuration
 // ======================================================================
+
+const POSTER_CACHE_DIR = path.join(process.cwd(), "cache", "posters");
+
 const SAVED_SECTIONS_PATH = path.join(
   process.cwd(),
   "configs",
   "sections.json"
 );
+
 const PROXY_TIMEOUT = parseInt(process.env.PROXY_TIMEOUT) || 30000;
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
@@ -89,7 +93,8 @@ function getAppVersion() {
 
 // Directory Management
 const ensureDirectories = () => {
-  const dirs = [path.dirname(SAVED_SECTIONS_PATH)];
+  const dirs = [path.dirname(SAVED_SECTIONS_PATH), POSTER_CACHE_DIR];
+
   dirs.forEach((dir) => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -282,6 +287,10 @@ const formatShowEpisode = (seasonNumber, episodeNumber) => {
   const paddedEpisode = padTwoDigits(episodeNumber);
   return `S${paddedSeason}E${paddedEpisode}`;
 };
+
+// ======================================================================
+// Format Templates
+// ======================================================================
 
 // Template processing
 const processTemplate = (template, data) => {
@@ -793,7 +802,6 @@ const getLibraryDetails = async (sectionId, config) => {
   }
 };
 
-// Get user history from Tautulli API
 // Enhanced getUserHistory function that also fetches media metadata
 async function getUserHistoryWithMetadata(
   baseUrl,
@@ -871,10 +879,68 @@ async function getUserHistoryWithMetadata(
 }
 
 // ======================================================================
+// Poster Utilities
+// ======================================================================
+
+const downloadPosterFromTautulli = async (thumbPath, apiKey, ratingKey) => {
+  try {
+    const config = getConfig();
+
+    // Verify we have config
+    if (!config.tautulliUrl || !apiKey) {
+      throw new Error("Tautulli configuration missing");
+    }
+
+    logDebug(`Downloading poster for ${ratingKey} from path: ${thumbPath}`);
+
+    const response = await axios.get(`${config.tautulliUrl}/pms_image_proxy`, {
+      params: {
+        img: thumbPath,
+        apikey: apiKey,
+      },
+      responseType: "arraybuffer",
+      timeout: 30000, // 30-second timeout for slow servers
+    });
+
+    const imageData = response.data;
+    const contentType = response.headers["content-type"];
+
+    // Determine the file extension
+    let fileExt = "jpg"; // Default to jpg
+    if (contentType) {
+      if (contentType.includes("jpeg") || contentType.includes("jpg")) {
+        fileExt = "jpg";
+      } else if (contentType.includes("png")) {
+        fileExt = "png";
+      } else if (contentType.includes("gif")) {
+        fileExt = "gif";
+      }
+    }
+
+    // Save the poster to the cache
+    const posterPath = path.join(POSTER_CACHE_DIR, `${ratingKey}.${fileExt}`);
+    fs.writeFileSync(posterPath, imageData);
+
+    logInfo(`Downloaded poster for ${ratingKey}`);
+
+    return {
+      success: true,
+      path: posterPath,
+      contentType,
+    };
+  } catch (error) {
+    logError(`Error downloading poster for ${ratingKey}:`, error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
+// ======================================================================
 // Caching System
 // ======================================================================
 
-// Generic cache factory to create different cache instances
 // Generic cache factory to create different cache instances
 const createCache = (defaultTTL = 10 * 60 * 1000) => {
   return {
@@ -1953,7 +2019,10 @@ app.get("/api/users", async (req, res) => {
   }
 });
 
+// ==============================================================
 // Cache control
+// ==============================================================
+
 // Add a route to clear all caches
 app.post("/api/clear-cache", (req, res) => {
   try {
@@ -2216,6 +2285,500 @@ app.post("/api/refresh-posters", async (req, res) => {
     });
   }
 });
+
+// =======================================================
+// POster Cache Api Routes
+// =======================================================
+
+// Route to serve cached posters
+app.get("/api/posters/:ratingKey", (req, res) => {
+  const { ratingKey } = req.params;
+
+  // Ensure directory exists
+  if (!fs.existsSync(POSTER_CACHE_DIR)) {
+    try {
+      fs.mkdirSync(POSTER_CACHE_DIR, { recursive: true });
+      logInfo(`Created missing poster cache directory: ${POSTER_CACHE_DIR}`);
+    } catch (dirError) {
+      logError("Failed to create poster cache directory:", dirError);
+      // Continue as we'll fall back to Tautulli proxy
+    }
+  }
+
+  // Look for the poster in the cache
+  try {
+    const files = fs.readdirSync(POSTER_CACHE_DIR);
+    const posterFile = files.find((file) => file.startsWith(`${ratingKey}.`));
+
+    if (posterFile) {
+      const posterPath = path.join(POSTER_CACHE_DIR, posterFile);
+      const contentType = posterFile.endsWith(".png")
+        ? "image/png"
+        : posterFile.endsWith(".gif")
+        ? "image/gif"
+        : "image/jpeg";
+
+      // Set cache headers for browser caching
+      res.setHeader("Cache-Control", "public, max-age=31536000"); // 1 year
+      res.setHeader("Content-Type", contentType);
+
+      // Stream the file
+      const stream = fs.createReadStream(posterPath);
+      stream.on("error", (streamError) => {
+        logError(`Error streaming poster file ${posterPath}:`, streamError);
+        // If streaming fails, fall back to proxy
+        fallbackToTautulliProxy();
+      });
+
+      stream.pipe(res);
+    } else {
+      // If not found in cache, fall back to Tautulli proxy
+      fallbackToTautulliProxy();
+    }
+  } catch (error) {
+    logError(`Error serving poster for ${ratingKey}:`, error);
+    fallbackToTautulliProxy();
+  }
+
+  // Helper function to fall back to Tautulli proxy
+  function fallbackToTautulliProxy() {
+    const config = getConfig();
+    if (config.tautulliApiKey && config.tautulliUrl) {
+      // Fall back to Tautulli proxy
+      logDebug(`Poster not cached for ${ratingKey}, proxying from Tautulli`);
+
+      // Get metadata to find thumb path
+      axios
+        .get(`${config.tautulliUrl}/api/v2`, {
+          params: {
+            apikey: config.tautulliApiKey,
+            cmd: "get_metadata",
+            rating_key: ratingKey,
+          },
+          timeout: 5000,
+        })
+        .then((response) => {
+          if (response.data?.response?.result === "success") {
+            const metadata = response.data.response.data;
+
+            // Get appropriate thumb path
+            let thumbPath = metadata.thumb;
+
+            // For episodes, use grandparent_thumb or parent_thumb
+            if (metadata.media_type?.toLowerCase() === "episode") {
+              thumbPath =
+                metadata.grandparent_thumb ||
+                metadata.parent_thumb ||
+                metadata.thumb;
+            }
+
+            if (thumbPath) {
+              // Redirect to Tautulli image proxy
+              res.redirect(
+                `${config.tautulliUrl}/pms_image_proxy?img=${encodeURIComponent(
+                  thumbPath
+                )}&apikey=${config.tautulliApiKey}`
+              );
+
+              // Also cache this poster for next time
+              downloadPosterFromTautulli(
+                thumbPath,
+                config.tautulliApiKey,
+                ratingKey
+              ).catch((err) => {
+                logWarn(
+                  `Background caching after redirect failed for ${ratingKey}:`,
+                  err
+                );
+              });
+            } else {
+              res.status(404).send("No thumb path found");
+            }
+          } else {
+            res.status(404).send("Metadata not found");
+          }
+        })
+        .catch((error) => {
+          logError(`Error fetching metadata for ${ratingKey}:`, error);
+          res.status(500).send("Error fetching metadata");
+        });
+    } else {
+      res.status(404).json({
+        error: "Poster not found",
+        ratingKey,
+      });
+    }
+  }
+});
+
+// Route to download and cache posters
+app.post("/api/posters/cache", async (req, res) => {
+  const { ratingKey, thumbPath, apiKey, mediaType } = req.body;
+
+  if (!ratingKey || !thumbPath || !apiKey) {
+    return res.status(400).json({
+      error: "Missing required parameters",
+      success: false,
+    });
+  }
+
+  try {
+    // Check if poster is already cached
+    const files = fs.readdirSync(POSTER_CACHE_DIR);
+    const posterFile = files.find((file) => file.startsWith(`${ratingKey}.`));
+
+    if (posterFile) {
+      // Poster already cached
+      return res.json({
+        success: true,
+        cached: true,
+        message: "Poster already cached",
+      });
+    }
+
+    // For episodes, we need to handle differently
+    let actualThumbPath = thumbPath;
+
+    // If it's an episode, try to get metadata to find the best thumb
+    if (mediaType.toLowerCase() === "episode") {
+      try {
+        const config = getConfig();
+        const metadataResponse = await axios.get(
+          `${config.tautulliUrl}/api/v2`,
+          {
+            params: {
+              apikey: apiKey,
+              cmd: "get_metadata",
+              rating_key: ratingKey,
+            },
+            timeout: 10000,
+          }
+        );
+
+        const metadata = metadataResponse.data?.response?.data;
+
+        if (metadata) {
+          // Prefer grandparent_thumb or parent_thumb for episodes
+          actualThumbPath =
+            metadata.grandparent_thumb || metadata.parent_thumb || thumbPath;
+        }
+      } catch (error) {
+        logWarn(`Error fetching metadata for episode ${ratingKey}:`, error);
+        // Continue with the original thumb path
+      }
+    }
+
+    // Download and cache the poster
+    const result = await downloadPosterFromTautulli(
+      actualThumbPath,
+      apiKey,
+      ratingKey
+    );
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: "Poster cached successfully",
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: result.error || "Failed to cache poster",
+      });
+    }
+  } catch (error) {
+    logError(`Error caching poster ${ratingKey}:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Route to clear the poster cache
+app.post("/api/posters/cache/clear", (req, res) => {
+  try {
+    // Ensure directory exists
+    if (!fs.existsSync(POSTER_CACHE_DIR)) {
+      fs.mkdirSync(POSTER_CACHE_DIR, { recursive: true });
+      logInfo(`Created missing poster cache directory: ${POSTER_CACHE_DIR}`);
+
+      // If we just created the directory, it's empty so we're done
+      return res.json({
+        success: true,
+        message: `Poster cache directory created (was missing)`,
+        count: 0,
+      });
+    }
+
+    const files = fs.readdirSync(POSTER_CACHE_DIR);
+
+    let deletedCount = 0;
+    for (const file of files) {
+      try {
+        const filePath = path.join(POSTER_CACHE_DIR, file);
+        fs.unlinkSync(filePath);
+        deletedCount++;
+      } catch (fileError) {
+        logWarn(`Error deleting file ${file}:`, fileError);
+        // Continue with other files
+      }
+    }
+
+    logInfo(`Cleared poster cache, deleted ${deletedCount} files`);
+
+    res.json({
+      success: true,
+      message: `Cleared poster cache, deleted ${deletedCount} files`,
+      count: deletedCount,
+    });
+  } catch (error) {
+    logError("Error clearing poster cache:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Route to clean up unused poster cache files
+app.post("/api/posters/cache/cleanup", async (req, res) => {
+  try {
+    // Get all files in the poster cache directory
+    const files = fs.readdirSync(POSTER_CACHE_DIR);
+
+    // Get a list of all section IDs from saved sections
+    let savedSections = [];
+    try {
+      const sectionsResponse = await fs.promises.readFile(
+        SAVED_SECTIONS_PATH,
+        "utf8"
+      );
+      savedSections = JSON.parse(sectionsResponse);
+    } catch (error) {
+      logWarn("Error reading saved sections:", error);
+      // Continue with empty sections
+    }
+
+    const allSectionIds = savedSections
+      .map((section) => section.section_id)
+      .filter(Boolean);
+
+    // Skip if no sections found
+    if (allSectionIds.length === 0) {
+      return res.json({
+        success: true,
+        message: "No sections found, skipping poster cache cleanup",
+        count: 0,
+      });
+    }
+
+    // Get all media items from all sections
+    const config = getConfig();
+    if (!config.tautulliApiKey || !config.tautulliUrl) {
+      return res.status(400).json({
+        success: false,
+        error: "Tautulli not configured",
+      });
+    }
+
+    // Get recently added from each section to build a list of active media
+    const activeRatingKeys = new Set();
+
+    for (const sectionId of allSectionIds) {
+      try {
+        const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
+          params: {
+            apikey: config.tautulliApiKey,
+            cmd: "get_recently_added",
+            section_id: sectionId,
+            count: 100, // Get a large number to include most active content
+          },
+          timeout: 10000,
+        });
+
+        if (response.data?.response?.result === "success") {
+          const recentItems =
+            response.data?.response?.data?.recently_added || [];
+
+          // Add all rating keys to the active set
+          recentItems.forEach((item) => {
+            if (item.rating_key) {
+              activeRatingKeys.add(item.rating_key.toString());
+            }
+          });
+        }
+      } catch (error) {
+        logError(
+          `Error fetching recently added for section ${sectionId}:`,
+          error
+        );
+        // Continue with other sections
+      }
+    }
+
+    // Now determine which posters are unused
+    let deletedCount = 0;
+
+    for (const file of files) {
+      // Parse the rating key from the filename (e.g., "12345.jpg" -> "12345")
+      const ratingKeyMatch = file.match(/^(\d+)\./);
+      if (ratingKeyMatch) {
+        const ratingKey = ratingKeyMatch[1];
+
+        // If this rating key is not in the active set, delete the file
+        if (!activeRatingKeys.has(ratingKey)) {
+          const filePath = path.join(POSTER_CACHE_DIR, file);
+          fs.unlinkSync(filePath);
+          deletedCount++;
+        }
+      }
+    }
+
+    logInfo(`Cleaned up ${deletedCount} unused poster cache files`);
+
+    res.json({
+      success: true,
+      message: `Cleaned up ${deletedCount} unused poster cache files`,
+      count: deletedCount,
+      activeCount: activeRatingKeys.size,
+    });
+  } catch (error) {
+    logError("Error cleaning up poster cache:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Route to clear a specific poster from cache
+app.post("/api/posters/cache/clear/:ratingKey", (req, res) => {
+  try {
+    const { ratingKey } = req.params;
+
+    if (!ratingKey) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing rating key",
+      });
+    }
+
+    // Ensure directory exists
+    if (!fs.existsSync(POSTER_CACHE_DIR)) {
+      fs.mkdirSync(POSTER_CACHE_DIR, { recursive: true });
+      logInfo(`Created missing poster cache directory: ${POSTER_CACHE_DIR}`);
+    }
+
+    // Find the poster file for this rating key
+    const files = fs.readdirSync(POSTER_CACHE_DIR);
+    const posterFiles = files.filter((file) =>
+      file.startsWith(`${ratingKey}.`)
+    );
+
+    let deletedCount = 0;
+    for (const file of posterFiles) {
+      const filePath = path.join(POSTER_CACHE_DIR, file);
+      fs.unlinkSync(filePath);
+      deletedCount++;
+    }
+
+    logInfo(
+      `Cleared poster cache for rating key ${ratingKey}, deleted ${deletedCount} files`
+    );
+
+    res.json({
+      success: true,
+      message: `Cleared poster cache for rating key ${ratingKey}`,
+      count: deletedCount,
+    });
+  } catch (error) {
+    logError(
+      `Error clearing poster cache for rating key ${req.params.ratingKey}:`,
+      error
+    );
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Route to get poster cache stats
+app.get("/api/posters/cache/stats", (req, res) => {
+  try {
+    // Check if the poster cache directory exists, create it if not
+    if (!fs.existsSync(POSTER_CACHE_DIR)) {
+      try {
+        fs.mkdirSync(POSTER_CACHE_DIR, { recursive: true });
+        logInfo(`Created missing poster cache directory: ${POSTER_CACHE_DIR}`);
+      } catch (dirError) {
+        // If we can't create the directory, return a more informative error
+        logError(
+          `Failed to create poster cache directory: ${POSTER_CACHE_DIR}`,
+          dirError
+        );
+        return res.status(500).json({
+          success: false,
+          error: "Could not create poster cache directory",
+          details: dirError.message,
+          directory: POSTER_CACHE_DIR,
+        });
+      }
+    }
+
+    // After ensuring directory exists, try to read its contents
+    try {
+      const files = fs.readdirSync(POSTER_CACHE_DIR);
+
+      // Calculate total size
+      let totalSize = 0;
+      if (files.length > 0) {
+        for (const file of files) {
+          try {
+            const filePath = path.join(POSTER_CACHE_DIR, file);
+            const stats = fs.statSync(filePath);
+            totalSize += stats.size;
+          } catch (fileStatError) {
+            // Skip this file if we can't get its stats
+            logWarn(`Could not get stats for file ${file}:`, fileStatError);
+          }
+        }
+      }
+
+      res.json({
+        count: files.length,
+        size: totalSize,
+        sizeFormatted: totalSize > 0 ? formatFileSize(totalSize) : "0 Bytes",
+        directory: POSTER_CACHE_DIR,
+      });
+    } catch (readError) {
+      // Handle read error
+      logError(
+        `Error reading poster cache directory: ${POSTER_CACHE_DIR}`,
+        readError
+      );
+      return res.status(500).json({
+        success: false,
+        error: "Failed to read poster cache directory",
+        details: readError.message,
+        directory: POSTER_CACHE_DIR,
+      });
+    }
+  } catch (error) {
+    // Catch-all for any other errors
+    logError("Unexpected error getting poster cache stats:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      directory: POSTER_CACHE_DIR,
+    });
+  }
+});
+
+// ================================================
+// Format Enpoints
+// ================================================
 
 // Downloads endpoint
 app.get("/api/downloads", async (req, res) => {
@@ -2996,208 +3559,6 @@ app.get("/api/recent/:type", async (req, res) => {
       error: "Failed to process recently added media",
       message: error.message,
       details: error.response?.data || error.stack,
-    });
-  }
-});
-
-// Add these diagnostic endpoints at the end of your file
-
-app.get("/api/diagnostic/recent/:type", async (req, res) => {
-  try {
-    const { type } = req.params;
-    const { count = 10 } = req.query;
-    const cacheKey = `media:${type}:all:${count}`;
-
-    // Get the config
-    const config = getConfig();
-
-    // Check if we have a cached entry
-    const cachedData = mediaCache.get(cacheKey);
-
-    // Prepare diagnostic info
-    const diagnosticInfo = {
-      endpoint: `/api/recent/${type}`,
-      cacheKey,
-      hasCachedData: !!cachedData,
-      cachedDataStructure: cachedData
-        ? {
-            hasMedia: !!cachedData.media,
-            mediaLength: cachedData.media?.length || 0,
-            mediaIsArray: Array.isArray(cachedData.media),
-            sectionsCount: cachedData.sections?.length || 0,
-            totalProperty: cachedData.total,
-            timestamp: cachedData._timestamp,
-            age: cachedData._timestamp
-              ? `${Math.floor((Date.now() - cachedData._timestamp) / 1000)}s`
-              : "unknown",
-          }
-        : null,
-      config: {
-        hasTautulliUrl: !!config.tautulliUrl,
-        hasTautulliApiKey: !!config.tautulliApiKey,
-      },
-      cacheStats: {
-        mediaCache: mediaCache.stats().size,
-        metadataCache: metadataCache.stats().size,
-        historyCache: historyCache.stats().size,
-      },
-    };
-
-    // Make a direct test call to Tautulli
-    try {
-      const testResponse = await axios.get(`${config.tautulliUrl}/api/v2`, {
-        params: {
-          apikey: config.tautulliApiKey,
-          cmd: "status",
-        },
-        timeout: 5000,
-      });
-
-      diagnosticInfo.tautulliTest = {
-        success: testResponse.data?.response?.result === "success",
-        status: testResponse.status,
-        data: testResponse.data?.response?.data || null,
-      };
-    } catch (error) {
-      diagnosticInfo.tautulliTest = {
-        success: false,
-        error: error.message,
-        code: error.code,
-      };
-    }
-
-    // Return diagnostic info
-    res.json(diagnosticInfo);
-  } catch (error) {
-    res.status(500).json({
-      error: "Diagnostic error",
-      message: error.message,
-      stack: error.stack,
-    });
-  }
-});
-
-// Add a direct test endpoint that forces a cache refresh
-app.get("/api/test/recent/:type", async (req, res) => {
-  try {
-    // Force clear the cache for this type
-    const { type } = req.params;
-    const { count = 10 } = req.query;
-    const cacheKey = `media:${type}:all:${count}`;
-
-    // Clear this specific cache key
-    mediaCache.delete(cacheKey);
-
-    // Make a request to the regular endpoint
-    const config = getConfig();
-    const requestUrl = `http://localhost:${
-      process.env.PORT || 3006
-    }/api/recent/${type}?count=${count}&refresh=true`;
-
-    // Log that we're making this request
-    logInfo(`Test endpoint making request to: ${requestUrl}`);
-
-    try {
-      // Use axios to make a request to our own endpoint
-      const response = await axios.get(requestUrl);
-
-      // Return the result with diagnostic info
-      res.json({
-        success: true,
-        statusCode: response.status,
-        hasMedia: !!response.data.media,
-        mediaCount: response.data.media?.length || 0,
-        sections: response.data.sections,
-        mediaExample:
-          response.data.media?.length > 0 ? response.data.media[0] : null,
-        originalResponse: response.data,
-      });
-    } catch (error) {
-      res.status(500).json({
-        error: "Test request failed",
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-      });
-    }
-  } catch (error) {
-    res.status(500).json({
-      error: "Test error",
-      message: error.message,
-    });
-  }
-});
-
-// Clear all caches via GET
-app.get("/api/clear-cache-get", (req, res) => {
-  try {
-    const previousSizes = {
-      history: historyCache.stats().size,
-      media: mediaCache.stats().size,
-      metadata: metadataCache.stats().size,
-    };
-
-    const totalSize =
-      previousSizes.history + previousSizes.media + previousSizes.metadata;
-
-    // Clear all caches
-    historyCache.clear();
-    mediaCache.clear();
-    metadataCache.clear();
-
-    res.json({
-      success: true,
-      message: `Successfully cleared all caches with ${totalSize} total entries`,
-      details: previousSizes,
-    });
-  } catch (error) {
-    logError("Failed to clear cache", error);
-    res.status(500).json({
-      error: "Failed to clear cache",
-      message: error.message,
-    });
-  }
-});
-
-// Clear a specific cache via GET
-app.get("/api/clear-cache-get/:type", (req, res) => {
-  try {
-    const { type } = req.params;
-    let message = "";
-    let details = {};
-
-    if (type === "media") {
-      const size = mediaCache.stats().size;
-      mediaCache.clear();
-      message = `Successfully cleared media cache with ${size} entries`;
-      details = { media: size };
-    } else if (type === "metadata") {
-      const size = metadataCache.stats().size;
-      metadataCache.clear();
-      message = `Successfully cleared metadata cache with ${size} entries`;
-      details = { metadata: size };
-    } else if (type === "history") {
-      const size = historyCache.stats().size;
-      historyCache.clear();
-      message = `Successfully cleared history cache with ${size} entries`;
-      details = { history: size };
-    } else {
-      return res.status(400).json({
-        error: "Invalid cache type",
-        message: "Cache type must be one of: media, metadata, history",
-      });
-    }
-
-    res.json({
-      success: true,
-      message,
-      details,
-    });
-  } catch (error) {
-    logError("Failed to clear cache", error);
-    res.status(500).json({
-      error: "Failed to clear cache",
-      message: error.message,
     });
   }
 });
