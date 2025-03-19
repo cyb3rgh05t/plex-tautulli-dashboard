@@ -467,10 +467,16 @@ const MediaCard = ({ media }) => {
         className="group cursor-pointer space-y-2"
       >
         <div
-          className="relative aspect-[2/3] rounded-xl overflow-hidden 
-            bg-gray-800/50 border border-accent 
-            group-hover:border-accent-hover group-hover:shadow-accent
-            transition-theme"
+          className={`relative ${
+            getMediaType() === "artist" ||
+            getMediaType() === "album" ||
+            getMediaType() === "track"
+              ? "aspect-[2/2]" // Square aspect ratio for music items
+              : "aspect-[2/3]" // Original aspect ratio for other media types
+          } rounded-xl overflow-hidden 
+    bg-gray-800/50 border border-accent 
+    group-hover:border-accent-hover group-hover:shadow-accent
+    transition-theme`}
         >
           {/* Loading State */}
           {imageLoading && (
