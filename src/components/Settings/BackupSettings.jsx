@@ -273,26 +273,52 @@ const BackupSettings = () => {
         throw new Error("Invalid backup file format");
       }
 
-      // Restore configurations
-      await Promise.all([
-        fetch("/api/config", {
+      // Step 1: Restore config
+      await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(backupData.config),
+      });
+
+      // Step 2: Restore formats - handle each format type individually
+      const formatTypes = Object.keys(backupData.formats);
+      for (const type of formatTypes) {
+        if (Array.isArray(backupData.formats[type])) {
+          await fetch("/api/formats", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: type,
+              formats: backupData.formats[type],
+            }),
+          });
+        }
+      }
+
+      // Step 3: Restore sections
+      if (backupData.sections && Array.isArray(backupData.sections)) {
+        // Handle case where sections is a direct array
+        await fetch("/api/sections", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(backupData.config),
-        }),
-        fetch("/api/formats", {
+          body: JSON.stringify(backupData.sections),
+        });
+      } else if (
+        backupData.sections &&
+        Array.isArray(backupData.sections.sections)
+      ) {
+        // Handle case where sections are nested in a sections property
+        // Extract and flatten the raw_data structure if present
+        const sectionsArray = backupData.sections.sections.map((section) => {
+          return section.raw_data || section;
+        });
+
+        await fetch("/api/sections", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(backupData.formats),
-        }),
-        fetch("/api/sections", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            backupData.sections.sections || backupData.sections
-          ),
-        }),
-      ]);
+          body: JSON.stringify(sectionsArray),
+        });
+      }
 
       toast.success("Settings restored successfully", {
         style: {

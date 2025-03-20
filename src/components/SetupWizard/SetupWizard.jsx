@@ -216,7 +216,7 @@ const SetupWizard = () => {
     }
   };
 
-  // Handle backup file restore
+  // Handle backup file restore with complete restoration
   const handleRestore = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -239,7 +239,7 @@ const SetupWizard = () => {
       // Extract configuration data
       const configData = backupData.config;
 
-      // Set form data from backup
+      // Set form data from backup for visual confirmation
       setFormData({
         plexUrl: configData.plexUrl || "",
         plexToken: configData.plexToken || "",
@@ -247,18 +247,137 @@ const SetupWizard = () => {
         tautulliApiKey: configData.tautulliApiKey || "",
       });
 
-      // Show success message
-      toast.success("Backup data loaded successfully", {
-        style: {
-          border: "1px solid #059669",
-          padding: "16px",
-          background: "#064E3B",
-        },
-        duration: 3000,
-      });
+      // Ask user if they want to restore all data now or just use the connection settings
+      const loadingToast = toast.loading("Processing backup file...");
 
-      // Exit restore mode
-      setIsRestoreMode(false);
+      // Add option to fully restore right away
+      toast(
+        (t) => (
+          <div className="flex flex-col gap-2">
+            <p className="font-medium mb-1">Backup loaded successfully</p>
+            <p className="text-sm mb-2">
+              Would you like to restore all settings now or just use the
+              connection details?
+            </p>
+            <div className="flex gap-2 mt-1">
+              <ThemedButton
+                variant="primary"
+                className="px-3 py-1.5 text-sm"
+                onClick={async () => {
+                  toast.dismiss(t.id);
+
+                  // Show loading indicator
+                  const restoreToast = toast.loading(
+                    "Restoring all settings..."
+                  );
+
+                  try {
+                    // Step 1: Restore config
+                    await fetch("/api/config", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(backupData.config),
+                    });
+
+                    // Step 2: Restore formats - process each format type
+                    const formatTypes = Object.keys(backupData.formats);
+                    for (const type of formatTypes) {
+                      if (Array.isArray(backupData.formats[type])) {
+                        await fetch("/api/formats", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            type: type,
+                            formats: backupData.formats[type],
+                          }),
+                        });
+                      }
+                    }
+
+                    // Step 3: Restore sections
+                    if (
+                      backupData.sections &&
+                      Array.isArray(backupData.sections)
+                    ) {
+                      // Handle case where sections is a direct array
+                      await fetch("/api/sections", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(backupData.sections),
+                      });
+                    } else if (
+                      backupData.sections &&
+                      Array.isArray(backupData.sections.sections)
+                    ) {
+                      // Handle case where sections are nested in a sections property
+                      // Extract and flatten the raw_data structure if present
+                      const sectionsArray = backupData.sections.sections.map(
+                        (section) => {
+                          return section.raw_data || section;
+                        }
+                      );
+
+                      await fetch("/api/sections", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(sectionsArray),
+                      });
+                    }
+
+                    // Update config through ConfigContext to trigger the app
+                    await updateConfig(configData);
+
+                    // Show success message
+                    toast.success("All settings restored successfully", {
+                      id: restoreToast,
+                      duration: 3000,
+                    });
+
+                    // Check for saved sections to determine where to navigate
+                    const sectionsResponse = await axios.get("/api/sections");
+                    const hasSavedSections =
+                      sectionsResponse.data.sections &&
+                      sectionsResponse.data.sections.length > 0;
+
+                    // Navigate to appropriate page after short delay
+                    setTimeout(() => {
+                      if (hasSavedSections) {
+                        navigate("/activities");
+                      } else {
+                        navigate("/libraries");
+                      }
+                    }, 1500);
+                  } catch (error) {
+                    logError("Full restore failed:", error);
+                    toast.error(`Restore failed: ${error.message}`, {
+                      id: restoreToast,
+                      duration: 4000,
+                    });
+                  }
+                }}
+              >
+                Restore Everything
+              </ThemedButton>
+              <ThemedButton
+                className="px-3 py-1.5"
+                variant="accent"
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  toast.success("Connection details loaded", {
+                    id: loadingToast,
+                    duration: 3000,
+                  });
+                  // This option just keeps the form fields populated but doesn't restore anything yet
+                  setIsRestoreMode(false);
+                }}
+              >
+                Restore Only Config
+              </ThemedButton>
+            </div>
+          </div>
+        ),
+        { id: loadingToast, duration: 30000 }
+      );
     } catch (error) {
       logError("Restore failed:", error);
       toast.error("Failed to restore from backup: " + error.message, {
@@ -326,27 +445,6 @@ const SetupWizard = () => {
           <p className="text-theme-muted">
             Configure your Plex and Tautulli connections
           </p>
-        </div>
-
-        {/* Restore from backup toggle */}
-        <div className="w-full max-w-lg mb-4 flex justify-center">
-          <button
-            onClick={toggleRestoreMode}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-900/60 border border-gray-700/70 
-      text-theme hover:bg-gray-800/70 hover:border-accent/30 transition-theme"
-          >
-            {isRestoreMode ? (
-              <>
-                <Icons.ArrowLeft size={16} />
-                Back to manual setup
-              </>
-            ) : (
-              <>
-                <Icons.Upload size={16} />
-                Restore from backup
-              </>
-            )}
-          </button>
         </div>
 
         {/* Setup Form or Restore UI */}
@@ -572,16 +670,36 @@ const SetupWizard = () => {
                 </div>
               </div>
 
-              {/* Submit Button */}
-              <ThemedButton
-                type="submit"
-                disabled={testing}
-                variant="accent"
-                className="w-full"
-                icon={testing ? Icons.Loader2 : Icons.CheckCircle2}
-              >
-                {testing ? "Testing Connections..." : "Save Configuration"}
-              </ThemedButton>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <ThemedButton
+                  type="submit"
+                  disabled={testing}
+                  variant="accent"
+                  className="flex-1"
+                  icon={testing ? Icons.Loader2 : Icons.CheckCircle2}
+                >
+                  {testing ? "Testing Connections..." : "Save Configuration"}
+                </ThemedButton>
+
+                <ThemedButton
+                  type="button"
+                  onClick={() => fileInputRef.current.click()}
+                  variant="accent"
+                  className="flex-1"
+                  icon={isRestoreLoading ? Icons.Loader2 : Icons.Upload}
+                  disabled={isRestoreLoading}
+                >
+                  {isRestoreLoading ? "Restoring..." : "Restore from Backup"}
+                </ThemedButton>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={handleRestore}
+                />
+              </div>
             </form>
           )}
         </div>

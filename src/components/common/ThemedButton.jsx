@@ -22,9 +22,10 @@ const ThemedButton = ({
   const variantClasses = {
     primary: "bg-accent text-white hover:bg-accent-hover",
     secondary: "bg-gray-800/50 text-white hover:bg-gray-700",
-    accent: "bg-accent-light text-accent hover:bg-accent-lighter",
+    accent:
+      "bg-accent-light text-accent hover:bg-accent-hover hover:text-white", // Added hover:text-white
     outline:
-      "bg-transparent border border-accent text-accent hover:bg-accent-lighter",
+      "bg-transparent border border-accent text-accent hover:bg-accent-lighter hover:text-white", // Also added to outline for consistency
     ghost:
       "bg-transparent text-theme-muted hover:text-accent hover:bg-gray-800/50",
     danger: "bg-red-600 hover:bg-red-700 text-white",
