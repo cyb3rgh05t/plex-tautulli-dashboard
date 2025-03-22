@@ -6,7 +6,7 @@ import ThemeToggle from "../common/ThemeToggle";
 import ThemeSelector from "../common/ThemeSelector"; // Import the new component
 import ServiceStatusBadge from "./ServiceStatusBadge";
 import * as Icons from "lucide-react";
-import { appVersion } from "../../../version.js";
+import { appVersion } from "../../../release.js";
 
 /**
  * A navbar component that changes color based on the current accent theme

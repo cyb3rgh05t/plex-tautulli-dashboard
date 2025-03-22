@@ -1,4 +1,4 @@
-// update-version.js
+// update-release.js
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -12,13 +12,13 @@ const isDev =
   process.env.NODE_ENV === "development" || process.argv.includes("--dev");
 console.log(`Running in ${isDev ? "development" : "production"} mode`);
 
-// Read the version from version.js (the source of truth)
+// Read the version from release.js (the source of truth)
 function getVersionFromFile() {
   try {
-    const versionFilePath = path.join(__dirname, "version.js");
+    const versionFilePath = path.join(__dirname, "release.js");
 
     if (!fs.existsSync(versionFilePath)) {
-      console.log("Error: version.js file does not exist!");
+      console.log("Error: release.js file does not exist!");
       process.exit(1);
     }
 
@@ -26,21 +26,21 @@ function getVersionFromFile() {
     const versionMatch = versionFileContent.match(/appVersion = "([^"]+)"/);
 
     if (!versionMatch || !versionMatch[1]) {
-      console.log("Error: Could not parse version from version.js!");
+      console.log("Error: Could not parse version from release.js!");
       process.exit(1);
     }
 
     // Extract the base version from the file
     const version = versionMatch[1];
-    console.log(`Found version in version.js: ${version}`);
+    console.log(`Found version in release.js: ${version}`);
     return version;
   } catch (error) {
-    console.log("Error reading version.js:", error);
+    console.log("Error reading release.js:", error);
     process.exit(1);
   }
 }
 
-// Update package.json with the version from version.js
+// Update package.json with the version from release.js
 function updatePackageJson(version) {
   try {
     const packageJsonPath = path.join(__dirname, "package.json");

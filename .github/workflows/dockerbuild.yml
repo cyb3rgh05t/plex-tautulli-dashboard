@@ -38,38 +38,50 @@ jobs:
 
       - uses: FranzDiebold/github-env-vars-action@v2.8.0
 
+      - name: Read release.js version
+        id: release_version
+        run: |
+          VERSION=$(grep -o 'appVersion = "[^"]*"' release.js | cut -d'"' -f2)
+          echo "RELEASE_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "::set-output name=version::$VERSION"
+
       - name: Determine Image Tags
         id: prep
         run: |
           REPO=$CI_REPOSITORY_NAME
-          DOCKER_IMAGE=${{ github.repository_owner }}/${REPO}
+          DOCKER_IMAGE=ghcr.io/${{ github.repository_owner }}/${REPO}
+          RELEASE_VERSION=${{ env.RELEASE_VERSION }}
 
+          # Check for workflow_dispatch with inputs first
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.tag }}" ]]; then
             VERSION="${{ github.event.inputs.tag }}"
             TAGS="${DOCKER_IMAGE}:${VERSION},${DOCKER_IMAGE}:latest"
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.branch }}" ]]; then
             VERSION="${{ github.event.inputs.branch }}"
             TAGS="${DOCKER_IMAGE}:${VERSION}"
+          # Then check git refs
           elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
-            VERSION="latest"
-            TAGS="${DOCKER_IMAGE}:latest"
+            # For main branch, use both the release version and latest
+            TAGS="${DOCKER_IMAGE}:${RELEASE_VERSION},${DOCKER_IMAGE}:latest"
           elif [[ "$GITHUB_REF" == refs/heads/dev ]]; then
-            VERSION="dev"
+            # For dev branch, only use dev tag
             TAGS="${DOCKER_IMAGE}:dev"
           elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
             TAGS="${DOCKER_IMAGE}:${VERSION},${DOCKER_IMAGE}:latest"
           else
-            VERSION="unknown"
-            TAGS="${DOCKER_IMAGE}:unknown"
+            # For any other branch, use branch name
+            BRANCH="${GITHUB_REF#refs/heads/}"
+            TAGS="${DOCKER_IMAGE}:${BRANCH}"
           fi
 
           CREATED=$(date +'%Y-%m-%dT%H:%M:%SZ')
 
           echo "::set-output name=tags::${TAGS}"
           echo "::set-output name=title::${GITHUB_REPOSITORY}"
-          echo "::set-output name=version::${VERSION}"
+          echo "::set-output name=version::${RELEASE_VERSION}"
           echo "::set-output name=created::${CREATED}"
+          echo "DOCKER_TAGS=${TAGS}" >> $GITHUB_ENV
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -107,15 +119,15 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-          tags: |
-            ghcr.io/${{ steps.prep.outputs.tags }}
+          tags: ${{ steps.prep.outputs.tags }}
           build-args: |
             COMMIT_TAG=${{ github.sha }}
+            VERSION=${{ env.RELEASE_VERSION }}
           labels: |
             org.opencontainers.image.title=${{ steps.prep.outputs.title }}
             org.opencontainers.image.version=${{ steps.prep.outputs.version }}
             org.opencontainers.image.created=${{ steps.prep.outputs.created }}
-            org.opencontainers.image.description=Plex & Tautulli Dashboard
+            org.opencontainers.image.description=Docker Uploader - Cloud Storage Management
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
 
       - name: Move cache
@@ -126,34 +138,82 @@ jobs:
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
 
-      - name: Send Discord Notification on Success
+      - name: Send Enhanced Discord Notification
         if: success()
         run: |
-          curl -X POST \
+          # Get short SHA - fix the variable capture
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+
+          # Create commit link properly formatted for the Discord notification
+          COMMIT_LINK="\`${SHORT_SHA}\`"
+          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+
+          # Determine branch and tags info - we need to use string values for colors
+          if [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            BRANCH="main"
+            BRANCH_COLOR="4885929"  # Decimal for Green
+            IMAGE_TAGS="${{ env.RELEASE_VERSION }}, latest"
+          elif [[ "$GITHUB_REF" == refs/heads/dev ]]; then
+            BRANCH="dev"
+            BRANCH_COLOR="16753920"  # Decimal for Orange
+            IMAGE_TAGS="dev"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            BRANCH="${GITHUB_REF#refs/tags/}"
+            BRANCH_COLOR="2201331"   # Decimal for Blue
+            IMAGE_TAGS="${BRANCH}, latest"
+          else
+            BRANCH="${GITHUB_REF#refs/heads/}"
+            BRANCH_COLOR="10233776"  # Decimal for Purple
+            IMAGE_TAGS="${{ env.DOCKER_TAGS }}"
+          fi
+
+          # Create a simpler JSON payload with less string manipulation in jq
+          cat > discord-payload.json << EOF
+          {
+            "embeds": [{
+              "title": "🚀 Docker Build Success: ${{ github.repository }}",
+              "color": $BRANCH_COLOR,
+              "description": "A new Docker image has been built and pushed to the container registry.",
+              "fields": [
+                {
+                  "name": "🏷️ Version",
+                  "value": "${{ env.RELEASE_VERSION }}",
+                  "inline": true
+                },
+                {
+                  "name": "🔖 Branch/Tag",
+                  "value": "$BRANCH",
+                  "inline": true
+                },
+                {
+                  "name": "🧠 Commit",
+                  "value": "[\`$SHORT_SHA\`]($COMMIT_URL)",
+                  "inline": true
+                },
+                {
+                  "name": "🏙️ Image",
+                  "value": "ghcr.io/${{ github.repository }}",
+                  "inline": false
+                },
+                {
+                  "name": "📋 Tags",
+                  "value": "$IMAGE_TAGS",
+                  "inline": false
+                }
+              ],
+              "thumbnail": {
+                "url": "https://github.com/cyb3rgh05t/plex-tautulli-dashboard/blob/main/previews/logo.png?raw=true"
+              },
+              "footer": {
+                "text": "Built with ❤️ by cyb3rgh05t",
+                "icon_url": "https://github.com/${{ github.repository_owner }}.png"
+              },
+              "timestamp": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            }]
+          }
+          EOF
+
+          # Send the webhook
+          curl -X POST ${{ secrets.DISCORD_WEBHOOK }} \
             -H "Content-Type: application/json" \
-            -d '{
-              "content": "🚀 Docker build and push completed successfully!",
-              "embeds": [{
-                "title": "Build Details",
-                "color": 5025616,
-                "fields": [
-                  {
-                    "name": "Repository",
-                    "value": "${{ github.repository }}",
-                    "inline": true
-                  },
-                  {
-                    "name": "Version",
-                    "value": "${{ steps.prep.outputs.version }}",
-                    "inline": true
-                  },
-                  {
-                    "name": "Commit",
-                    "value": "`${{ github.sha }}`",
-                    "inline": true
-                  }
-                ],
-                "timestamp": "'$(date -u +'%Y-%m-%dT%H:%M:%SZ')'"
-              }]
-            }' \
-            ${{ secrets.DISCORD_WEBHOOK }}
+            -d @discord-payload.json
