@@ -64,10 +64,128 @@ const ColorOption = ({ color, current, onChange, displayName, rgb }) => {
   );
 };
 
+// Theme preview component
+const ThemePreview = ({
+  id,
+  name,
+  description,
+  colors,
+  isActive,
+  onClick,
+  isDefault,
+}) => {
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        flex flex-col items-center p-4 rounded-lg transition-theme
+        ${
+          isActive
+            ? "bg-accent-light/20 border-2 border-white/80 shadow-accent"
+            : "border border-accent/50"
+        }
+        hover:bg-white/10 hover:border-white/40
+      `}
+    >
+      {/* Theme preview swatch */}
+      <div className="w-full h-24 mb-3 rounded-md overflow-hidden shadow-md relative">
+        {/* Gradient or solid background */}
+        {[
+          "hotline",
+          "aquamarine",
+          "hotpink",
+          "cyberpunk",
+          "spacegray",
+          "maroon",
+        ].includes(id) ? (
+          <div
+            className="w-full h-full"
+            style={{
+              background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%)`,
+            }}
+          >
+            {/* For cyberpunk, add grid overlay */}
+            {id === "cyberpunk" && (
+              <div
+                className="absolute inset-0"
+                style={{
+                  backgroundImage: `linear-gradient(${colors.accent}20 1px, transparent 1px), 
+                                  linear-gradient(90deg, ${colors.accent}20 1px, transparent 1px)`,
+                  backgroundSize: "10px 10px",
+                }}
+              />
+            )}
+          </div>
+        ) : (
+          <div
+            className="w-full h-full"
+            style={{ background: colors.primary }}
+          />
+        )}
+
+        {/* Special elements for cyberpunk theme */}
+        {id === "cyberpunk" && (
+          <>
+            <div
+              className="absolute top-2 left-2 w-6 h-1"
+              style={{ background: colors.highlight }}
+            />
+            <div
+              className="absolute top-2 right-2 w-1 h-6"
+              style={{ background: colors.accent }}
+            />
+            <div
+              className="absolute bottom-2 right-2 w-6 h-1"
+              style={{ background: colors.highlight }}
+            />
+            <div
+              className="absolute bottom-2 left-2 w-1 h-6"
+              style={{ background: colors.accent }}
+            />
+          </>
+        )}
+
+        {/* Accent color strip */}
+        <div
+          className="absolute bottom-0 left-0 w-full h-3"
+          style={{ background: colors.accent }}
+        />
+
+        {/* Selected indicator */}
+        {isActive && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="bg-white/20 rounded-full p-1">
+              <Icons.Check size={18} className="text-white" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Theme info */}
+      <div className="text-center">
+        <span className="text-white text-sm font-medium block">{name}</span>
+        <span className="text-gray-400 text-xs block mt-1">{description}</span>
+        {isDefault && (
+          <span className="text-accent-base text-xs block mt-1">
+            Supports custom accents
+          </span>
+        )}
+      </div>
+    </button>
+  );
+};
+
 const SettingsPage = () => {
   const navigate = useNavigate();
   const { config, updateConfig, clearConfig } = useConfig();
-  const { theme, setTheme, accentColor, setAccentColor } = useTheme();
+  const {
+    themeName,
+    setThemeName,
+    accentColor,
+    setAccentColor,
+    allThemes,
+    allAccents,
+  } = useTheme();
   const [formData, setFormData] = useState({
     plexUrl: config?.plexUrl || "",
     plexToken: config?.plexToken || "",
@@ -85,6 +203,10 @@ const SettingsPage = () => {
   });
   const [resetConfirm, setResetConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState("servers");
+
+  // For theme section
+  const [themeExpanded, setThemeExpanded] = useState(false);
+  const [accentExpanded, setAccentExpanded] = useState(false);
 
   // Handle connection testing and config updates
   const handleSubmit = async (e) => {
@@ -171,16 +293,103 @@ const SettingsPage = () => {
     navigate("/api-endpoints");
   };
 
-  // Map of available accent colors
-  const accentColors = [
-    { id: "purple", name: "Purple", rgb: "167, 139, 250" },
-    { id: "grey", name: "Grey", rgb: "220, 220, 220" },
-    { id: "green", name: "Green", rgb: "109, 247, 81" },
-    { id: "maroon", name: "Maroon", rgb: "166, 40, 140" },
-    { id: "orange", name: "Orange", rgb: "255, 153, 0" },
-    { id: "blue", name: "Blue", rgb: "0, 98, 255" },
-    { id: "red", name: "Red", rgb: "232, 12, 11" },
-  ];
+  // Convert accent colors to array for rendering
+  const accentColors = Object.entries(allAccents).map(([id, details]) => ({
+    id,
+    name: details.name,
+    rgb: details.rgb,
+  }));
+
+  // Get theme preview color based on theme name
+  const getThemePreviewColors = (theme) => {
+    switch (theme) {
+      case "dark":
+        return {
+          primary: "#0a0c14",
+          secondary: "#141824",
+          accent: "rgb(167, 139, 250)",
+        };
+      case "dracula":
+        return {
+          primary: "#282a36",
+          secondary: "#1e2029",
+          accent: "#bd93f9",
+        };
+      case "plex":
+        return {
+          primary: "#1f1f1f",
+          secondary: "#282828",
+          accent: "#e5a00d",
+        };
+      case "overseerr":
+        return {
+          primary: "#111827",
+          secondary: "#1f2937",
+          accent: "#4f46e5",
+        };
+      case "onedark":
+        return {
+          primary: "#282c34",
+          secondary: "#1e222a",
+          accent: "#61afef",
+        };
+      case "nord":
+        return {
+          primary: "#2E3440",
+          secondary: "#3B4252",
+          accent: "#79b8ca",
+        };
+      case "hotline":
+        return {
+          primary: "#f765b8",
+          secondary: "#155fa5",
+          accent: "#f98dc9",
+        };
+      case "aquamarine":
+        return {
+          primary: "#47918a",
+          secondary: "#0b3161",
+          accent: "#009688",
+        };
+      case "spacegray":
+        return {
+          primary: "#576c75",
+          secondary: "#253237",
+          accent: "#81a6b7",
+        };
+      case "organizr":
+        return {
+          primary: "#1f1f1f",
+          secondary: "#333333",
+          accent: "#2cabe3",
+        };
+      case "maroon":
+        return {
+          primary: "#4c1533",
+          secondary: "#220a25",
+          accent: "#a21c65",
+        };
+      case "hotpink":
+        return {
+          primary: "#fb3f62",
+          secondary: "#204c80",
+          accent: "#fb3f62",
+        };
+      case "cyberpunk":
+        return {
+          primary: "#160133",
+          secondary: "#06021a",
+          accent: "#bf00ff",
+          highlight: "#e0ff00",
+        };
+      default:
+        return {
+          primary: "#0a0c14",
+          secondary: "#141824",
+          accent: "#a78bfa",
+        };
+    }
+  };
 
   // Tabs definition
   const tabs = [
@@ -193,6 +402,9 @@ const SettingsPage = () => {
     { id: "reset", label: "Reset Application", icon: Icons.AlertTriangle },
   ];
 
+  // Only allow accent customization for dark theme
+  const canCustomizeAccent = themeName === "dark";
+
   // Render content based on active tab
   const renderTabContent = () => {
     switch (activeTab) {
@@ -202,7 +414,6 @@ const SettingsPage = () => {
             title="Server Configuration"
             icon={Icons.Server}
             useAccentBorder={true}
-            useAccentGradient={true}
             className="p-6"
           >
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -379,44 +590,156 @@ const SettingsPage = () => {
 
       case "theme":
         return (
-          <ThemedCard
-            title="Theme Settings"
-            icon={Icons.Palette}
-            useAccentBorder={true}
-            useAccentGradient={true}
-            className="p-6"
-          >
-            <div className="space-y-6">
-              <p className="text-theme-muted">
-                Customize the appearance of the dashboard by choosing an accent
-                color.
-              </p>
-
-              {/* Accent Color Selection */}
+          <div className="space-y-6">
+            {/* Theme Selection Section */}
+            <ThemedCard
+              title="Theme Selection"
+              icon={Icons.Monitor}
+              useAccentBorder={true}
+              className="p-6"
+              action={
+                <button
+                  onClick={() => setThemeExpanded(!themeExpanded)}
+                  className="text-sm flex items-center gap-1 text-gray-400 hover:text-white"
+                >
+                  {themeExpanded ? (
+                    <>
+                      <Icons.ChevronUp size={16} />
+                      <span>Show Less</span>
+                    </>
+                  ) : (
+                    <>
+                      <Icons.ChevronDown size={16} />
+                      <span>Show All</span>
+                    </>
+                  )}
+                </button>
+              }
+            >
               <div className="space-y-4">
-                <h4 className="text-lg font-medium text-white">Accent Color</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {accentColors.map((color) => (
-                    <ColorOption
-                      key={color.id}
-                      color={color.id}
-                      displayName={color.name}
-                      rgb={color.rgb}
-                      current={accentColor}
-                      onChange={setAccentColor}
-                    />
-                  ))}
-                </div>
+                <p className="text-theme-muted">
+                  Choose a theme preset to change the overall look and feel of
+                  the dashboard.
+                </p>
 
-                {/* Current theme information with active accent preview */}
-                <div className="bg-accent-light/10 rounded-lg p-4 border border-accent mt-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {/* Always show at least popular themes */}
+                  {Object.entries(allThemes)
+                    .filter(
+                      ([id, details], index) => themeExpanded || index < 4
+                    )
+                    .map(([id, details]) => (
+                      <ThemePreview
+                        key={id}
+                        id={id}
+                        name={details.name}
+                        description={details.description}
+                        colors={getThemePreviewColors(id)}
+                        isActive={themeName === id}
+                        isDefault={id === "dark"}
+                        onClick={() => setThemeName(id)}
+                      />
+                    ))}
+                </div>
+              </div>
+            </ThemedCard>
+
+            {/* Accent Color Selection - Only enabled for dark theme */}
+            <ThemedCard
+              title="Accent Color"
+              icon={Icons.Palette}
+              useAccentBorder={true}
+              className="p-6"
+              action={
+                canCustomizeAccent ? (
+                  <button
+                    onClick={() => setAccentExpanded(!accentExpanded)}
+                    className="text-sm flex items-center gap-1 text-gray-400 hover:text-white"
+                  >
+                    {accentExpanded ? (
+                      <>
+                        <Icons.ChevronUp size={16} />
+                        <span>Show Less</span>
+                      </>
+                    ) : (
+                      <>
+                        <Icons.ChevronDown size={16} />
+                        <span>Show All</span>
+                      </>
+                    )}
+                  </button>
+                ) : null
+              }
+            >
+              {canCustomizeAccent ? (
+                <div className="space-y-4">
+                  <p className="text-theme-muted">
+                    Customize the accent color used throughout the dashboard.
+                    Accent colors can be changed only in the Dark theme.
+                  </p>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {accentColors
+                      .filter((_, index) => accentExpanded || index < 4)
+                      .map((color) => (
+                        <ColorOption
+                          key={color.id}
+                          color={color.id}
+                          displayName={color.name}
+                          rgb={color.rgb}
+                          current={accentColor}
+                          onChange={setAccentColor}
+                        />
+                      ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-gray-800/50 rounded-lg border border-accent/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Icons.Info size={16} className="text-accent" />
+                    <h4 className="text-sm font-medium text-white">
+                      Theme-Defined Accent Color
+                    </h4>
+                  </div>
+                  <p className="text-theme-muted">
+                    The current theme ({allThemes[themeName]?.name}) uses a
+                    predefined accent color that can't be changed. Switch to the
+                    Dark theme to customize accent colors.
+                  </p>
+                  <div className="mt-4 flex items-center gap-2">
+                    <div
+                      className="w-6 h-6 rounded-full"
+                      style={{
+                        backgroundColor:
+                          getThemePreviewColors(themeName).accent,
+                      }}
+                    ></div>
+                    <span className="text-white text-sm">
+                      Current theme accent
+                    </span>
+                  </div>
+                </div>
+              )}
+            </ThemedCard>
+
+            {/* Preview Section */}
+            <ThemedCard
+              title="Current Theme Preview"
+              icon={Icons.Eye}
+              useAccentBorder={true}
+              className="p-6"
+            >
+              <div className="space-y-4">
+                <div className="bg-accent-light/10 rounded-lg p-4 border border-accent mt-2">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="p-2 bg-accent-base rounded-lg">
                       <Icons.Palette size={16} className="text-white" />
                     </div>
                     <h4 className="text-white font-medium">
-                      Current Theme:{" "}
-                      <span className="text-accent-base">Dark</span>
+                      Active Theme:{" "}
+                      <span className="text-accent-base">
+                        {allThemes[themeName]?.name}
+                      </span>
                     </h4>
                   </div>
 
@@ -440,15 +763,36 @@ const SettingsPage = () => {
                     </div>
                   </div>
 
-                  <p className="text-theme-muted mt-4">
-                    The dashboard uses a dark theme with customizable accent
-                    colors. Your accent color selection will be remembered
-                    across sessions.
-                  </p>
+                  <div className="mt-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-theme-muted">Button:</span>
+                      <ThemedButton size="sm" variant="accent">
+                        Sample Button
+                      </ThemedButton>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-theme-muted">Link:</span>
+                      <a
+                        href="#"
+                        className="text-accent-base hover:text-accent-hover underline"
+                      >
+                        Sample Link
+                      </a>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-theme-muted">Input:</span>
+                      <input
+                        type="text"
+                        className="bg-gray-900/70 border border-accent rounded px-3 py-1 text-white focus:outline-none focus:ring-1 focus:ring-accent"
+                        placeholder="Sample input field"
+                        readOnly
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </ThemedCard>
+            </ThemedCard>
+          </div>
         );
 
       case "logging":
@@ -466,7 +810,6 @@ const SettingsPage = () => {
             title="API Documentation"
             icon={Icons.FileCode}
             useAccentBorder={true}
-            useAccentGradient={true}
             className="p-6"
           >
             <div className="space-y-6">
@@ -491,7 +834,6 @@ const SettingsPage = () => {
             title="Reset Application"
             icon={Icons.AlertTriangle}
             useAccentBorder={true}
-            useAccentGradient={true}
             className="p-6"
           >
             <div className="space-y-6">

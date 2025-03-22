@@ -47,6 +47,20 @@
   --link-color-hover: rgba(232, 12, 11, 0.8);
 }
 
+/* Neon Yellow Accent (New for Cyberpunk) */
+.accent-neon {
+  --accent-color: 224, 255, 0;
+  --link-color: rgb(224, 255, 0);
+  --link-color-hover: rgba(224, 255, 0, 0.8);
+}
+
+/* Cyber Purple Accent (New for Cyberpunk) */
+.accent-cyber {
+  --accent-color: 191, 0, 255;
+  --link-color: rgb(191, 0, 255);
+  --link-color-hover: rgba(224, 0, 255, 0.8);
+}
+
 /* Default (same as purple for backward compatibility) */
 .accent-default {
   --accent-color: 167, 139, 250;
