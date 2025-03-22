@@ -1,6 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { logInfo, logError, logDebug } from "../utils/logger";
-import { applyCyberpunkTheme, removeCyberpunkTheme } from "../utils/themeUtils"; // Import the injection functions
 
 // Create context
 const ThemeContext = createContext(null);
@@ -156,12 +155,6 @@ export const ThemeProvider = ({ children }) => {
   const [themeName, setThemeName] = useState(DEFAULT_THEME);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Store the user's custom accent color for dark theme
-  const [darkThemeAccent, setDarkThemeAccent] = useState(accentColor);
-
-  // Previous theme for handling special cleanup
-  const [prevTheme, setPrevTheme] = useState(null);
-
   // Internal function to set accent color and save to storage
   const handleAccentChange = (accent) => {
     if (!VALID_ACCENTS.includes(accent)) {
@@ -212,15 +205,15 @@ export const ThemeProvider = ({ children }) => {
     }
   };
 
+  // Store the user's custom accent color for dark theme
+  const [darkThemeAccent, setDarkThemeAccent] = useState(accentColor);
+
   // Internal function to set theme and save to storage
   const handleThemeChange = (theme) => {
     if (!VALID_THEMES.includes(theme)) {
       logError(`Invalid theme: ${theme}`);
       return;
     }
-
-    // Store previous theme for cleanup
-    setPrevTheme(themeName);
 
     // If switching to dark theme, restore the user's custom accent
     if (theme === "dark") {
@@ -233,30 +226,8 @@ export const ThemeProvider = ({ children }) => {
       setAccentColor(getThemeDefaultAccent(theme));
     }
 
-    // Apply theme
     setThemeName(theme);
     saveToStorage(THEME_STORAGE_KEY, theme);
-
-    // Handle special theme direct injections
-    if (theme === "cyberpunk") {
-      // Apply direct CSS injection for Cyberpunk theme
-      setTimeout(() => {
-        try {
-          applyCyberpunkTheme();
-          logInfo("Applied direct Cyberpunk theme injection");
-        } catch (error) {
-          logError("Failed to apply Cyberpunk theme injection:", error);
-        }
-      }, 100); // Small delay to ensure DOM is updated
-    } else if (prevTheme === "cyberpunk") {
-      // Remove Cyberpunk injection when switching away
-      try {
-        removeCyberpunkTheme();
-        logInfo("Removed Cyberpunk theme injection");
-      } catch (error) {
-        logError("Failed to remove Cyberpunk theme injection:", error);
-      }
-    }
   };
 
   // Load saved preferences from localStorage
@@ -276,19 +247,6 @@ export const ThemeProvider = ({ children }) => {
       // Apply stored values
       setAccentColor(storedAccent);
       setThemeName(storedTheme);
-
-      // Apply direct CSS for special themes during initial load
-      if (storedTheme === "cyberpunk") {
-        // Small delay to ensure DOM is ready
-        setTimeout(() => {
-          try {
-            applyCyberpunkTheme();
-            logInfo("Applied Cyberpunk theme on initial load");
-          } catch (error) {
-            logError("Failed to apply initial Cyberpunk theme:", error);
-          }
-        }, 200);
-      }
 
       logInfo("Theme preferences loaded", {
         accent: storedAccent,
@@ -346,34 +304,11 @@ export const ThemeProvider = ({ children }) => {
       htmlElement.setAttribute("data-theme", themeName);
       htmlElement.setAttribute("data-accent", accentColor);
 
-      // Apply Cyberpunk theme CSS injection
-      if (themeName === "cyberpunk") {
-        try {
-          applyCyberpunkTheme();
-          logInfo("Applied Cyberpunk theme direct CSS injection");
-        } catch (error) {
-          logError("Failed to apply Cyberpunk theme injection:", error);
-        }
-      }
-
       logInfo("Applied theme via CSS classes", { themeName, accentColor });
     } catch (error) {
       logError("Failed to apply theme:", error);
     }
   }, [accentColor, themeName, isLoading]);
-
-  // Clean up effect for direct CSS injections
-  useEffect(() => {
-    // Clean up function will remove any direct CSS injections when component unmounts
-    return () => {
-      try {
-        // Remove cyberpunk direct CSS injection
-        removeCyberpunkTheme();
-      } catch (error) {
-        logError("Error cleaning up theme injections:", error);
-      }
-    };
-  }, []);
 
   // Function to get accent RGB values based on current accent
   const getAccentRgb = () => {

@@ -247,19 +247,16 @@
   --accent-color-border-hover: rgba(var(--accent-color), 0.5);
 }
 
-/* Cyberpunk Theme - NEW */
+/* Cyberpunk Theme */
 .theme-cyberpunk {
-  /* Based on cyberpunk.css */
   --theme-bg-primary: linear-gradient(
-      135deg,
-      #160133 0%,
-      #0c0221 40%,
-      #06021a 80%,
-      #000000 100%
-    )
-    center center/cover no-repeat fixed;
-  --theme-bg-secondary: linear-gradient(180deg, #160133 0%, #06021a 100%) center
-    center/cover no-repeat fixed;
+    135deg,
+    #160133 0%,
+    #0c0221 40%,
+    #06021a 80%,
+    #000000 100%
+  );
+  --theme-bg-secondary: linear-gradient(180deg, #160133 0%, #06021a 100%);
   --theme-bg-tertiary: #160133;
 
   --theme-text-primary: #d6c5ff; /* Light purple text */
@@ -272,8 +269,11 @@
   --button-text: #000000;
   --button-text-hover: #ffffff;
 
-  /* Cyberpunk accent color */
-  --accent-color: 191, 0, 255; /* BF00FF - Neon Purple */
+  --link-color: #e0ff00;
+  --link-color-hover: #ffffff;
+
+  /* Cyberpunk accent color - CHANGE THIS TO YELLOW */
+  --accent-color: 224, 255, 0; /* E0FF00 - Neon Yellow (instead of purple) */
   --accent-color-hover: rgba(var(--accent-color), 0.8);
   --accent-color-light: rgba(var(--accent-color), 0.2);
   --accent-color-lighter: rgba(var(--accent-color), 0.1);

@@ -92,9 +92,8 @@ body.theme-hotpink {
   background-attachment: fixed;
 }
 
-/* Fixed Cyberpunk Theme - Ensuring the background is properly applied */
+/* Cyberpunk Theme - More aggressive styling */
 body.theme-cyberpunk {
-  /* Adding !important to ensure it overrides any other styles */
   background: linear-gradient(
     135deg,
     #160133 0%,
@@ -102,17 +101,39 @@ body.theme-cyberpunk {
     #06021a 80%,
     #000000 100%
   ) !important;
+  background-color: #160133 !important; /* Fallback if gradient fails */
   background-attachment: fixed !important;
 
-  /* Optional: Add subtle grid overlay for more cyberpunk feel */
+  /* Grid overlay for cyberpunk aesthetic */
   background-image: linear-gradient(
       rgba(191, 0, 255, 0.05) 1px,
       transparent 1px
     ),
     linear-gradient(90deg, rgba(191, 0, 255, 0.05) 1px, transparent 1px) !important;
   background-size: 20px 20px !important;
-
-  /* Ensure all properties are properly applied */
   background-repeat: repeat !important;
   background-position: center center !important;
+}
+
+/* Target any container that might be overriding the body background */
+body.theme-cyberpunk > div,
+body.theme-cyberpunk > main,
+body.theme-cyberpunk > #root,
+body.theme-cyberpunk > #app,
+body.theme-cyberpunk > .container,
+body.theme-cyberpunk > [class*="container"],
+body.theme-cyberpunk > [class*="wrapper"],
+body.theme-cyberpunk > [class*="main"] {
+  background: transparent !important;
+}
+
+/* Target header specifically */
+body.theme-cyberpunk header {
+  background-color: rgba(22, 1, 51, 0.7) !important;
+  border-bottom-color: rgba(224, 255, 0, 0.2) !important;
+}
+
+/* Target navigation elements */
+body.theme-cyberpunk nav {
+  background-color: rgba(12, 2, 33, 0.8) !important;
 }

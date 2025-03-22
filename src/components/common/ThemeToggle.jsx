@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "../../context/ThemeContext";
 import { Palette, Check, AlertCircle, X } from "lucide-react";
+import ReactDOM from "react-dom";
 
 /**
  * An improved theme toggle component that shows accent colors in a modal
@@ -43,13 +44,15 @@ const ThemeToggle = ({ variant = "simple", showAccent = true }) => {
 
   // Render accent color modal
   const renderAccentColorModal = () => {
+    if (!showAccentModal) return null;
+
     const accentColors = Object.entries(allAccents).map(([id, details]) => ({
       id,
       name: details.name,
       rgb: details.rgb,
     }));
 
-    return (
+    const modal = (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
         <div
           ref={modalRef}
@@ -148,6 +151,9 @@ const ThemeToggle = ({ variant = "simple", showAccent = true }) => {
         </div>
       </div>
     );
+
+    // Render modal at document body level with portal
+    return ReactDOM.createPortal(modal, document.body);
   };
 
   // Simple variant just shows the accent toggle button
