@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { logError, logInfo, logDebug, logWarn } from "./utils/logger";
 import {
   HashRouter as Router,
   Routes,
@@ -10,7 +11,9 @@ import {
 import { QueryClient, QueryClientProvider, useQueryClient } from "react-query";
 import { Toaster } from "react-hot-toast";
 import { ConfigProvider, useConfig } from "./context/ConfigContext";
-import { ThemeProvider, useTheme } from "./context/ThemeContext";
+import { ThemeProvider, useTheme } from "./context/ThemeContext.jsx";
+import GlobalPreloader from "./components/common/GlobalPreloader.jsx";
+import MediaContentMonitor from "./components/common/MediaContentMonitor.jsx";
 import SetupWizard from "./components/SetupWizard/SetupWizard";
 import ThemedDashboardLayout from "./components/Layout/ThemedDashboardLayout";
 import LoadingScreen from "./components/common/LoadingScreen";
@@ -22,15 +25,84 @@ import FormatSettings from "./components/FormatSettings/FormatSettings";
 import ApiEndpoints from "./components/Settings/ApiEndpoints";
 import SettingsPage from "./components/Settings/Settings";
 
+// Enhanced QueryClient with improved caching strategy
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 2,
-      staleTime: 5000,
+      retry: 1,
+      staleTime: 5 * 60 * 1000, // 5 minutes default stale time
+      cacheTime: 30 * 60 * 1000, // 30 minutes default cache time
       refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchInterval: false,
+      refetchIntervalInBackground: false,
+      // Add a customized onError handler for all queries
+      onError: (error) => {
+        logError("Query error:", error);
+      },
+    },
+    mutations: {
+      // Configure mutations to retry on network errors
+      retry: (failureCount, error) => {
+        // Only retry for network errors, not for 4xx/5xx responses
+        if (
+          error.message &&
+          (error.message.includes("Network Error") ||
+            error.message.includes("timeout"))
+        ) {
+          return failureCount < 2; // Retry up to 2 times for network issues
+        }
+        return false; // Don't retry other errors
+      },
     },
   },
 });
+
+// Try to set up query cache persistence if available in the browser environment
+try {
+  // Function to handle persistence setup
+  const setupPersistence = async () => {
+    // Completely disable React Query persistence to prevent cache size errors
+    logInfo("Query persistence disabled to prevent cache size issues");
+
+    // Keep TMDB poster cache functionality which is essential for image display
+    try {
+      // Create a simple cache for just TMDB poster URLs
+      const tmdbCache = JSON.parse(
+        localStorage.getItem("tmdbPosterCache") || "{}"
+      );
+
+      // Clean up any expired items
+      const now = Date.now();
+      let expiredCount = 0;
+
+      Object.keys(tmdbCache).forEach((key) => {
+        if (tmdbCache[key].expires < now) {
+          delete tmdbCache[key];
+          expiredCount++;
+        }
+      });
+
+      // Save back cleaned cache
+      localStorage.setItem("tmdbPosterCache", JSON.stringify(tmdbCache));
+
+      if (expiredCount > 0) {
+        logInfo(
+          `TMDB poster cache cleaned up (removed ${expiredCount} expired items)`
+        );
+      }
+    } catch (e) {
+      logWarn("TMDB cache cleanup failed:", e);
+    }
+  };
+
+  // Only attempt to set up persistence if we're in a browser environment
+  if (typeof window !== "undefined") {
+    setupPersistence();
+  }
+} catch (err) {
+  logWarn("Query persistence unavailable:", err.message);
+}
 
 // Wrapper to apply theme classes safely
 const ThemeWrapper = ({ children }) => {
@@ -59,112 +131,13 @@ const ThemeWrapper = ({ children }) => {
   );
 };
 
-// Setup Completion Handler - Inside Router context
-const SetupCompletionHandler = ({ onComplete }) => {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { isConfigured, isLoading } = useConfig();
-  const hasRun = useRef(false);
-
-  useEffect(() => {
-    if (!isLoading && isConfigured() && !hasRun.current) {
-      hasRun.current = true;
-
-      const prefetchData = async () => {
-        try {
-          await Promise.all([
-            queryClient.prefetchQuery(["plexActivities"], async () => {
-              const response = await fetch(`/api/downloads`);
-              if (!response.ok)
-                throw new Error("Failed to fetch Plex activities");
-              const data = await response.json();
-              return data.activities || [];
-            }),
-
-            queryClient.prefetchQuery(["recentlyAdded"], async () => {
-              const response = await fetch(`/api/downloads`);
-              if (!response.ok)
-                throw new Error("Failed to fetch recently added");
-              return await response.json();
-            }),
-
-            queryClient.prefetchQuery(["libraries"], async () => {
-              const response = await fetch(`/api/downloads`);
-              if (!response.ok) throw new Error("Failed to fetch libraries");
-              return await response.json();
-            }),
-          ]);
-
-          // Only navigate if we're on the root path
-          const pathname = window.location.pathname;
-          if (pathname === "/" || pathname === "/setup") {
-            navigate("/activities");
-          }
-
-          if (onComplete) onComplete();
-        } catch (error) {
-          console.error("Error prefetching data:", error);
-          if (onComplete) onComplete();
-        }
-      };
-
-      prefetchData();
-    }
-  }, [isConfigured, isLoading, navigate, queryClient, onComplete]);
-
-  return null;
-};
-
-// Protected Route - Inside Router context
+// This component is still useful for routes requiring protection
+// But initial loading is now handled by GlobalPreloader
 const ProtectedRoute = ({ children }) => {
   const { isConfigured, isLoading } = useConfig();
-  const [isPreloading, setIsPreloading] = useState(true);
-  const queryClient = useQueryClient();
-  const hasPreloaded = useRef(false);
 
-  useEffect(() => {
-    if (!isLoading && isConfigured() && !hasPreloaded.current) {
-      hasPreloaded.current = true;
-
-      const preloadData = async () => {
-        try {
-          await Promise.all([
-            queryClient.prefetchQuery(["plexActivities"], async () => {
-              const response = await fetch(`/api/downloads`);
-              if (!response.ok)
-                throw new Error("Failed to fetch Plex activities");
-              const data = await response.json();
-              return data.activities || [];
-            }),
-
-            queryClient.prefetchQuery(["recentlyAdded"], async () => {
-              const response = await fetch(`/api/downloads`);
-              if (!response.ok)
-                throw new Error("Failed to fetch recently added");
-              return await response.json();
-            }),
-
-            queryClient.prefetchQuery(["libraries"], async () => {
-              const response = await fetch(`/api/downloads`);
-              if (!response.ok) throw new Error("Failed to fetch libraries");
-              return await response.json();
-            }),
-          ]);
-        } catch (error) {
-          console.error("Error preloading data:", error);
-        } finally {
-          setIsPreloading(false);
-        }
-      };
-
-      preloadData();
-    } else if (!isLoading) {
-      setIsPreloading(false);
-    }
-  }, [isConfigured, isLoading, queryClient]);
-
-  if (isLoading || isPreloading) {
-    return <LoadingScreen />;
+  if (isLoading) {
+    return <LoadingScreen progress={50} message="Checking configuration..." />;
   }
 
   if (!isConfigured()) {
@@ -176,56 +149,51 @@ const ProtectedRoute = ({ children }) => {
 
 // AppRoutes component - Define routes inside Router context
 const AppRoutes = () => {
-  const [setupComplete, setSetupComplete] = useState(false);
-
   return (
-    <>
-      <SetupCompletionHandler onComplete={() => setSetupComplete(true)} />
-      <Routes>
-        <Route path="/setup" element={<SetupWizard />} />
+    <Routes>
+      <Route path="/setup" element={<SetupWizard />} />
 
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <ThemedDashboardLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Navigate to="/activities" replace />} />
-          <Route path="activities" element={<PlexActivity />} />
-          <Route path="recent" element={<RecentlyAdded />} />
-          <Route path="libraries" element={<Libraries />} />
-          <Route path="users" element={<Users />} />
-          <Route path="format" element={<FormatSettings />} />
-          <Route path="api-endpoints" element={<ApiEndpoints />} />
-          {/* Add Settings as a child route inside the layout */}
-          <Route path="settings" element={<SettingsPage />} />
-        </Route>
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <ThemedDashboardLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="/activities" replace />} />
+        <Route path="activities" element={<PlexActivity />} />
+        <Route path="recent" element={<RecentlyAdded />} />
+        <Route path="libraries" element={<Libraries />} />
+        <Route path="users" element={<Users />} />
+        <Route path="format" element={<FormatSettings />} />
+        <Route path="api-endpoints" element={<ApiEndpoints />} />
+        {/* Add Settings as a child route inside the layout */}
+        <Route path="settings" element={<SettingsPage />} />
+      </Route>
 
-        <Route
-          path="*"
-          element={
-            <div className="flex items-center justify-center h-screen">
-              <div className="text-center">
-                <h1 className="text-3xl font-bold text-red-500 mb-4">
-                  Page Not Found
-                </h1>
-                <p className="text-gray-400 mb-6">
-                  The page you're looking for doesn't exist.
-                </p>
-                <button
-                  onClick={() => (window.location.href = "/")}
-                  className="px-4 py-2 bg-brand-primary-500 text-white rounded-lg"
-                >
-                  Go to Dashboard
-                </button>
-              </div>
+      <Route
+        path="*"
+        element={
+          <div className="flex items-center justify-center h-screen">
+            <div className="text-center">
+              <h1 className="text-3xl font-bold text-red-500 mb-4">
+                Page Not Found
+              </h1>
+              <p className="text-gray-400 mb-6">
+                The page you're looking for doesn't exist.
+              </p>
+              <button
+                onClick={() => (window.location.href = "/")}
+                className="px-4 py-2 bg-brand-primary-500 text-white rounded-lg"
+              >
+                Go to Dashboard
+              </button>
             </div>
-          }
-        />
-      </Routes>
-    </>
+          </div>
+        }
+      />
+    </Routes>
   );
 };
 
@@ -237,7 +205,7 @@ const App = () => {
   // Add error handler
   React.useEffect(() => {
     const handleError = (event) => {
-      console.error("Global error caught:", event.error);
+      logError("Global error caught:", event.error);
       setError(event.error?.message || "An unexpected error occurred");
     };
 
@@ -295,53 +263,78 @@ const App = () => {
       <ConfigProvider>
         <ThemeProvider>
           <ThemeWrapper>
-            <Router>
-              <AppRoutes />
-              <Toaster
-                position="top-right"
-                toastOptions={{
-                  duration: 3000,
-                  style: {
-                    background: `rgba(var(--accent-color), 0.55)`,
-                    color: "#fff",
-                    border: `1px solid rgba(var(--accent-color), 0.5)`,
-                    backdropFilter: "blur(10px)",
-                    boxShadow: `0 0 10px rgba(var(--accent-color), 0.5), 0 0 20px rgba(var(--accent-color), 0.3)`,
-                    textShadow:
-                      "1px 1px 2px rgba(0,0,0,0.5), 0 0 5px rgba(0,0,0,0.3)",
-                  },
-                  success: {
+            <GlobalPreloader>
+              <Router>
+                <MediaContentMonitor />
+                <AppRoutes />
+                <Toaster
+                  position="top-right"
+                  gutter={12}
+                  containerStyle={{
+                    top: 60,
+                  }}
+                  toastOptions={{
+                    duration: 5000,
+                    className: "toast-theme",
                     style: {
-                      background: `rgba(var(--accent-color), 0.55)`,
-                      border: `1px solid rgba(var(--accent-color), 0.7)`,
-                      backdropFilter: "blur(10px)",
-                      boxShadow: `0 0 10px rgba(var(--accent-color), 0.5), 0 0 20px rgba(var(--accent-color), 0.3)`,
-                      textShadow:
-                        "1px 1px 2px rgba(0,0,0,0.5), 0 0 5px rgba(0,0,0,0.3)",
+                      background: "rgba(17, 24, 39, 0.85)",
+                      color: "#fff",
+                      maxWidth: "380px",
+                      padding: "10px 16px",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      fontWeight: "500",
+                      border: "1px solid rgba(var(--accent-color), 0.3)",
+                      backdropFilter: "blur(8px)",
+                      boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
                     },
-                    iconTheme: {
-                      primary: "#10B981",
-                      secondary: "#fff",
+                    // Default toast styling
+                    success: {
+                      duration: 5000,
+                      iconTheme: {
+                        primary: "#10B981",
+                        secondary: "#FFFFFF",
+                      },
+                      style: {
+                        background: "rgba(17, 24, 39, 0.9)",
+                        borderLeft: "4px solid #10B981", // Green accent
+                      },
                     },
-                  },
-                  error: {
-                    style: {
-                      background: "rgba(232, 12, 11, 0.85)",
-                      border: "1px solid rgba(232, 12, 11, 0.7)",
-                      backdropFilter: "blur(10px)",
-                      boxShadow:
-                        "0 0 10px rgba(232, 12, 11, 0.5), 0 0 20px rgba(232, 12, 11, 0.3)",
-                      textShadow:
-                        "1px 1px 2px rgba(0,0,0,0.5), 0 0 5px rgba(0,0,0,0.3)",
+                    error: {
+                      duration: 6000, // Longer duration for errors
+                      iconTheme: {
+                        primary: "#EF4444",
+                        secondary: "#FFFFFF",
+                      },
+                      style: {
+                        background: "rgba(17, 24, 39, 0.9)",
+                        borderLeft: "4px solid #EF4444", // Red accent
+                      },
                     },
-                    iconTheme: {
-                      primary: "#EF4444",
-                      secondary: "#fff",
+                    info: {
+                      iconTheme: {
+                        primary: "rgb(var(--accent-color))",
+                        secondary: "#FFFFFF",
+                      },
+                      style: {
+                        background: "rgba(17, 24, 39, 0.9)",
+                        borderLeft: "4px solid rgba(var(--accent-color), 1)",
+                      },
                     },
-                  },
-                }}
-              />
-            </Router>
+                    loading: {
+                      iconTheme: {
+                        primary: "rgb(var(--accent-color))",
+                        secondary: "#FFFFFF",
+                      },
+                      style: {
+                        background: "rgba(17, 24, 39, 0.9)",
+                        borderLeft: "4px solid rgba(var(--accent-color), 1)",
+                      },
+                    },
+                  }}
+                />
+              </Router>
+            </GlobalPreloader>
           </ThemeWrapper>
         </ThemeProvider>
       </ConfigProvider>

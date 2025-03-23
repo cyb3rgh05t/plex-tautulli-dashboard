@@ -1,298 +1,66 @@
-// with theme styling applied
-
-import React, { useState, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
+import { useLocation } from "react-router-dom";
 import { useConfig } from "../../context/ConfigContext";
-import { logError } from "../../utils/logger";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 import * as Icons from "lucide-react";
-import MediaModal from "./MediaModal";
+import MediaCard from "./MediaCard";
 import ThemedButton from "../common/ThemedButton";
 import ThemedCard from "../common/ThemedCard";
-import { useTheme } from "../../context/ThemeContext";
+import ThemedTabButton from "../common/ThemedTabButton";
+import { useQuery, useQueryClient, useQueries } from "react-query";
+import toast from "react-hot-toast";
+import * as posterCacheService from "../../services/posterCacheService";
 import axios from "axios";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
-
-const MediaCard = ({ media }) => {
-  const [imageError, setImageError] = useState(false);
-  const [imageLoading, setImageLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [resolution, setResolution] = useState(null);
-  const [imageCacheKey, setImageCacheKey] = useState(Date.now()); // Added cache key state
-
-  // Fetch resolution metadata
-  useEffect(() => {
-    const fetchResolution = async () => {
-      try {
-        const response = await axios.get(`/api/tautulli/api/v2`, {
-          params: {
-            apikey: media.apiKey,
-            cmd: "get_metadata",
-            rating_key: media.rating_key,
-          },
-        });
-
-        const mediaInfo = response.data?.response?.data?.media_info?.[0];
-        if (mediaInfo) {
-          let videoResolution = mediaInfo.video_full_resolution;
-          // Convert 4K to 2160p for consistent display
-          if (videoResolution === "4k") {
-            videoResolution = "2160p";
-          }
-          setResolution(videoResolution);
-        }
-      } catch (error) {
-        console.error("Failed to fetch resolution:", error);
-      }
-    };
-
-    // Only fetch if rating_key exists
-    if (media.rating_key) {
-      fetchResolution();
-    }
-  }, [media.rating_key, media.apiKey]);
-
-  // Date formatting helper for relative added time
-  const getRelativeAddedTime = (timestamp) => {
-    if (!timestamp) return "Recently";
-
-    // Convert timestamp to milliseconds if needed
-    const timestampMs =
-      String(timestamp).length === 10 ? timestamp * 1000 : timestamp;
-
-    const now = new Date();
-    const addedDate = new Date(timestampMs);
-    const diffMs = now - addedDate;
-
-    const diffSeconds = Math.floor(diffMs / 1000);
-    const diffMinutes = Math.floor(diffSeconds / 60);
-    const diffHours = Math.floor(diffMinutes / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffSeconds < 60) return "Just now";
-    if (diffMinutes < 60) return `${diffMinutes}m`;
-    if (diffHours < 24) return `${diffHours}h`;
-    return `${diffDays}d`;
-  };
-
-  const getDisplayTitle = () => {
-    // Use our safe media type getter
-    const mediaType = getMediaType();
-
-    switch (mediaType) {
-      case "movie":
-        return media.title;
-      case "episode":
-        return media.grandparent_title;
-      case "season":
-        return media.grandparent_title;
-      case "show":
-        return media.title;
-      default:
-        return media.title || "Unknown";
-    }
-  };
-
-  const getDisplaySubtitle = () => {
-    // Use our safe media type getter
-    const mediaType = getMediaType();
-
-    switch (mediaType) {
-      case "movie":
-        return media.year || "";
-      case "episode":
-        return `S${String(media.parent_media_index || "0").padStart(
-          2,
-          "0"
-        )}・E${String(media.media_index || "0").padStart(2, "0")}`;
-      case "season":
-        return `Season ${media.media_index || 1}`;
-      case "show":
-        return `Season ${media.season || 1}`;
-      default:
-        return "";
-    }
-  };
-
-  // Add safety check for media_type
-  const getMediaType = () => {
-    return media.media_type && typeof media.media_type === "string"
-      ? media.media_type.toLowerCase()
-      : "unknown";
-  };
-
-  const getThumbnailUrl = (media, apiKey) => {
-    let thumbPath;
-
-    // Use our safe media type getter
-    const mediaType = getMediaType();
-
-    switch (mediaType) {
-      case "movie":
-        thumbPath = media.parent_thumb;
-        break;
-      case "show":
-        thumbPath = media.parent_thumb;
-        break;
-      case "episode":
-        thumbPath = media.grandparent_thumb;
-        break;
-      case "season":
-        thumbPath = media.grandparent_thumb;
-        break;
-      default:
-        thumbPath = media.thumb;
-    }
-
-    if (!thumbPath) {
-      thumbPath = media.thumb;
-    }
-
-    return `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
-      thumbPath || ""
-    )}&apikey=${apiKey}&cacheKey=${imageCacheKey}`;
-  };
-
-  return (
-    <>
-      <div
-        onClick={() => setShowModal(true)}
-        className="group cursor-pointer space-y-2"
-      >
-        <div
-          className="relative aspect-[2/3] rounded-xl overflow-hidden 
-            bg-gray-800/50 border border-gray-700/50 
-            group-hover:border-accent group-hover:shadow-accent-lg
-            transition-all duration-200"
-        >
-          {/* Loading State */}
-          {imageLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-modal backdrop-blur-sm">
-              <div className="animate-spin mr-2">
-                <Icons.Loader2 className="h-8 w-8 text-accent-base" />
-              </div>
-            </div>
-          )}
-
-          {/* Image */}
-          {!imageError ? (
-            <img
-              src={getThumbnailUrl(media, media.apiKey)}
-              alt={media.title || "Media"}
-              className={`w-full h-full object-cover transition-all duration-300 
-                  group-hover:scale-105 ${
-                    imageLoading ? "opacity-0" : "opacity-100"
-                  }`}
-              onLoad={() => setImageLoading(false)}
-              onError={() => {
-                setImageError(true);
-                setImageLoading(false);
-              }}
-            />
-          ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-800/50">
-              <Icons.Film size={32} className="text-gray-500 mb-2" />
-              <span className="text-theme-muted text-sm mb-3">No Preview</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation(); // Prevent the card click event
-                  // Generate a new cache key to force image reload
-                  setImageCacheKey(Date.now());
-                  setImageError(false);
-                  setImageLoading(true);
-                }}
-                className="px-3 py-1.5 bg-accent-base/20 backdrop-blur-sm rounded-lg 
-                  border border-accent/20 text-accent-base text-xs font-medium 
-                  hover:bg-accent-base/30 transition-colors flex items-center gap-1.5"
-              >
-                <Icons.RefreshCw size={14} className="animate-spin" />
-                Refresh
-              </button>
-            </div>
-          )}
-
-          {/* Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <div className="absolute bottom-0 left-0 right-0 p-4">
-              <div className="flex items-center gap-2 text-sm text-white">
-                <Icons.Play size={16} />
-                <span>View Details</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Badges */}
-          <div className="absolute top-2 right-2 flex flex-col gap-1">
-            {/* Added Time Badge */}
-            <div
-              className="px-2 py-1 bg-gray-900/70 backdrop-blur-sm rounded-lg 
-                border border-gray-700/50 text-theme-muted text-xs font-medium 
-                flex items-center gap-1"
-            >
-              <Icons.Clock3 size={12} />
-              {getRelativeAddedTime(media.added_at)}
-            </div>
-
-            {/* Resolution Badge */}
-            {resolution && (
-              <div
-                className="px-2 py-1 bg-accent-base/20 backdrop-blur-sm rounded-lg 
-                  border border-accent/20 text-accent-base text-xs font-medium"
-              >
-                {resolution}
-              </div>
-            )}
-
-            {media.rating && (
-              <div
-                className="px-2 py-1 bg-yellow-500/20 backdrop-blur-sm rounded-lg 
-                  border border-yellow-500/20 text-yellow-400 text-xs font-medium 
-                  flex items-center gap-1"
-              >
-                <Icons.Star size={12} />
-                {media.rating}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Metadata */}
-        <div className="space-y-1 px-1">
-          <h3 className="text-white font-medium truncate">
-            {getDisplayTitle()}
-          </h3>
-          <div className="flex items-center gap-2 text-sm accent-base">
-            {getDisplaySubtitle() && (
-              <span className="text-accent-base">{getDisplaySubtitle()}</span>
-            )}
-            {media.duration && (
-              <div className="flex items-center gap-1 text-gray-400">
-                <Icons.Clock3 size={14} />
-                <span>{Math.round((media.duration || 0) / 60000)}m</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Modal is now rendered through a portal */}
-      {showModal && (
-        <MediaModal
-          media={media}
-          onClose={() => setShowModal(false)}
-          apiKey={media.apiKey}
-        />
-      )}
-    </>
-  );
+// Store active tab filter in session storage to preserve between tab switches
+const getStoredActiveFilter = () => {
+  try {
+    return sessionStorage.getItem("recentlyAddedFilter") || "all";
+  } catch (e) {
+    return "all";
+  }
 };
 
+// Store filtered section data in session storage to preserve between tab switches
+const getStoredSectionData = () => {
+  try {
+    const data = sessionStorage.getItem("recentlyAddedSections");
+    return data ? JSON.parse(data) : null;
+  } catch (e) {
+    return null;
+  }
+};
+
+// Track component mounts/unmounts globally to avoid refetching on tab switches
+let componentWasMounted = false;
+
 const LoadingCard = () => (
-  <div className="space-y-2 animate-pulse">
-    <div className="aspect-[2/3] rounded-xl bg-modal border border-gray-700/50" />
-    <div className="space-y-2 px-1">
-      <div className="h-4 bg-modal rounded w-3/4" />
-      <div className="h-3 bg-modal rounded w-1/2" />
+  <div className="space-y-3">
+    {/* Card image skeleton */}
+    <div className="aspect-[2/3] rounded-xl overflow-hidden relative border border-accent bg-gray-800/50">
+      {/* Pulsing overlay */}
+      <div className="absolute inset-0 bg-gray-700/50 animate-pulse"></div>
+
+      {/* Add subtle accent color glow */}
+      <div className="absolute bottom-2 right-2 flex flex-col gap-1">
+        <div className="h-5 w-16 bg-accent/20 rounded-lg animate-pulse"></div>
+        <div className="h-5 w-12 bg-accent/20 rounded-lg animate-pulse"></div>
+      </div>
+    </div>
+
+    {/* Title skeleton */}
+    <div className="h-4 bg-gray-800 rounded w-4/5 animate-pulse"></div>
+
+    {/* Metadata skeletons */}
+    <div className="flex items-center gap-2">
+      <div className="h-3 bg-accent/30 rounded w-1/3 animate-pulse"></div>
+      <div className="h-3 bg-gray-800 rounded w-1/4 animate-pulse"></div>
     </div>
   </div>
 );
@@ -339,38 +107,16 @@ const EmptySection = ({ type }) => {
 
   return (
     <ThemedCard className="p-8 text-center flex flex-col items-center">
-      <Icon size={32} className="text-gray-500 mb-3" />
+      <div className="flex justify-center mb-4">
+        <Icon size={32} className="text-accent opacity-70" />
+      </div>
       <p className="text-theme-muted font-medium mb-1">{message}</p>
       <p className="text-sm text-theme-muted">{hint}</p>
     </ThemedCard>
   );
 };
 
-// Helper function to get type priority for sorting
-const getTypePriority = (type) => {
-  const typeStr = (type || "").toString().toLowerCase();
-  if (typeStr === "movie") return 1;
-  if (typeStr === "show") return 2;
-  if (typeStr === "artist") return 3;
-  return 4; // other types
-};
-
-const MediaTypeSubTab = ({ active, onClick, icon: Icon, children }) => (
-  <button
-    onClick={onClick}
-    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-      active
-        ? "bg-accent-light text-accent-base"
-        : "text-gray-400 hover:text-white hover:bg-gray-700/50"
-    }`}
-  >
-    {Icon && <Icon size={16} />}
-    {children}
-  </button>
-);
-
 // Updated NoLibrariesCard component with centered layout
-
 const NoLibrariesCard = ({ type }) => {
   const typeIcons = {
     movies: Icons.Film,
@@ -394,7 +140,7 @@ const NoLibrariesCard = ({ type }) => {
     >
       <div className="text-center">
         <div className="flex justify-center mb-4">
-          <Icon size={48} className="text-accent-base opacity-70" />
+          <Icon size={48} className="text-accent opacity-70" />
         </div>
         <h3 className="text-white text-xl font-semibold mb-2">
           No {description} have been saved yet
@@ -429,208 +175,437 @@ const NoLibrariesCard = ({ type }) => {
   );
 };
 
+// Helper for standardizing section types
+const mapSectionType = (section) => {
+  if (!section) return "unknown";
+
+  // Get potential type properties
+  const rawType =
+    section.type || section.section_type || section.library_type || "unknown";
+
+  // Normalize to standard types
+  const typeStr = String(rawType).toLowerCase();
+
+  // Map to standard type names
+  if (typeStr.includes("movie")) return "movie";
+  if (typeStr.includes("show")) return "show";
+  if (typeStr.includes("artist") || typeStr.includes("music")) return "artist";
+
+  return typeStr;
+};
+
+// Enhanced RecentlyAdded component with optimized loading
 const RecentlyAdded = () => {
   const { config } = useConfig();
-  const [sections, setSections] = useState([]);
-  const [sectionMedia, setSectionMedia] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
+  const queryClient = useQueryClient();
+  // Use stored filter from session storage (or default to 'all')
+  const [activeMediaTypeFilter, setActiveMediaTypeFilter] = useState(
+    getStoredActiveFilter
+  );
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastRefreshTime, setLastRefreshTime] = useState(0);
-  const refreshInterval = useRef(null);
-  const REFRESH_INTERVAL = 600000; // 10 minutes in milliseconds
+  const location = useLocation();
+  const prevPathRef = useRef(location.pathname);
 
-  // New state for media type filtering
-  const [activeMediaTypeFilter, setActiveMediaTypeFilter] = useState("all");
+  // Track if initial data fetch has occurred
+  const initialDataFetched = useRef(false);
+  // Track if posters have been preloaded
+  const postersPreloaded = useRef(false);
+  // Keep track of tab visibility to optimize loading
+  const [isVisible, setIsVisible] = useState(true);
+  // Central loading state
+  const [isComponentLoading, setIsComponentLoading] = useState(true);
 
-  // Fetch saved sections
-  const fetchSections = async () => {
-    try {
-      const response = await fetch(`/api/sections`);
-      const data = await response.json();
-
-      // Check if sections are available and in the expected format
-      const processedSections = (data.sections || []).map((section) => {
-        // Handle both raw_data and direct section format
-        const sectionData = section.raw_data || section;
-
-        return {
-          ...sectionData,
-          // Ensure type is always available by looking at different possible properties
-          type: sectionData.type || sectionData.section_type || "unknown",
-          // Ensure name is always available
-          name:
-            sectionData.name || sectionData.section_name || "Unknown Section",
-        };
-      });
-
-      setSections(processedSections);
-      return processedSections;
-    } catch (error) {
-      logError("Failed to fetch sections", error);
-      setError("Failed to load sections");
-      return [];
-    }
-  };
-
-  // Fetch recently added media for a specific section
-  const fetchSectionRecentlyAdded = async (sectionId) => {
-    try {
-      const response = await fetch(
-        `/api/tautulli/api/v2?apikey=${config.tautulliApiKey}&cmd=get_recently_added&section_id=${sectionId}&count=5`
-      );
-      const data = await response.json();
-
-      if (data?.response?.result === "success") {
-        return data.response.data.recently_added || [];
-      }
-      return [];
-    } catch (error) {
-      logError(
-        `Failed to fetch recently added for section ${sectionId}`,
-        error
-      );
-      return [];
-    }
-  };
-
-  const handleRefresh = async () => {
-    // Prevent multiple refreshes happening at once
-    if (isRefreshing) return;
-
-    setIsRefreshing(true);
-    try {
-      const savedSections = await fetchSections();
-      const sectionMediaResults = {};
-
-      for (const section of savedSections) {
-        // Skip if section_id is missing
-        if (!section.section_id) {
-          console.warn("Section missing section_id, skipping:", section);
-          continue;
-        }
-
-        const media = await fetchSectionRecentlyAdded(section.section_id);
-        const transformedMedia = media.map((item) => ({
-          ...item,
-          apiKey: config.tautulliApiKey,
-        }));
-
-        sectionMediaResults[section.section_id] = {
-          ...section,
-          media: transformedMedia,
-        };
-      }
-
-      setSectionMedia(sectionMediaResults);
-      setLastRefreshTime(Date.now());
-    } catch (error) {
-      logError("Failed to refresh media", error);
-      setError("Failed to refresh media");
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
-  // Initial load
+  // Save active filter to session storage when it changes
   useEffect(() => {
-    const loadSectionMedia = async () => {
-      setIsLoading(true);
-      setError(null);
-      await handleRefresh();
-      setIsLoading(false);
+    try {
+      sessionStorage.setItem("recentlyAddedFilter", activeMediaTypeFilter);
+    } catch (e) {
+      // Ignore storage errors
+    }
+  }, [activeMediaTypeFilter]);
+
+  // IMPROVED: Sections query with better caching configuration
+  const {
+    data: sectionsData,
+    isLoading: isSectionsLoading,
+    error: sectionsError,
+  } = useQuery(
+    ["sections"],
+    async () => {
+      logInfo("Fetching sections data");
+
+      // First, check if we have cached data from previous visits
+      const cachedData = getStoredSectionData();
+      if (cachedData && !isRefreshing) {
+        // Use the cached data if not refreshing
+        logInfo("Using cached sections data from session storage");
+        return cachedData;
+      }
+
+      const response = await fetch(`/api/sections`);
+      if (!response.ok) throw new Error("Failed to load sections");
+      const data = await response.json();
+
+      // Cache the data for future quick loading
+      try {
+        sessionStorage.setItem("recentlyAddedSections", JSON.stringify(data));
+      } catch (e) {
+        // Ignore storage errors
+      }
+
+      return data;
+    },
+    {
+      staleTime: 30 * 60 * 1000, // Consider data fresh for 30 minutes
+      cacheTime: 60 * 60 * 1000, // Keep in cache for 1 hour
+      refetchOnWindowFocus: false,
+      refetchOnMount: !componentWasMounted, // Only refetch if first time mounting
+      onSuccess: () => {
+        // Mark that we've successfully mounted this component
+        componentWasMounted = true;
+        initialDataFetched.current = true;
+      },
+      onError: (err) => setError("Failed to load sections: " + err.message),
+    }
+  );
+
+  // Process sections from the cached data
+  const processedSections = useMemo(() => {
+    if (!sectionsData || !sectionsData.sections) return [];
+
+    return sectionsData.sections.map((section) => {
+      const sectionData = section.raw_data || section;
+      return {
+        ...sectionData,
+        type: mapSectionType(sectionData), // Use standardized type mapping
+        name: sectionData.name || sectionData.section_name || "Unknown Section",
+      };
+    });
+  }, [sectionsData]);
+
+  // Get all unique section IDs
+  const allSectionIds = useMemo(() => {
+    return processedSections
+      .map((section) => section.section_id)
+      .filter(Boolean);
+  }, [processedSections]);
+
+  // Preload posters for visible media in the background
+  const preloadVisiblePosters = useCallback((mediaItems, apiKey) => {
+    if (postersPreloaded.current || !mediaItems?.length || !apiKey) return;
+
+    // Delay the preloading to prioritize UI rendering
+    setTimeout(() => {
+      // Only preload posters for the first 12 items per section
+      posterCacheService.preloadPosters(mediaItems.slice(0, 12), apiKey);
+      postersPreloaded.current = true;
+    }, 500);
+  }, []);
+
+  // Optimized section queries that respect component mount state
+  const sectionQueries = useQueries(
+    allSectionIds.map((sectionId) => ({
+      queryKey: [`section:${sectionId}`],
+      queryFn: async () => {
+        // Skip if no config available yet
+        if (!config?.tautulliApiKey) return { media: [], section: null };
+
+        try {
+          // Check if we have data in cache already from preloading
+          const cachedData = queryClient.getQueryData([`section:${sectionId}`]);
+          if (
+            cachedData &&
+            cachedData.media &&
+            cachedData.media.length > 0 &&
+            !isRefreshing
+          ) {
+            logDebug(`Using cached data for section ${sectionId}`);
+            return cachedData;
+          }
+
+          // Direct API call to get recently added for this specific section
+          const response = await axios.get(`/api/tautulli/api/v2`, {
+            params: {
+              apikey: config.tautulliApiKey,
+              cmd: "get_recently_added",
+              section_id: sectionId,
+              count: 12, // Request enough items to show
+            },
+          });
+
+          if (response.data?.response?.result !== "success") {
+            throw new Error(`Error fetching section ${sectionId}`);
+          }
+
+          // Get section info
+          const section = processedSections.find(
+            (s) => s.section_id === sectionId
+          );
+
+          // Process media items with minimal enhancements to improve performance
+          const mediaItems =
+            response.data?.response?.data?.recently_added.map((item) => ({
+              ...item,
+              apiKey: config.tautulliApiKey,
+              section_id: sectionId,
+              section_type: section?.type || "unknown",
+            })) || [];
+
+          // Trigger background poster preloading for this section
+          if (mediaItems.length > 0) {
+            preloadVisiblePosters(mediaItems, config.tautulliApiKey);
+          }
+
+          return {
+            media: mediaItems,
+            section,
+          };
+        } catch (error) {
+          logError(`Error loading section ${sectionId}:`, error);
+          return { media: [], section: null };
+        }
+      },
+      staleTime: 5 * 60 * 1000, // 5 minute stale time
+      cacheTime: 15 * 60 * 1000, // 15 minute cache time
+      enabled:
+        !!config?.tautulliApiKey &&
+        !isSectionsLoading &&
+        !!allSectionIds.length &&
+        isVisible, // Only run queries when component is visible
+      refetchOnWindowFocus: false,
+      refetchOnMount: !componentWasMounted, // Only refetch on first mount
+      onError: (err) => logError(`Error fetching section ${sectionId}:`, err),
+    }))
+  );
+
+  // Listen for tab visibility changes to optimize loading
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsVisible(!document.hidden);
     };
 
-    if (config.tautulliApiKey) {
-      loadSectionMedia();
-      setLastRefreshTime(Date.now());
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
-      // Setup interval for auto-refresh
-      refreshInterval.current = setInterval(() => {
-        handleRefresh();
-      }, REFRESH_INTERVAL);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
 
-      // Cleanup interval on unmount
-      return () => {
-        if (refreshInterval.current) {
-          clearInterval(refreshInterval.current);
-        }
-      };
+  // Wait for all sections to load before showing content
+  useEffect(() => {
+    // Check if all section queries are done (success or error)
+    const allQueriesDone = sectionQueries.every(
+      (query) => !query.isLoading || query.isError
+    );
+
+    // Set loading state based on section queries and sections data
+    if (!isSectionsLoading && allQueriesDone) {
+      setIsComponentLoading(false);
+    } else {
+      setIsComponentLoading(true);
     }
-  }, [config.tautulliApiKey]);
+  }, [sectionQueries, isSectionsLoading]);
 
-  // Calculate time until next refresh
-  const timeUntilNextRefresh = Math.max(
-    0,
-    REFRESH_INTERVAL - (Date.now() - lastRefreshTime)
-  );
-  const secondsUntilRefresh = Math.ceil(timeUntilNextRefresh / 1000);
-  const minutesUntilRefresh = Math.floor(secondsUntilRefresh / 60);
-  const remainingSeconds = secondsUntilRefresh % 60;
-  const formattedTimeUntilRefresh = `${minutesUntilRefresh}`;
+  // Process section data based on the active filter
+  const filteredSections = useMemo(() => {
+    // Get only successful queries
+    const successfulQueries = sectionQueries.filter(
+      (query) =>
+        query.isSuccess && query.data?.media?.length > 0 && query.data?.section
+    );
 
-  const getSortedSectionEntries = () => {
-    const allEntries = Object.entries(sectionMedia);
+    // Group by section
+    return successfulQueries
+      .map((query) => query.data)
+      .filter((data) => {
+        // For 'all' filter, include all sections
+        if (activeMediaTypeFilter === "all") return true;
 
-    // Filter based on media type
-    const filteredEntries = allEntries.filter(([_, sectionData]) => {
-      // Check if no filter is selected or matches current media type
-      if (activeMediaTypeFilter === "all") return true;
+        // Otherwise filter by media type
+        const sectionType = mapSectionType(data.section);
+        const typeMap = {
+          movies: "movie",
+          shows: "show",
+          music: "artist",
+        };
 
-      const sectionType = (
-        sectionData.type ||
-        sectionData.section_type ||
-        "unknown"
-      ).toLowerCase();
+        return sectionType === typeMap[activeMediaTypeFilter];
+      });
+  }, [sectionQueries, activeMediaTypeFilter]);
 
-      // Map filter to actual type
-      const typeMap = {
-        movies: "movie",
-        shows: "show",
-        music: "artist",
-      };
+  // Handler for new media detection and automatic update
+  useEffect(() => {
+    // Listen for 'newMediaDetected' event
+    const handleNewMediaDetected = () => {
+      logInfo("New media detected event received, refreshing data");
+      handleRefresh(true); // Silent refresh to avoid unnecessary UI changes
+    };
 
-      return sectionType === typeMap[activeMediaTypeFilter];
-    });
+    window.addEventListener("newMediaDetected", handleNewMediaDetected);
 
-    // First sort by media type, then by name alphabetically
-    return filteredEntries.sort((a, b) => {
-      const typeA = a[1]?.type || a[1]?.section_type || "unknown";
-      const typeB = b[1]?.type || b[1]?.section_type || "unknown";
+    return () => {
+      window.removeEventListener("newMediaDetected", handleNewMediaDetected);
+    };
+  }, []);
 
-      // First sort by type priority
-      const typePriorityDiff = getTypePriority(typeA) - getTypePriority(typeB);
+  // Track if any queries are still loading
+  const isLoading =
+    sectionQueries.some((query) => query.isLoading) ||
+    isSectionsLoading ||
+    isComponentLoading;
 
-      // If types are same, sort by name
-      if (typePriorityDiff === 0) {
-        const nameA = (a[1]?.name || a[1]?.section_name || "").toLowerCase();
-        const nameB = (b[1]?.name || b[1]?.section_name || "").toLowerCase();
-        return nameA.localeCompare(nameB);
+  // Handle refresh button click - force refresh all data
+  const handleRefresh = async (silent = false) => {
+    if (isRefreshing) return;
+
+    if (!silent) {
+      setIsRefreshing(true);
+      setError(null);
+      // Only show toast for manual refreshes
+      toast.success("Refreshing media content...");
+    }
+
+    try {
+      // Clear image cache
+      await axios.get("/api/clear-image-cache");
+
+      // Clear session storage cache
+      try {
+        sessionStorage.removeItem("recentlyAddedSections");
+      } catch (e) {
+        // Ignore storage errors
       }
 
-      return typePriorityDiff;
-    });
+      // Invalidate all queries
+      await queryClient.invalidateQueries(["sections"]);
+
+      // Invalidate section queries
+      for (const sectionId of allSectionIds) {
+        await queryClient.invalidateQueries([`section:${sectionId}`]);
+      }
+
+      // Reset poster preload tracker
+      postersPreloaded.current = false;
+
+      if (!silent) {
+        toast.success("Media content refreshed!");
+      }
+    } catch (error) {
+      logError("Failed to refresh media", error);
+      if (!silent) {
+        setError("Failed to refresh media");
+        toast.error("Failed to refresh media");
+      }
+    } finally {
+      if (!silent) {
+        setIsRefreshing(false);
+      }
+    }
   };
 
+  // Effect for handling route changes and refreshing data when navigating to this tab
+  useEffect(() => {
+    // Check if we're navigating TO the recent tab
+    if (location.pathname === "/recent" && prevPathRef.current !== "/recent") {
+      logInfo("Navigated to recently added tab");
+
+      // Only trigger loading if we haven't loaded before
+      if (!initialDataFetched.current) {
+        setIsComponentLoading(true);
+      } else {
+        // If we've already loaded, just check if data is stale
+        const isDataStale = sectionQueries.some(
+          (query) => query.isStale || !query.data?.media?.length
+        );
+
+        if (isDataStale && !isRefreshing) {
+          // Silently refresh in background without showing loading state
+          logInfo("Data is stale, refreshing in background");
+          handleRefresh(true); // Silent refresh
+        }
+      }
+    }
+
+    // Update ref for next comparison
+    prevPathRef.current = location.pathname;
+  }, [location.pathname, sectionQueries]);
+
+  // Listen for image cache cleared events
+  useEffect(() => {
+    const handleImageCacheCleared = () => {
+      logInfo("Image cache cleared event received, refreshing data");
+      // Force refresh all section queries
+      for (const sectionId of allSectionIds) {
+        queryClient.invalidateQueries([`section:${sectionId}`]);
+      }
+    };
+
+    window.addEventListener("imageCacheCleared", handleImageCacheCleared);
+
+    // Also listen for poster cache cleared events
+    const handlePosterCacheCleared = () => {
+      logInfo("Poster cache cleared event received, refreshing data");
+      // Force refresh all section queries
+      for (const sectionId of allSectionIds) {
+        queryClient.invalidateQueries([`section:${sectionId}`]);
+      }
+
+      // Reset poster preloaded flag
+      postersPreloaded.current = false;
+    };
+
+    window.addEventListener("posterCacheCleared", handlePosterCacheCleared);
+
+    return () => {
+      window.removeEventListener("imageCacheCleared", handleImageCacheCleared);
+      window.removeEventListener(
+        "posterCacheCleared",
+        handlePosterCacheCleared
+      );
+    };
+  }, [allSectionIds, queryClient]);
+
   // Check if there are any sections for the current media type filter
-  const hasSectionsForCurrentFilter = () => {
+  const hasSectionsForCurrentFilter = useCallback(() => {
     const typeMap = {
       movies: "movie",
       shows: "show",
       music: "artist",
     };
 
-    if (activeMediaTypeFilter === "all") return sections.length > 0;
+    if (activeMediaTypeFilter === "all") return processedSections.length > 0;
 
-    return sections.some((section) => {
-      const sectionType = (
-        section.type ||
-        section.section_type ||
-        "unknown"
-      ).toLowerCase();
+    return processedSections.some((section) => {
+      const sectionType = mapSectionType(section);
       return sectionType === typeMap[activeMediaTypeFilter];
     });
-  };
+  }, [activeMediaTypeFilter, processedSections]);
+
+  // Sort sections - movies first, then shows, then music
+  const sortedSections = useMemo(() => {
+    return [...filteredSections].sort((a, b) => {
+      const typeA = mapSectionType(a.section);
+      const typeB = mapSectionType(b.section);
+
+      // Define type priority for sorting
+      const getTypePriority = (type) => {
+        if (type === "movie") return 1;
+        if (type === "show") return 2;
+        if (type === "artist") return 3;
+        return 4;
+      };
+
+      // First sort by type
+      const typeDiff = getTypePriority(typeA) - getTypePriority(typeB);
+      if (typeDiff !== 0) return typeDiff;
+
+      // Then by name
+      const nameA = (a.section?.name || "").toLowerCase();
+      const nameB = (b.section?.name || "").toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+  }, [filteredSections]);
 
   return (
     <div className="space-y-8">
@@ -640,29 +615,25 @@ const RecentlyAdded = () => {
             Recently Added
           </h2>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
-              <Icons.Film size={14} className="text-accent-base" />
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-accent">
+              <Icons.Film size={14} className="text-accent" />
               <span className="text-theme-muted text-sm">
-                {sections.length} Sections
+                {processedSections.length} Sections
               </span>
             </div>
-            {isRefreshing ? (
+            {isRefreshing && (
               <span className="text-xs text-theme-muted">Refreshing...</span>
-            ) : (
-              <span className="text-xs text-theme-muted">
-                Auto-refresh in {formattedTimeUntilRefresh}min
-              </span>
             )}
           </div>
         </div>
 
         <ThemedButton
-          onClick={handleRefresh}
+          onClick={() => handleRefresh()}
           disabled={isRefreshing}
           variant="accent"
           icon={
             isRefreshing
-              ? () => <Icons.RefreshCw className="animate-spin" />
+              ? () => <Icons.RefreshCw className="text-accent animate-spin" />
               : Icons.RefreshCw
           }
         >
@@ -672,43 +643,45 @@ const RecentlyAdded = () => {
 
       {/* Media Type Subtabs */}
       <div className="flex gap-2 mb-4">
-        <MediaTypeSubTab
+        <ThemedTabButton
           active={activeMediaTypeFilter === "all"}
           onClick={() => setActiveMediaTypeFilter("all")}
           icon={Icons.Grid}
         >
           All Media
-        </MediaTypeSubTab>
-        <MediaTypeSubTab
+        </ThemedTabButton>
+        <ThemedTabButton
           active={activeMediaTypeFilter === "movies"}
           onClick={() => setActiveMediaTypeFilter("movies")}
           icon={Icons.Film}
         >
           Movies
-        </MediaTypeSubTab>
-        <MediaTypeSubTab
+        </ThemedTabButton>
+        <ThemedTabButton
           active={activeMediaTypeFilter === "shows"}
           onClick={() => setActiveMediaTypeFilter("shows")}
           icon={Icons.Tv}
         >
           TV Shows
-        </MediaTypeSubTab>
-        <MediaTypeSubTab
+        </ThemedTabButton>
+        <ThemedTabButton
           active={activeMediaTypeFilter === "music"}
           onClick={() => setActiveMediaTypeFilter("music")}
           icon={Icons.Music}
         >
           Music
-        </MediaTypeSubTab>
+        </ThemedTabButton>
       </div>
 
-      {/* Existing rendering logic remains the same */}
+      {/* Error handling */}
       {error && (
         <ThemedCard className="bg-red-500/10 border-red-500/20 p-6 text-center flex flex-col items-center">
-          <Icons.AlertCircle size={24} className="text-red-400 mb-2" />
+          <div className="flex justify-center mb-4">
+            <Icons.AlertCircle size={24} className="text-red-400 mb-2" />
+          </div>
           <p className="text-red-400">{error}</p>
           <ThemedButton
-            onClick={handleRefresh}
+            onClick={() => handleRefresh()}
             className="mt-4"
             variant="danger"
             icon={Icons.RefreshCw}
@@ -718,9 +691,12 @@ const RecentlyAdded = () => {
         </ThemedCard>
       )}
 
-      {!sections.length && (
+      {/* No sections message */}
+      {!processedSections.length && (
         <ThemedCard className="p-8 text-center flex flex-col items-center">
-          <Icons.Film size={32} className="text-gray-500 mb-3" />
+          <div className="flex justify-center mb-4">
+            <Icons.Film size={32} className="text-accent opacity-70" />
+          </div>
           <p className="text-theme-muted mb-2">
             No library sections have been saved yet
           </p>
@@ -751,11 +727,12 @@ const RecentlyAdded = () => {
         </ThemedCard>
       )}
 
-      {/* New condition for no libraries of specific type */}
-      {sections.length > 0 && !hasSectionsForCurrentFilter() && (
+      {/* No libraries of specific type */}
+      {processedSections.length > 0 && !hasSectionsForCurrentFilter() && (
         <NoLibrariesCard type={activeMediaTypeFilter} />
       )}
 
+      {/* Loading state */}
       {isLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
           {[...Array(12)].map((_, i) => (
@@ -764,53 +741,188 @@ const RecentlyAdded = () => {
         </div>
       ) : (
         <div className="space-y-12">
-          {getSortedSectionEntries().map(([sectionId, sectionData]) => {
-            // Check if the section data is valid
-            if (!sectionData || typeof sectionData !== "object") {
-              return null;
-            }
+          {sortedSections.length === 0 ? (
+            <ThemedCard className="p-8 text-center">
+              <Icons.Search
+                size={48}
+                className="mx-auto mb-4 text-accent opacity-70"
+              />
+              <h3 className="text-xl font-medium text-white mb-2">
+                No media found
+              </h3>
+              <p className="text-theme-muted">
+                There are no recently added items for the selected filter.
+              </p>
+            </ThemedCard>
+          ) : (
+            sortedSections.map((sectionData, sectionIndex) => {
+              if (
+                !sectionData.section ||
+                !sectionData.media ||
+                sectionData.media.length === 0
+              ) {
+                return null;
+              }
 
-            // Get section type safely
-            const sectionType =
-              sectionData.type || sectionData.section_type || "unknown";
+              // Get the section name and type
+              const sectionName = sectionData.section.name || "Unknown Section";
+              const sectionType = mapSectionType(sectionData.section);
+              const formattedType =
+                sectionType.charAt(0).toUpperCase() + sectionType.slice(1);
 
-            // Format the type for display
-            const formattedType =
-              typeof sectionType === "string"
-                ? sectionType.charAt(0).toUpperCase() + sectionType.slice(1)
-                : "Unknown";
+              // Sort the media items by added_at date (newest first)
+              const sortedMedia = [...sectionData.media].sort(
+                (a, b) => parseInt(b.added_at || 0) - parseInt(a.added_at || 0)
+              );
 
-            return (
-              <div key={sectionId} className="space-y-4">
-                <div className="flex items-center gap-3 pb-2 border-b border-gray-700/50">
-                  <h3 className="text-xl font-medium text-white">
-                    {sectionData.name || "Unknown Section"}
-                  </h3>
-                  <div className="px-2 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
-                    <span className="text-theme-muted text-sm">
-                      {formattedType}
-                    </span>
+              return (
+                <div
+                  key={`section-${
+                    sectionData.section.section_id || sectionIndex
+                  }`}
+                  className="space-y-4"
+                >
+                  <div className="flex items-center justify-between pb-2 border-b border-accent">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-xl font-medium text-white">
+                        {sectionName}
+                      </h3>
+                      <div className="px-2 py-1 bg-gray-800/50 rounded-lg border border-accent">
+                        <span className="text-theme-muted text-sm">
+                          {formattedType}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Section Actions */}
+                    <div>
+                      <ThemedButton
+                        onClick={async () => {
+                          try {
+                            // Show loading toast
+                            toast.loading(
+                              `Refreshing posters for ${sectionName}...`,
+                              {
+                                id: `section-${sectionData.section.section_id}`,
+                              }
+                            );
+
+                            try {
+                              // First try using the API endpoint
+                              await axios.post("/api/refresh-posters", {
+                                sectionId: sectionData.section.section_id,
+                              });
+                            } catch (apiError) {
+                              // If the server-side endpoint fails, we'll use a fallback approach
+                              logWarn(
+                                `API endpoint for refreshing section failed: ${apiError.message}`
+                              );
+
+                              // Alternative approach: clear cache and invalidate queries
+                              // 1. Clear image cache first
+                              await axios.get("/api/clear-image-cache");
+
+                              // 2. If section has media items, try to refresh their posters individually
+                              const refreshPromises = sortedMedia
+                                .slice(0, 6)
+                                .map(async (mediaItem) => {
+                                  try {
+                                    if (mediaItem.rating_key) {
+                                      // Clear the cache for this specific poster
+                                      await posterCacheService.clearPosterCache(
+                                        mediaItem.rating_key
+                                      );
+
+                                      // Re-cache the poster with fresh data
+                                      const thumbPath =
+                                        posterCacheService.getAppropriateThumbPath(
+                                          mediaItem
+                                        );
+                                      if (thumbPath && mediaItem.apiKey) {
+                                        return posterCacheService.cachePoster(
+                                          mediaItem.rating_key,
+                                          thumbPath,
+                                          mediaItem.apiKey,
+                                          mediaItem.media_type
+                                        );
+                                      }
+                                    }
+                                    return Promise.resolve();
+                                  } catch (itemError) {
+                                    // Log but continue with other items
+                                    logWarn(
+                                      `Failed to refresh poster for ${mediaItem.title}: ${itemError.message}`
+                                    );
+                                    return Promise.resolve();
+                                  }
+                                });
+
+                              // Wait for all the individual refresh operations to complete
+                              await Promise.allSettled(refreshPromises);
+                            }
+
+                            // Force cache refresh regardless of which method was used
+                            queryClient.invalidateQueries([
+                              `section:${sectionData.section.section_id}`,
+                            ]);
+
+                            // Reset poster preloaded flag
+                            postersPreloaded.current = false;
+
+                            // Success toast
+                            toast.success(
+                              `Refreshed ${sectionName} posters. Changes may take a moment to appear.`,
+                              {
+                                id: `section-${sectionData.section.section_id}`,
+                                duration: 5000,
+                              }
+                            );
+
+                            // Trigger a global refresh event
+                            window.dispatchEvent(
+                              new CustomEvent("posterCacheCleared", {
+                                detail: { timestamp: Date.now() },
+                              })
+                            );
+                          } catch (error) {
+                            console.error(
+                              `Failed to refresh section ${sectionName}:`,
+                              error
+                            );
+                            toast.error(
+                              `Failed to refresh ${sectionName} posters: ${error.message}`,
+                              {
+                                id: `section-${sectionData.section.section_id}`,
+                              }
+                            );
+                          }
+                        }}
+                        variant="ghost"
+                        size="sm"
+                        title="Refresh all posters in this section"
+                        icon={Icons.RefreshCw}
+                      >
+                        Refresh Posters
+                      </ThemedButton>
+                    </div>
                   </div>
+
+                  {sortedMedia.length === 0 ? (
+                    <EmptySection type={sectionType} />
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                      {sortedMedia.slice(0, 6).map((media, mediaIndex) => (
+                        <MediaCard
+                          key={`${media.rating_key || `unknown-${mediaIndex}`}`}
+                          media={media}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
-
-                {!sectionData.media || sectionData.media.length === 0 ? (
-                  <EmptySection type={sectionType} />
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                    {sectionData.media.map((media) => (
-                      <MediaCard
-                        key={`${media.media_type || "unknown"}-${
-                          media.rating_key ||
-                          Math.random().toString(36).substring(2, 9)
-                        }`}
-                        media={media}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       )}
     </div>

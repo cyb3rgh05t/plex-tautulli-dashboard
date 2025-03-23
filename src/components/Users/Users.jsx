@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
-import { useTheme } from "../../context/ThemeContext";
+import { useTheme } from "../../context/ThemeContext.jsx";
 import { useLocation } from "react-router-dom";
-import { logError } from "../../utils/logger";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 import * as Icons from "lucide-react";
 import ThemedCard from "../common/ThemedCard";
 import ThemedButton from "../common/ThemedButton";
@@ -16,30 +16,22 @@ const ActivityBadge = ({ type }) => {
   const styles = {
     watching: {
       icon: Icons.Play,
-      bg: "bg-green-500/10",
-      text: "text-green-400",
-      border: "border-green-500/20",
+      className: "bg-green-500/10 text-green-400 border-green-500/20",
       label: "Watching",
     },
     watched: {
       icon: Icons.Clock,
-      bg: "bg-gray-500/10",
-      text: "text-gray-400",
-      border: "border-gray-500/20",
+      className: "bg-gray-500/10 text-gray-400 border-gray-500/20",
       label: "Watched",
     },
     movie: {
       icon: Icons.Film,
-      bg: "bg-brand-primary-500/10",
-      text: "text-accent-base",
-      border: "border-accent/20",
+      className: "bg-accent-lighter text-accent border-accent/30",
       label: "Movie",
     },
     episode: {
       icon: Icons.Tv,
-      bg: "bg-brand-primary-500/10",
-      text: "text-accent-base",
-      border: "border-accent/20",
+      className: "bg-accent-lighter text-accent border-accent/30",
       label: "TV Show",
     },
   };
@@ -53,8 +45,7 @@ const ActivityBadge = ({ type }) => {
 
   return (
     <div
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border
-        ${style.bg} ${style.text} ${style.border}`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border ${style.className}`}
     >
       <Icon size={14} />
       <span className="text-xs font-medium">{style.label}</span>
@@ -67,37 +58,37 @@ const UsersTable = ({ users }) => (
     <table className="w-full border-separate border-spacing-0">
       <thead>
         <tr>
-          <th className="px-4 py-3 text-left bg-gray-800/50 rounded-tl-lg border-b border-gray-700/50">
+          <th className="px-4 py-3 text-left bg-gray-800/50 rounded-tl-lg border-b border-accent">
             <div className="flex items-center gap-2 text-theme-muted font-medium">
               <Icons.Users size={14} />
               Username
             </div>
           </th>
-          <th className="px-4 py-3 text-left bg-gray-800/50 border-b border-gray-700/50">
+          <th className="px-4 py-3 text-left bg-gray-800/50 border-b border-accent">
             <div className="flex items-center gap-2 text-theme-muted font-medium">
               <Icons.Clock size={14} />
               Last Seen
             </div>
           </th>
-          <th className="px-4 py-3 text-left bg-gray-800/50 border-b border-gray-700/50">
+          <th className="px-4 py-3 text-left bg-gray-800/50 border-b border-accent">
             <div className="flex items-center gap-2 text-theme-muted font-medium">
               <Icons.PlayCircle size={14} />
               Last Played Media
             </div>
           </th>
-          <th className="px-4 py-3 text-left bg-gray-800/50 border-b border-gray-700/50">
+          <th className="px-4 py-3 text-left bg-gray-800/50 border-b border-accent">
             <div className="flex items-center gap-2 text-theme-muted font-medium">
               <Icons.Clock size={14} />
               Runtime Duration
             </div>
           </th>
-          <th className="px-4 py-3 text-right bg-gray-800/50 border-b border-gray-700/50">
+          <th className="px-4 py-3 text-right bg-gray-800/50 border-b border-accent">
             <div className="flex items-center justify-end gap-2 text-theme-muted font-medium">
               <Icons.Play size={14} />
               Total Plays
             </div>
           </th>
-          <th className="px-4 py-3 text-right bg-gray-800/50 rounded-tr-lg border-b border-gray-700/50">
+          <th className="px-4 py-3 text-right bg-gray-800/50 rounded-tr-lg border-b border-accent">
             <div className="flex items-center justify-end gap-2 text-theme-muted font-medium">
               <Icons.Film size={14} />
               Type
@@ -114,7 +105,7 @@ const UsersTable = ({ users }) => (
           return (
             <tr
               key={userData.user_id || index}
-              className={`hover:bg-gray-800/30 transition-colors duration-200 ${
+              className={`hover:bg-gray-800/30 transition-theme ${
                 isWatching ? "bg-gray-800/20" : ""
               }`}
             >
@@ -125,7 +116,7 @@ const UsersTable = ({ users }) => (
                 {isWatching ? (
                   <span className="font-medium text-green-400 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                    Is Watching
+                    Watching
                   </span>
                 ) : (
                   <span className="text-theme">
@@ -146,7 +137,7 @@ const UsersTable = ({ users }) => (
                       )}m`
                     : "0m")}
               </td>
-              <td className="px-4 py-3 text-right text-accent-base font-medium">
+              <td className="px-4 py-3 text-right text-accent font-medium">
                 {userData.plays ? userData.plays.toLocaleString() : "0"}
               </td>
               <td className="px-4 py-3 text-right">
@@ -164,47 +155,45 @@ const UsersTable = ({ users }) => (
   </div>
 );
 
-const LoadingSkeleton = () => (
-  <div className="space-y-6 animate-pulse">
-    {/* Header skeleton */}
-    <div className="flex justify-between items-center">
-      <div>
-        <div className="h-8 w-48 bg-gray-800/50 rounded-lg mb-2"></div>
-        <div className="h-6 w-32 bg-gray-800/50 rounded-lg"></div>
-      </div>
-      <div className="h-10 w-28 bg-gray-800/50 rounded-lg"></div>
-    </div>
-
-    {/* Table skeleton */}
-    <div className="bg-gray-900/30 rounded-xl overflow-hidden border border-gray-800/50">
+const TableSkeleton = () => (
+  <ThemedCard className="overflow-hidden">
+    <div className="animate-pulse">
       {/* Table header */}
-      <div className="h-14 bg-gray-800/50 border-b border-gray-700/50 px-4 flex items-center">
-        <div className="flex-1 h-6 bg-gray-700/50 rounded-md"></div>
+      <div className="flex gap-4 px-4 py-3 bg-gray-800/50 border-b border-accent">
+        {[...Array(6)].map((_, i) => (
+          <div
+            key={i}
+            className={`h-5 bg-gray-700/50 rounded-md ${
+              i === 0 ? "w-24" : i === 5 ? "w-16 ml-auto" : "w-32"
+            }`}
+          ></div>
+        ))}
       </div>
 
       {/* Table rows */}
       {[...Array(5)].map((_, i) => (
         <div
           key={i}
-          className="h-16 px-4 flex items-center border-b border-gray-800/30"
+          className="flex items-center gap-4 px-4 py-4 border-b border-gray-700/30"
         >
-          <div className="w-1/6 h-6 bg-gray-800/70 rounded-md mr-4"></div>
-          <div className="w-1/6 h-6 bg-gray-800/70 rounded-md mr-4"></div>
-          <div className="w-1/6 h-6 bg-gray-800/70 rounded-md mr-4"></div>
-          <div className="w-1/6 h-6 bg-gray-800/70 rounded-md mr-4"></div>
-          <div className="w-1/6 h-6 bg-gray-800/70 rounded-md mr-4"></div>
-          <div className="w-1/6 h-6 bg-gray-800/70 rounded-md"></div>
+          <div className="w-32 h-5 bg-gray-700/50 rounded-md"></div>
+          <div className="w-24 h-5 bg-gray-700/50 rounded-md"></div>
+          <div className="flex-1 h-5 bg-gray-700/50 rounded-md"></div>
+          <div className="w-20 h-5 bg-gray-700/50 rounded-md"></div>
+          <div className="w-16 h-5 bg-gray-700/50 rounded-md"></div>
+          <div className="w-24 h-6 bg-gray-700/50 rounded-full"></div>
         </div>
       ))}
     </div>
+  </ThemedCard>
+);
 
-    {/* Pagination skeleton */}
-    <div className="flex justify-center mt-6">
-      <div className="flex gap-2">
-        <div className="w-10 h-10 bg-gray-800/70 rounded-lg"></div>
-        <div className="w-10 h-10 bg-gray-800/70 rounded-lg"></div>
-        <div className="w-10 h-10 bg-gray-800/70 rounded-lg"></div>
-      </div>
+const PaginationSkeleton = () => (
+  <div className="flex justify-center mt-6 animate-pulse">
+    <div className="flex gap-2">
+      <div className="w-10 h-10 bg-gray-700/50 rounded-lg"></div>
+      <div className="w-10 h-10 bg-gray-700/50 rounded-lg"></div>
+      <div className="w-10 h-10 bg-gray-700/50 rounded-lg"></div>
     </div>
   </div>
 );
@@ -216,7 +205,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="p-2 rounded-lg border border-gray-700/50 bg-gray-800/50 text-theme-muted 
+        className="p-2 rounded-lg border  border-accent bg-gray-800/50 text-theme-muted 
           hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Icons.ChevronLeft size={16} />
@@ -230,8 +219,8 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
             className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors
               ${
                 currentPage === page
-                  ? "bg-accent-base text-white"
-                  : "bg-gray-800/50 text-theme-muted hover:bg-gray-700 hover:text-white border border-gray-700/50"
+                  ? "bg-accent-light text-white"
+                  : "bg-gray-800/50 text-theme-muted hover:bg-gray-700 hover:text-white border  border-accent"
               }`}
           >
             {page}
@@ -242,7 +231,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="p-2 rounded-lg border border-gray-700/50 bg-gray-800/50 text-theme-muted 
+        className="p-2 rounded-lg border  border-accent bg-gray-800/50 text-theme-muted 
           hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Icons.ChevronRight size={16} />
@@ -356,75 +345,103 @@ const Users = () => {
   );
   const secondsUntilRefresh = Math.ceil(timeUntilNextRefresh / 1000);
 
-  // If loading, show skeleton
-  if (isLoading) {
-    return <LoadingSkeleton />;
-  }
+  // Page header - always visible
+  const pageHeader = (
+    <div className="flex justify-between items-center mb-6">
+      <div className="space-y-1">
+        <h2 className="text-2xl font-semibold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+          Plex Users
+        </h2>
+        <div className="flex items-center gap-2">
+          {isLoading || isRefreshing ? (
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-accent">
+              <Icons.Users size={14} className="text-accent" />
+              <div className="w-16 h-4 bg-gray-700/70 rounded-md animate-pulse"></div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-accent">
+              <Icons.Users size={14} className="text-accent" />
+              <span className="text-theme-muted text-sm">
+                {totalItems} Users
+              </span>
+            </div>
+          )}
+          {isRefreshing || isLoading ? (
+            <span className="text-xs text-theme-muted">Refreshing...</span>
+          ) : (
+            <span className="text-xs text-theme-muted">
+              Auto-refresh in {secondsUntilRefresh}s
+            </span>
+          )}
+        </div>
+      </div>
 
+      <ThemedButton
+        onClick={handleRefresh}
+        disabled={isRefreshing || isLoading}
+        variant="accent"
+        icon={
+          isRefreshing || isLoading
+            ? () => <Icons.RefreshCw className="text-accent animate-spin" />
+            : Icons.RefreshCw
+        }
+      >
+        {isRefreshing || isLoading ? "Refreshing..." : "Refresh"}
+      </ThemedButton>
+    </div>
+  );
   // If error, show error state
   if (isError) {
     return (
-      <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center">
-        <p className="text-red-400">
-          {error?.message || "Failed to load users"}
-        </p>
+      <div>
+        {pageHeader}
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center">
+          <p className="text-red-400">
+            {error?.message || "Failed to load users"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // If loading or refreshing, show the page header with skeleton
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        {pageHeader}
+        <TableSkeleton />
+        <PaginationSkeleton />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div className="space-y-1">
-          <h2 className="text-2xl font-semibold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-            Plex Users
-          </h2>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
-              <Icons.Users size={14} className="text-accent-base" />
-              <span className="text-theme-muted text-sm">
-                {totalItems} Users
-              </span>
-            </div>
-            {isRefreshing ? (
-              <span className="text-xs text-theme-muted">Refreshing...</span>
-            ) : (
-              <span className="text-xs text-theme-muted">
-                Auto-refresh in {secondsUntilRefresh}s
-              </span>
-            )}
-          </div>
-        </div>
+      {pageHeader}
 
-        <ThemedButton
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          variant="accent"
-          icon={
-            isRefreshing
-              ? () => <Icons.RefreshCw className="animate-spin" />
-              : Icons.RefreshCw
-          }
-        >
-          {isRefreshing ? "Refreshing..." : "Refresh"}
-        </ThemedButton>
-      </div>
-
-      <ThemedCard className="overflow-hidden">
-        <UsersTable users={currentItems} />
-      </ThemedCard>
+      {isRefreshing ? (
+        <TableSkeleton />
+      ) : (
+        <ThemedCard className="overflow-hidden">
+          <UsersTable users={currentItems} />
+        </ThemedCard>
+      )}
 
       {/* Pagination controls */}
-      {totalPages > 1 && (
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-        />
+      {isRefreshing ? (
+        <PaginationSkeleton />
+      ) : (
+        totalPages > 1 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+          />
+        )
       )}
 
       {/* Page indicator */}
-      {totalPages > 1 && (
+      {!isRefreshing && totalPages > 1 && (
         <div className="text-center text-sm text-theme-muted">
           Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
           {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems}{" "}

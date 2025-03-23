@@ -1,4 +1,4 @@
-// update-version.js
+// update-release.js
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -12,13 +12,13 @@ const isDev =
   process.env.NODE_ENV === "development" || process.argv.includes("--dev");
 console.log(`Running in ${isDev ? "development" : "production"} mode`);
 
-// Read the version from version.js (the source of truth)
+// Read the version from release.js (the source of truth)
 function getVersionFromFile() {
   try {
-    const versionFilePath = path.join(__dirname, "version.js");
+    const versionFilePath = path.join(__dirname, "release.js");
 
     if (!fs.existsSync(versionFilePath)) {
-      console.error("Error: version.js file does not exist!");
+      console.log("Error: release.js file does not exist!");
       process.exit(1);
     }
 
@@ -26,27 +26,27 @@ function getVersionFromFile() {
     const versionMatch = versionFileContent.match(/appVersion = "([^"]+)"/);
 
     if (!versionMatch || !versionMatch[1]) {
-      console.error("Error: Could not parse version from version.js!");
+      console.log("Error: Could not parse version from release.js!");
       process.exit(1);
     }
 
     // Extract the base version from the file
     const version = versionMatch[1];
-    console.log(`Found version in version.js: ${version}`);
+    console.log(`Found version in release.js: ${version}`);
     return version;
   } catch (error) {
-    console.error("Error reading version.js:", error);
+    console.log("Error reading release.js:", error);
     process.exit(1);
   }
 }
 
-// Update package.json with the version from version.js
+// Update package.json with the version from release.js
 function updatePackageJson(version) {
   try {
     const packageJsonPath = path.join(__dirname, "package.json");
 
     if (!fs.existsSync(packageJsonPath)) {
-      console.error("Error: package.json file does not exist!");
+      console.log("Error: package.json file does not exist!");
       process.exit(1);
     }
 
@@ -64,7 +64,7 @@ function updatePackageJson(version) {
 
     return true;
   } catch (error) {
-    console.error("Error updating package.json:", error);
+    console.log("Error updating package.json:", error);
     return false;
   }
 }
@@ -107,7 +107,7 @@ function updateReadmeBadge(version) {
       return true;
     }
   } catch (error) {
-    console.error("Error updating README.md badge:", error);
+    console.log("Error updating README.md badge:", error);
     return false;
   }
 }
@@ -117,7 +117,7 @@ function main() {
   const version = getVersionFromFile();
 
   if (!version) {
-    console.error("Failed to get version information.");
+    console.log("Failed to get version information.");
     process.exit(1);
   }
 
@@ -127,7 +127,7 @@ function main() {
   if (packageSuccess && readmeSuccess) {
     console.log("Version update completed successfully!");
   } else {
-    console.error("Version update failed!");
+    console.log("Version update failed!");
     process.exit(1);
   }
 }

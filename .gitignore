@@ -1,6 +1,41 @@
+# Dependency directories
+node_modules
+npm-debug.log
+
+# Build output
+dist
+build
+
+# Environment files
 .env
-/.vscode
-/cache
-/node_modules
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+config.json
+formats.json
+
+# Logs
+logs
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.idea
+.vscode
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.bak
+
+# Backup files
+*.backup
+sections.json
 package-lock.json
-/configs
+/cache
+/posters

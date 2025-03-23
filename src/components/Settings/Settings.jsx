@@ -7,50 +7,170 @@ import { testTautulliConnection } from "../../services/tautulliService";
 import * as Icons from "lucide-react";
 import toast from "react-hot-toast";
 import ThemedButton from "../common/ThemedButton";
+import ThemedTabButton from "../common/ThemedTabButton";
 import ThemedCard from "../common/ThemedCard";
 import BackupSettings from "./BackupSettings";
 import CacheManager from "./CacheManager";
+import LoggingSettings from "./LoggingSettings";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
 // Styled tab component for settings
 const SettingsTab = ({ active, onClick, icon: Icon, label }) => (
-  <button
+  <ThemedTabButton
+    active={active}
     onClick={onClick}
-    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-      active
-        ? "bg-accent-light text-accent-base"
-        : "text-gray-400 hover:text-white hover:bg-gray-700/50"
-    }`}
+    icon={Icon}
+    className="min-w-[140px]"
   >
-    {Icon && <Icon size={16} className={active ? "text-accent-base" : ""} />}
-    <span>{label}</span>
-  </button>
+    {label}
+  </ThemedTabButton>
 );
 
-// Color option component for accent selection
+// Enhanced color option component for accent selection
 const ColorOption = ({ color, current, onChange, displayName, rgb }) => {
+  const isActive = current === color;
+
   return (
     <button
       onClick={() => onChange(color)}
-      className={`flex flex-col items-center p-4 rounded-lg transition-all ${
-        current === color
-          ? "border-2 border-white"
-          : "border border-gray-700/50"
+      className={`flex flex-col items-center p-4 rounded-lg transition-all duration-200 ${
+        isActive
+          ? "border-2 border-white shadow-lg"
+          : "border border-accent hover:border-accent/50 hover:shadow-accent-sm"
       }`}
       style={{
-        backgroundColor:
-          current === color ? `rgba(${rgb}, 0.4)` : `rgba(${rgb}, 0.2)`,
+        backgroundColor: isActive ? `rgba(${rgb}, 0.15)` : `rgba(${rgb}, 0.05)`,
       }}
     >
       <div
-        className="w-12 h-12 rounded-full mb-2 flex items-center justify-center"
+        className={`w-12 h-12 rounded-full mb-2 flex items-center justify-center transition-transform duration-200 ${
+          isActive ? "scale-110" : "hover:scale-105"
+        }`}
         style={{
           background: `linear-gradient(135deg, rgba(${rgb}, 0.8) 0%, rgba(${rgb}, 0.4) 100%)`,
-          boxShadow: current === color ? `0 0 10px rgba(${rgb}, 0.6)` : "none",
+          boxShadow: isActive ? `0 0 15px rgba(${rgb}, 0.6)` : "none",
         }}
       >
-        {current === color && <Icons.Check size={20} className="text-white" />}
+        {isActive && <Icons.Check size={20} className="text-white" />}
       </div>
-      <span className="text-white text-sm font-medium">{displayName}</span>
+      <span
+        className={`text-white text-sm font-medium ${
+          isActive ? "text-accent-base" : ""
+        }`}
+      >
+        {displayName}
+      </span>
+    </button>
+  );
+};
+
+// Theme preview component
+const ThemePreview = ({
+  id,
+  name,
+  description,
+  colors,
+  isActive,
+  onClick,
+  isDefault,
+}) => {
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        flex flex-col items-center p-4 rounded-lg transition-theme
+        ${
+          isActive
+            ? "bg-accent-light/20 border-2 border-white/80 shadow-accent"
+            : "border border-accent/50"
+        }
+        hover:bg-white/10 hover:border-white/40
+      `}
+    >
+      {/* Theme preview swatch */}
+      <div className="w-full h-24 mb-3 rounded-md overflow-hidden shadow-md relative">
+        {/* Gradient or solid background */}
+        {[
+          "hotline",
+          "aquamarine",
+          "hotpink",
+          "cyberpunk",
+          "spacegray",
+          "maroon",
+        ].includes(id) ? (
+          <div
+            className="w-full h-full"
+            style={{
+              background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%)`,
+            }}
+          >
+            {/* For cyberpunk, add grid overlay */}
+            {id === "cyberpunk" && (
+              <div
+                className="absolute inset-0"
+                style={{
+                  backgroundImage: `linear-gradient(${colors.accent}20 1px, transparent 1px), 
+                                  linear-gradient(90deg, ${colors.accent}20 1px, transparent 1px)`,
+                  backgroundSize: "10px 10px",
+                }}
+              />
+            )}
+          </div>
+        ) : (
+          <div
+            className="w-full h-full"
+            style={{ background: colors.primary }}
+          />
+        )}
+
+        {/* Special elements for cyberpunk theme */}
+        {id === "cyberpunk" && (
+          <>
+            <div
+              className="absolute top-2 left-2 w-6 h-1"
+              style={{ background: colors.highlight }}
+            />
+            <div
+              className="absolute top-2 right-2 w-1 h-6"
+              style={{ background: colors.accent }}
+            />
+            <div
+              className="absolute bottom-2 right-2 w-6 h-1"
+              style={{ background: colors.highlight }}
+            />
+            <div
+              className="absolute bottom-2 left-2 w-1 h-6"
+              style={{ background: colors.accent }}
+            />
+          </>
+        )}
+
+        {/* Accent color strip */}
+        <div
+          className="absolute bottom-0 left-0 w-full h-3"
+          style={{ background: colors.accent }}
+        />
+
+        {/* Selected indicator */}
+        {isActive && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="bg-white/20 rounded-full p-1">
+              <Icons.Check size={18} className="text-white" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Theme info */}
+      <div className="text-center">
+        <span className="text-white text-sm font-medium block">{name}</span>
+        <span className="text-gray-400 text-xs block mt-1">{description}</span>
+        {isDefault && (
+          <span className="text-accent-base text-xs block mt-1">
+            Supports custom accents
+          </span>
+        )}
+      </div>
     </button>
   );
 };
@@ -58,7 +178,14 @@ const ColorOption = ({ color, current, onChange, displayName, rgb }) => {
 const SettingsPage = () => {
   const navigate = useNavigate();
   const { config, updateConfig, clearConfig } = useConfig();
-  const { theme, setTheme, accentColor, setAccentColor } = useTheme();
+  const {
+    themeName,
+    setThemeName,
+    accentColor,
+    setAccentColor,
+    allThemes,
+    allAccents,
+  } = useTheme();
   const [formData, setFormData] = useState({
     plexUrl: config?.plexUrl || "",
     plexToken: config?.plexToken || "",
@@ -76,6 +203,10 @@ const SettingsPage = () => {
   });
   const [resetConfirm, setResetConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState("servers");
+
+  // For theme section
+  const [themeExpanded, setThemeExpanded] = useState(false);
+  const [accentExpanded, setAccentExpanded] = useState(false);
 
   // Handle connection testing and config updates
   const handleSubmit = async (e) => {
@@ -109,6 +240,7 @@ const SettingsPage = () => {
       ) {
         await updateConfig(formData);
         toast.success("Settings updated successfully");
+        logInfo("Server settings updated successfully");
       } else {
         const error = [];
         if (plexResult.status === "rejected")
@@ -123,7 +255,7 @@ const SettingsPage = () => {
       }
     } catch (err) {
       toast.error(err.message || "Failed to update settings");
-      console.error("Settings update error:", err);
+      logError("Settings update error:", err);
     } finally {
       setTesting(false);
     }
@@ -150,6 +282,7 @@ const SettingsPage = () => {
     try {
       await clearConfig();
       toast.success("All settings have been reset");
+      logInfo("Application settings have been reset");
       navigate("/setup");
     } catch (err) {
       toast.error(err.message || "Failed to reset settings");
@@ -160,26 +293,117 @@ const SettingsPage = () => {
     navigate("/api-endpoints");
   };
 
-  // Map of available accent colors
-  const accentColors = [
-    { id: "purple", name: "Purple", rgb: "167, 139, 250" },
-    { id: "grey", name: "Grey", rgb: "220, 220, 220" },
-    { id: "green", name: "Green", rgb: "109, 247, 81" },
-    { id: "maroon", name: "Maroon", rgb: "166, 40, 140" },
-    { id: "orange", name: "Orange", rgb: "255, 153, 0" },
-    { id: "blue", name: "Blue", rgb: "0, 98, 255" },
-    { id: "red", name: "Red", rgb: "232, 12, 11" },
-  ];
+  // Convert accent colors to array for rendering
+  const accentColors = Object.entries(allAccents).map(([id, details]) => ({
+    id,
+    name: details.name,
+    rgb: details.rgb,
+  }));
+
+  // Get theme preview color based on theme name
+  const getThemePreviewColors = (theme) => {
+    switch (theme) {
+      case "dark":
+        return {
+          primary: "#0a0c14",
+          secondary: "#141824",
+          accent: "rgb(167, 139, 250)",
+        };
+      case "dracula":
+        return {
+          primary: "#282a36",
+          secondary: "#1e2029",
+          accent: "#bd93f9",
+        };
+      case "plex":
+        return {
+          primary: "#1f1f1f",
+          secondary: "#282828",
+          accent: "#e5a00d",
+        };
+      case "overseerr":
+        return {
+          primary: "#111827",
+          secondary: "#1f2937",
+          accent: "#4f46e5",
+        };
+      case "onedark":
+        return {
+          primary: "#282c34",
+          secondary: "#1e222a",
+          accent: "#61afef",
+        };
+      case "nord":
+        return {
+          primary: "#2E3440",
+          secondary: "#3B4252",
+          accent: "#79b8ca",
+        };
+      case "hotline":
+        return {
+          primary: "#f765b8",
+          secondary: "#155fa5",
+          accent: "#f98dc9",
+        };
+      case "aquamarine":
+        return {
+          primary: "#47918a",
+          secondary: "#0b3161",
+          accent: "#009688",
+        };
+      case "spacegray":
+        return {
+          primary: "#576c75",
+          secondary: "#253237",
+          accent: "#81a6b7",
+        };
+      case "organizr":
+        return {
+          primary: "#1f1f1f",
+          secondary: "#333333",
+          accent: "#2cabe3",
+        };
+      case "maroon":
+        return {
+          primary: "#4c1533",
+          secondary: "#220a25",
+          accent: "#a21c65",
+        };
+      case "hotpink":
+        return {
+          primary: "#fb3f62",
+          secondary: "#204c80",
+          accent: "#fb3f62",
+        };
+      case "cyberpunk":
+        return {
+          primary: "#160133",
+          secondary: "#06021a",
+          accent: "#bf00ff",
+          highlight: "#e0ff00",
+        };
+      default:
+        return {
+          primary: "#0a0c14",
+          secondary: "#141824",
+          accent: "#a78bfa",
+        };
+    }
+  };
 
   // Tabs definition
   const tabs = [
     { id: "servers", label: "Server Configuration", icon: Icons.Server },
     { id: "theme", label: "Theme Settings", icon: Icons.Palette },
+    { id: "logging", label: "Logging", icon: Icons.FileText },
     { id: "cache", label: "Cache Management", icon: Icons.Database },
     { id: "backup", label: "Backup & Restore", icon: Icons.Save },
     { id: "api", label: "API Documentation", icon: Icons.FileCode },
     { id: "reset", label: "Reset Application", icon: Icons.AlertTriangle },
   ];
+
+  // Only allow accent customization for dark theme
+  const canCustomizeAccent = themeName === "dark";
 
   // Render content based on active tab
   const renderTabContent = () => {
@@ -199,16 +423,21 @@ const SettingsPage = () => {
                   <label className="block text-theme font-medium mb-2">
                     Plex URL
                   </label>
-                  <input
-                    type="text"
-                    name="plexUrl"
-                    value={formData.plexUrl}
-                    onChange={handleChange}
-                    className="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-4 py-3 
-                      text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
-                      transition-all duration-200"
-                    placeholder="http://your-plex-server:32400"
-                  />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Icons.Link className="text-accent-base opacity-70" />
+                    </div>
+                    <input
+                      type="text"
+                      name="plexUrl"
+                      value={formData.plexUrl}
+                      onChange={handleChange}
+                      className="w-full bg-gray-900/50 border border-accent rounded-lg pl-10 px-4 py-3 
+                        text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+                        transition-all duration-200"
+                      placeholder="http://your-plex-server:32400"
+                    />
+                  </div>
                 </div>
 
                 {/* Plex Token */}
@@ -217,25 +446,28 @@ const SettingsPage = () => {
                     Plex Token
                   </label>
                   <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Icons.Key className="text-accent-base opacity-70" />
+                    </div>
                     <input
                       type={showPasswords.plexToken ? "text" : "password"}
                       name="plexToken"
                       value={formData.plexToken}
                       onChange={handleChange}
-                      className="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-4 py-3 
+                      className="w-full bg-gray-900/50 border border-accent rounded-lg pl-10 px-4 py-3 
                         text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                         transition-all duration-200 font-mono"
                     />
                     <button
                       type="button"
                       onClick={() => togglePasswordVisibility("plexToken")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 
-                        hover:text-white transition-colors bg-transparent border-none outline-none focus:outline-none focus:ring-0"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-accent-base opacity-70
+                        hover:opacity-100 transition-opacity bg-transparent border-none outline-none focus:outline-none focus:ring-0"
                     >
                       {showPasswords.plexToken ? (
-                        <Icons.EyeOff size={16} />
+                        <Icons.EyeOff size={18} />
                       ) : (
-                        <Icons.Eye size={16} />
+                        <Icons.Eye size={18} />
                       )}
                     </button>
                   </div>
@@ -246,16 +478,21 @@ const SettingsPage = () => {
                   <label className="block text-theme font-medium mb-2">
                     Tautulli URL
                   </label>
-                  <input
-                    type="text"
-                    name="tautulliUrl"
-                    value={formData.tautulliUrl}
-                    onChange={handleChange}
-                    className="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-4 py-3 
-                      text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
-                      transition-all duration-200"
-                    placeholder="http://your-tautulli-server:8181"
-                  />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Icons.Link className="text-accent-base opacity-70" />
+                    </div>
+                    <input
+                      type="text"
+                      name="tautulliUrl"
+                      value={formData.tautulliUrl}
+                      onChange={handleChange}
+                      className="w-full bg-gray-900/50 border border-accent rounded-lg pl-10 px-4 py-3 
+                        text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+                        transition-all duration-200"
+                      placeholder="http://your-tautulli-server:8181"
+                    />
+                  </div>
                 </div>
 
                 {/* Tautulli API Key */}
@@ -264,25 +501,28 @@ const SettingsPage = () => {
                     Tautulli API Key
                   </label>
                   <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Icons.Key className="text-accent-base opacity-70" />
+                    </div>
                     <input
                       type={showPasswords.tautulliApiKey ? "text" : "password"}
                       name="tautulliApiKey"
                       value={formData.tautulliApiKey}
                       onChange={handleChange}
-                      className="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-4 py-3 
+                      className="w-full bg-gray-900/50 border border-accent rounded-lg pl-10 px-4 py-3 
                         text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                         transition-all duration-200 font-mono"
                     />
                     <button
                       type="button"
                       onClick={() => togglePasswordVisibility("tautulliApiKey")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 
-                        hover:text-white transition-colors bg-transparent border-none outline-none focus:outline-none focus:ring-0"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-accent-base opacity-70
+                        hover:opacity-100 transition-opacity bg-transparent border-none outline-none focus:outline-none focus:ring-0"
                     >
                       {showPasswords.tautulliApiKey ? (
-                        <Icons.EyeOff size={16} />
+                        <Icons.EyeOff size={18} />
                       ) : (
-                        <Icons.Eye size={16} />
+                        <Icons.Eye size={18} />
                       )}
                     </button>
                   </div>
@@ -350,60 +590,213 @@ const SettingsPage = () => {
 
       case "theme":
         return (
-          <ThemedCard
-            title="Theme Settings"
-            icon={Icons.Palette}
-            useAccentBorder={true}
-            className="p-6"
-          >
-            <div className="space-y-6">
-              <p className="text-theme-muted">
-                Customize the appearance of the dashboard by choosing an accent
-                color.
-              </p>
-
-              {/* Accent Color Selection */}
+          <div className="space-y-6">
+            {/* Theme Selection Section */}
+            <ThemedCard
+              title="Theme Selection"
+              icon={Icons.Monitor}
+              useAccentBorder={true}
+              className="p-6"
+              action={
+                <button
+                  onClick={() => setThemeExpanded(!themeExpanded)}
+                  className="text-sm flex items-center gap-1 text-gray-400 hover:text-white"
+                >
+                  {themeExpanded ? (
+                    <>
+                      <Icons.ChevronUp size={16} />
+                      <span>Show Less</span>
+                    </>
+                  ) : (
+                    <>
+                      <Icons.ChevronDown size={16} />
+                      <span>Show All</span>
+                    </>
+                  )}
+                </button>
+              }
+            >
               <div className="space-y-4">
-                <h4 className="text-lg font-medium text-white">Accent Color</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {accentColors.map((color) => (
-                    <ColorOption
-                      key={color.id}
-                      color={color.id}
-                      displayName={color.name}
-                      rgb={color.rgb}
-                      current={accentColor}
-                      onChange={setAccentColor}
-                    />
-                  ))}
-                </div>
+                <p className="text-theme-muted">
+                  Choose a theme preset to change the overall look and feel of
+                  the dashboard.
+                </p>
 
-                {/* Current theme information */}
-                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50 mt-6">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Icons.Info size={16} className="text-accent-base" />
-                    <h4 className="text-white font-medium">
-                      Theme Information
-                    </h4>
-                  </div>
-                  <p className="text-theme-muted mb-4">
-                    The dashboard uses a dark theme with customizable accent
-                    colors. Your accent color selection will be remembered
-                    across sessions.
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {/* Always show at least popular themes */}
+                  {Object.entries(allThemes)
+                    .filter(
+                      ([id, details], index) => themeExpanded || index < 4
+                    )
+                    .map(([id, details]) => (
+                      <ThemePreview
+                        key={id}
+                        id={id}
+                        name={details.name}
+                        description={details.description}
+                        colors={getThemePreviewColors(id)}
+                        isActive={themeName === id}
+                        isDefault={id === "dark"}
+                        onClick={() => setThemeName(id)}
+                      />
+                    ))}
+                </div>
+              </div>
+            </ThemedCard>
+
+            {/* Accent Color Selection - Only enabled for dark theme */}
+            <ThemedCard
+              title="Accent Color"
+              icon={Icons.Palette}
+              useAccentBorder={true}
+              className="p-6"
+              action={
+                canCustomizeAccent ? (
+                  <button
+                    onClick={() => setAccentExpanded(!accentExpanded)}
+                    className="text-sm flex items-center gap-1 text-gray-400 hover:text-white"
+                  >
+                    {accentExpanded ? (
+                      <>
+                        <Icons.ChevronUp size={16} />
+                        <span>Show Less</span>
+                      </>
+                    ) : (
+                      <>
+                        <Icons.ChevronDown size={16} />
+                        <span>Show All</span>
+                      </>
+                    )}
+                  </button>
+                ) : null
+              }
+            >
+              {canCustomizeAccent ? (
+                <div className="space-y-4">
+                  <p className="text-theme-muted">
+                    Customize the accent color used throughout the dashboard.
+                    Accent colors can be changed only in the Dark theme.
                   </p>
 
-                  <div className="flex items-center gap-3">
-                    <div className="px-3 py-2 bg-gray-900/70 rounded-lg border border-gray-700/50">
-                      <span className="text-accent-base font-medium">
-                        Current accent: {accentColor}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {accentColors
+                      .filter((_, index) => accentExpanded || index < 4)
+                      .map((color) => (
+                        <ColorOption
+                          key={color.id}
+                          color={color.id}
+                          displayName={color.name}
+                          rgb={color.rgb}
+                          current={accentColor}
+                          onChange={setAccentColor}
+                        />
+                      ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-gray-800/50 rounded-lg border border-accent/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Icons.Info size={16} className="text-accent" />
+                    <h4 className="text-sm font-medium text-white">
+                      Theme-Defined Accent Color
+                    </h4>
+                  </div>
+                  <p className="text-theme-muted">
+                    The current theme ({allThemes[themeName]?.name}) uses a
+                    predefined accent color that can't be changed. Switch to the
+                    Dark theme to customize accent colors.
+                  </p>
+                  <div className="mt-4 flex items-center gap-2">
+                    <div
+                      className="w-6 h-6 rounded-full"
+                      style={{
+                        backgroundColor:
+                          getThemePreviewColors(themeName).accent,
+                      }}
+                    ></div>
+                    <span className="text-white text-sm">
+                      Current theme accent
+                    </span>
+                  </div>
+                </div>
+              )}
+            </ThemedCard>
+
+            {/* Preview Section */}
+            <ThemedCard
+              title="Current Theme Preview"
+              icon={Icons.Eye}
+              useAccentBorder={true}
+              className="p-6"
+            >
+              <div className="space-y-4">
+                <div className="bg-accent-light/10 rounded-lg p-4 border border-accent mt-2">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="p-2 bg-accent-base rounded-lg">
+                      <Icons.Palette size={16} className="text-white" />
+                    </div>
+                    <h4 className="text-white font-medium">
+                      Active Theme:{" "}
+                      <span className="text-accent-base">
+                        {allThemes[themeName]?.name}
                       </span>
+                    </h4>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <div className="p-3 bg-accent-light rounded-lg border border-accent">
+                      <span className="text-accent-base font-medium">
+                        Text with accent color
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-accent-base rounded-lg">
+                      <span className="text-white font-medium">
+                        Accent background
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-gray-900/70 rounded-lg border border-accent/30">
+                      <span className="text-accent-base font-medium">
+                        Border accent
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-theme-muted">Button:</span>
+                      <ThemedButton size="sm" variant="accent">
+                        Sample Button
+                      </ThemedButton>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-theme-muted">Link:</span>
+                      <a
+                        href="#"
+                        className="text-accent-base hover:text-accent-hover underline"
+                      >
+                        Sample Link
+                      </a>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-theme-muted">Input:</span>
+                      <input
+                        type="text"
+                        className="bg-gray-900/70 border border-accent rounded px-3 py-1 text-white focus:outline-none focus:ring-1 focus:ring-accent"
+                        placeholder="Sample input field"
+                        readOnly
+                      />
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </ThemedCard>
+            </ThemedCard>
+          </div>
         );
+
+      case "logging":
+        return <LoggingSettings />;
 
       case "cache":
         return <CacheManager />;
@@ -486,8 +879,8 @@ const SettingsPage = () => {
         </p>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-6 scrollbar-hide">
+      {/* Tabs Navigation - Enhanced with accent colors */}
+      <div className="flex flex-wrap gap-2 overflow-x-auto pb-4 mb-6 scrollbar-hide">
         {tabs.map((tab) => (
           <SettingsTab
             key={tab.id}

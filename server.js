@@ -1,22 +1,50 @@
-require("dotenv").config({ path: ".env" });
+import "dotenv/config";
+import express from "express";
+import cors from "cors";
+import { createProxyMiddleware } from "http-proxy-middleware";
+import { getConfig, setConfig } from "./src/utils/configStore.js";
+import { getFormats, saveFormats } from "./src/utils/formatStore.js";
+import {
+  logError,
+  logWarn,
+  logInfo,
+  logDebug,
+  setLogLevel,
+  getLogLevel,
+  getLogLevels,
+  getLogs,
+  clearLogs,
+  exportLogs,
+} from "./src/utils/logger.js";
+import axios from "axios";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import chalk from "chalk"; // Adding chalk for colored output in server banner
+import { EventEmitter } from "events";
 
-const express = require("express");
-const cors = require("cors");
-const { createProxyMiddleware } = require("http-proxy-middleware");
-const { getConfig, setConfig } = require("./src/utils/configStore.cjs");
-const { getFormats, saveFormats } = require("./src/utils/formatStore.cjs");
-const axios = require("axios");
-const fs = require("fs");
-const path = require("path");
+// Increase the default max listeners to prevent warnings
+EventEmitter.defaultMaxListeners = 20;
+
+// Set log level from environment variable or config
+setLogLevel(process.env.LOG_LEVEL || "INFO");
+
+// Get directory name in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ======================================================================
 // Constants and Configuration
 // ======================================================================
+
+const POSTER_CACHE_DIR = path.join(process.cwd(), "cache", "posters");
+
 const SAVED_SECTIONS_PATH = path.join(
   process.cwd(),
   "configs",
   "sections.json"
 );
+
 const PROXY_TIMEOUT = parseInt(process.env.PROXY_TIMEOUT) || 30000;
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
@@ -53,23 +81,24 @@ const corsOptions = {
 // Version Management
 function getAppVersion() {
   try {
-    const versionFilePath = path.join(__dirname, "version.js");
+    const versionFilePath = path.join(__dirname, "release.js");
     const versionFileContent = fs.readFileSync(versionFilePath, "utf8");
     const versionMatch = versionFileContent.match(/appVersion = "([^"]+)"/);
     return versionMatch && versionMatch[1] ? versionMatch[1] : "unknown";
   } catch (error) {
-    console.error("Error reading version:", error);
+    logError("Error reading version", error);
     return "unknown";
   }
 }
 
 // Directory Management
 const ensureDirectories = () => {
-  const dirs = [path.dirname(SAVED_SECTIONS_PATH)];
+  const dirs = [path.dirname(SAVED_SECTIONS_PATH), POSTER_CACHE_DIR];
+
   dirs.forEach((dir) => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
-      console.log(`Created directory: ${dir}`);
+      logInfo(`Created directory: ${dir}`);
     }
   });
 };
@@ -100,13 +129,13 @@ const formatDate = (timestamp, format = "default") => {
       date = new Date(timestamp);
     }
   } catch (e) {
-    console.error(`Error parsing date: ${timestamp}`, e);
+    logError(`Error parsing date: ${timestamp}`, e);
     return "Invalid Date";
   }
 
   // Ensure we have a valid date
   if (isNaN(date.getTime())) {
-    console.warn(`Invalid date from timestamp: ${timestamp}`);
+    logWarn(`Invalid date from timestamp: ${timestamp}`);
     return "Invalid Date";
   }
 
@@ -259,6 +288,10 @@ const formatShowEpisode = (seasonNumber, episodeNumber) => {
   return `S${paddedSeason}E${paddedEpisode}`;
 };
 
+// ======================================================================
+// Format Templates
+// ======================================================================
+
 // Template processing
 const processTemplate = (template, data) => {
   if (!template) return "";
@@ -322,7 +355,7 @@ const processTemplate = (template, data) => {
         value = data[key];
       }
     } catch (error) {
-      console.error(`Error processing template variable ${key}:`, error);
+      logError(`Error processing template variable ${key}:`, error);
       value = ""; // Default to empty string on error
     }
 
@@ -470,6 +503,256 @@ function formatShowTitle(session) {
   return title.replace(/\s*\(\d{4}\)|\s+[-–]\s+\d{4}/, "");
 }
 
+// Helper function for processing media in batches
+const processMediaInBatches = async (
+  mediaItems,
+  requestId,
+  config,
+  recentlyAddedFormats,
+  type
+) => {
+  const BATCH_SIZE = 5; // Process 5 items at a time
+  const processedItems = [];
+
+  // Create batches
+  const batches = [];
+  for (let i = 0; i < mediaItems.length; i += BATCH_SIZE) {
+    batches.push(mediaItems.slice(i, i + BATCH_SIZE));
+  }
+
+  logDebug(
+    `[${requestId}] Processing ${mediaItems.length} media items in ${batches.length} batches`
+  );
+
+  // Process each batch sequentially
+  for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+    const batch = batches[batchIndex];
+    logDebug(
+      `[${requestId}] Processing batch ${batchIndex + 1}/${
+        batches.length
+      } with ${batch.length} items`
+    );
+
+    // Process all items in this batch in parallel
+    const batchResults = await Promise.all(
+      batch.map(async (media) => {
+        try {
+          // Try to get metadata from cache
+          const metadataCacheKey = `metadata:${media.rating_key}`;
+          let videoResolution = "Unknown";
+          let cachedMetadata = false;
+
+          // Check metadata cache
+          const metadata = metadataCache.get(metadataCacheKey);
+          if (metadata) {
+            videoResolution = metadata.video_full_resolution || "Unknown";
+            cachedMetadata = true;
+
+            // Apply cached metadata to the media item
+            media.video_full_resolution = videoResolution;
+            media.content_rating = metadata.content_rating || null;
+            media.rating = metadata.rating || null;
+            media.summary = metadata.summary || media.summary;
+
+            // If complete metadata is available, apply additional fields
+            if (metadata.complete_metadata) {
+              const completeData = metadata.complete_metadata;
+              // Apply other important fields that might be needed for display
+              media.genres = completeData.genres || [];
+              media.directors = completeData.directors || [];
+              media.actors = completeData.actors || [];
+            }
+          } else if (media.rating_key) {
+            // Only fetch metadata if not cached and we have a rating_key
+            try {
+              const metadataResponse = await axios.get(
+                `${config.tautulliUrl}/api/v2`,
+                {
+                  params: {
+                    apikey: config.tautulliApiKey,
+                    cmd: "get_metadata",
+                    rating_key: media.rating_key,
+                  },
+                  // Increase timeout to 20 seconds
+                  timeout: 20000,
+                  headers: {
+                    "Cache-Control": "no-cache",
+                    Pragma: "no-cache",
+                  },
+                }
+              );
+
+              const responseData = metadataResponse.data?.response?.data;
+
+              if (responseData) {
+                // Extract metadata
+                const mediaInfo = responseData.media_info?.[0] || {};
+                videoResolution = mediaInfo.video_full_resolution || "Unknown";
+
+                // Cache the metadata
+                metadataCache.set(metadataCacheKey, {
+                  video_full_resolution: videoResolution,
+                  content_rating: responseData.content_rating || null,
+                  rating: responseData.rating || null,
+                  summary: responseData.summary || null,
+                  duration: responseData.duration || null,
+                  complete_metadata: responseData,
+                  media_info: mediaInfo,
+                  timestamp: Date.now(),
+                });
+
+                // Update the media item
+                media.video_full_resolution = videoResolution;
+                media.content_rating = responseData.content_rating || null;
+                media.rating = responseData.rating || null;
+              }
+            } catch (error) {
+              // Graceful error handling - log but continue
+              logWarn(
+                `[${requestId}] Could not fetch metadata for item ${media.rating_key} (${media.title}): ${error.message}`
+              );
+
+              // Use default values
+              media.video_full_resolution =
+                media.video_full_resolution || "Unknown";
+            }
+          }
+
+          // Calculate formatted duration once
+          const formattedDuration = formatDuration(media.duration || 0);
+
+          // Enhanced media object with both aliases and formatted data
+          const enhancedMedia = {
+            ...media,
+            mediaType: type,
+            media_type: type,
+            formatted_duration: formattedDuration,
+            video_full_resolution:
+              media.video_full_resolution || videoResolution,
+            // Ensure content rating is included
+            content_rating: media.content_rating || null,
+            // Add both key variations for timestamps
+            addedAt: media.added_at,
+            added_at: media.added_at,
+          };
+
+          const formattedData = {};
+
+          // Apply formats based on media type
+          recentlyAddedFormats
+            .filter(
+              (format) =>
+                format.type === type &&
+                (format.sectionId === "all" ||
+                  format.sectionId === media.section_id.toString())
+            )
+            .forEach((format) => {
+              try {
+                // Process special variables before template processing
+                let processedTemplate = format.template;
+
+                // Handle added_at:format pattern specifically
+                const dateFormatPattern = /\{added_at:([^}]+)\}/g;
+                processedTemplate = processedTemplate.replace(
+                  dateFormatPattern,
+                  (match, formatType) => {
+                    return formatDate(media.added_at, formatType);
+                  }
+                );
+
+                // Same for addedAt:format
+                const dateFormatPattern2 = /\{addedAt:([^}]+)\}/g;
+                processedTemplate = processedTemplate.replace(
+                  dateFormatPattern2,
+                  (match, formatType) => {
+                    return formatDate(media.added_at, formatType);
+                  }
+                );
+
+                // Special handling for duration
+                processedTemplate = processedTemplate.replace(
+                  /\{duration\}/g,
+                  formattedDuration
+                );
+
+                // Now process the template with the enhanced media data
+                formattedData[format.name] = enhancedProcessTemplate(
+                  processedTemplate,
+                  enhancedMedia
+                );
+              } catch (templateError) {
+                logWarn(
+                  `[${requestId}] Template processing error for ${media.title}: ${templateError.message}`
+                );
+                formattedData[
+                  format.name
+                ] = `[Error: ${templateError.message}]`;
+              }
+            });
+
+          // If no formats were applied, create a default format based on media type
+          if (Object.keys(formattedData).length === 0) {
+            if (type === "movies") {
+              formattedData["Movie Title"] = `${media.title || "Unknown"} (${
+                media.year || ""
+              })`;
+            } else if (type === "shows") {
+              formattedData["Show Title"] = `${
+                media.grandparent_title || media.title || "Unknown"
+              }`;
+              if (media.parent_media_index && media.media_index) {
+                formattedData["Episode"] = `S${String(
+                  media.parent_media_index
+                ).padStart(2, "0")}E${String(media.media_index).padStart(
+                  2,
+                  "0"
+                )} - ${media.title || ""}`;
+              }
+            } else {
+              formattedData["Title"] = media.title || "Unknown";
+            }
+          }
+
+          return {
+            ...formattedData,
+            raw_data: {
+              ...media,
+              formatted_duration: formattedDuration,
+              video_full_resolution:
+                media.video_full_resolution || videoResolution,
+              _cached_metadata: cachedMetadata,
+            },
+          };
+        } catch (itemError) {
+          // Handle any unexpected errors for this item
+          logError(
+            `[${requestId}] Error processing media item ${
+              media.title || "unknown"
+            }:`,
+            itemError
+          );
+
+          // Return a simple object with the raw data to ensure we don't drop this item
+          return {
+            title: media.title || "Unknown",
+            raw_data: media,
+          };
+        }
+      })
+    );
+
+    // Add all successfully processed items from this batch
+    processedItems.push(...batchResults);
+
+    // Brief pause between batches to reduce server load
+    if (batchIndex < batches.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+
+  return processedItems;
+};
+
 // ======================================================================
 // API Services
 // ======================================================================
@@ -507,10 +790,7 @@ const getLibraryDetails = async (sectionId, config) => {
       last_played: watchStats.last_played || null,
     };
   } catch (error) {
-    console.error(
-      `Error fetching library details for section ${sectionId}:`,
-      error
-    );
+    logError(`Error fetching library details for section ${sectionId}:`, error);
     return {
       count: 0,
       parent_count: 0,
@@ -522,10 +802,15 @@ const getLibraryDetails = async (sectionId, config) => {
   }
 };
 
-// Get user history from Tautulli API
-async function getUserHistory(baseUrl, apiKey, userId, requestId = "") {
+// Enhanced getUserHistory function that also fetches media metadata
+async function getUserHistoryWithMetadata(
+  baseUrl,
+  apiKey,
+  userId,
+  requestId = ""
+) {
   try {
-    console.log(`[${requestId}] Fetching history for user ${userId}...`);
+    logDebug(`[${requestId}] Fetching history for user ${userId}...`);
 
     const response = await axios.get(`${baseUrl}/api/v2`, {
       params: {
@@ -540,22 +825,117 @@ async function getUserHistory(baseUrl, apiKey, userId, requestId = "") {
     const historyItem = response.data?.response?.data?.data?.[0] || null;
 
     if (historyItem) {
-      console.log(
+      logDebug(
         `[${requestId}] History fetch success for ${userId}: ${historyItem.media_type}: ${historyItem.title}`
       );
+
+      // If we have a history item with a rating key, fetch the media metadata to get duration
+      if (historyItem.rating_key) {
+        try {
+          logDebug(
+            `[${requestId}] Fetching metadata for item ${historyItem.rating_key}...`
+          );
+
+          const metadataResponse = await axios.get(`${baseUrl}/api/v2`, {
+            params: {
+              apikey: apiKey,
+              cmd: "get_metadata",
+              rating_key: historyItem.rating_key,
+            },
+            timeout: 5000,
+          });
+
+          // Get the actual media duration from metadata
+          const mediaInfo = metadataResponse.data?.response?.data;
+          if (mediaInfo && mediaInfo.duration) {
+            historyItem.media_duration = mediaInfo.duration; // Add the media duration to history item
+            logDebug(
+              `[${requestId}] Got media duration for ${historyItem.title}: ${mediaInfo.duration}ms`
+            );
+          } else {
+            logDebug(
+              `[${requestId}] No duration found in metadata for ${historyItem.title}`
+            );
+          }
+        } catch (error) {
+          logError(
+            `[${requestId}] Error fetching metadata for ${historyItem.rating_key}:`,
+            error
+          );
+        }
+      }
     } else {
-      console.log(`[${requestId}] No history found for user ${userId}`);
+      logDebug(`[${requestId}] No history found for user ${userId}`);
     }
 
     return historyItem;
   } catch (error) {
-    console.error(
+    logError(
       `[${requestId}] Error fetching history for user ${userId}:`,
-      error.message
+      error
     );
     return null;
   }
 }
+
+// ======================================================================
+// Poster Utilities
+// ======================================================================
+
+const downloadPosterFromTautulli = async (thumbPath, apiKey, ratingKey) => {
+  try {
+    const config = getConfig();
+
+    // Verify we have config
+    if (!config.tautulliUrl || !apiKey) {
+      throw new Error("Tautulli configuration missing");
+    }
+
+    logDebug(`Downloading poster for ${ratingKey} from path: ${thumbPath}`);
+
+    const response = await axios.get(`${config.tautulliUrl}/pms_image_proxy`, {
+      params: {
+        img: thumbPath,
+        apikey: apiKey,
+      },
+      responseType: "arraybuffer",
+      timeout: 30000, // 30-second timeout for slow servers
+    });
+
+    const imageData = response.data;
+    const contentType = response.headers["content-type"];
+
+    // Determine the file extension
+    let fileExt = "jpg"; // Default to jpg
+    if (contentType) {
+      if (contentType.includes("jpeg") || contentType.includes("jpg")) {
+        fileExt = "jpg";
+      } else if (contentType.includes("png")) {
+        fileExt = "png";
+      } else if (contentType.includes("gif")) {
+        fileExt = "gif";
+      }
+    }
+
+    // Save the poster to the cache
+    const posterPath = path.join(POSTER_CACHE_DIR, `${ratingKey}.${fileExt}`);
+    fs.writeFileSync(posterPath, imageData);
+
+    logInfo(`Downloaded poster for ${ratingKey}`);
+
+    return {
+      success: true,
+      path: posterPath,
+      contentType,
+    };
+  } catch (error) {
+    logError(`Error downloading poster for ${ratingKey}:`, error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
 
 // ======================================================================
 // Caching System
@@ -577,14 +957,35 @@ const createCache = (defaultTTL = 10 * 60 * 1000) => {
         return null;
       }
 
-      return item.value;
+      // Return a deep clone of the value to prevent reference issues
+      try {
+        return JSON.parse(JSON.stringify(item.value));
+      } catch (error) {
+        // If cloning fails (e.g., circular reference), return a simple copy
+        console.warn(
+          `Warning: Could not deep clone cached item ${key}, returning simple copy`
+        );
+        return { ...item.value };
+      }
     },
 
     set(key, value, ttl = this.ttl) {
-      this.cache.set(key, {
-        value,
-        expires: Date.now() + ttl,
-      });
+      try {
+        // Store a deep clone of the value to prevent reference issues
+        this.cache.set(key, {
+          value: JSON.parse(JSON.stringify(value)),
+          expires: Date.now() + ttl,
+        });
+      } catch (error) {
+        // If cloning fails (e.g., circular reference), store a simple copy
+        console.warn(
+          `Warning: Could not deep clone value for ${key}, using simple copy`
+        );
+        this.cache.set(key, {
+          value: { ...value },
+          expires: Date.now() + ttl,
+        });
+      }
     },
 
     delete(key) {
@@ -610,8 +1011,115 @@ const createCache = (defaultTTL = 10 * 60 * 1000) => {
 
 // Create specific cache instances
 const historyCache = createCache(10 * 60 * 1000); // 10 minutes
-const mediaCache = createCache(5 * 60 * 1000); // 5 minutes
+const mediaCache = createCache(10 * 60 * 1000); // 10 minutes - increased cache time
 const metadataCache = createCache(30 * 60 * 1000); // 30 minutes
+
+// Track ongoing background refreshes to prevent duplicates
+const pendingRefreshes = new Map();
+
+// Function to refresh cache in the background without blocking the current request
+const refreshCacheInBackground = async (type, section, count) => {
+  const config = getConfig();
+  if (!config.tautulliUrl || !config.tautulliApiKey) return false;
+
+  // Create a unique key for this refresh
+  const refreshKey = `refresh:${type}:${section || "all"}`;
+
+  // If already refreshing this data, skip
+  if (pendingRefreshes.has(refreshKey)) return false;
+
+  // Mark as pending
+  pendingRefreshes.set(refreshKey, Date.now());
+
+  try {
+    const validTypes = {
+      movies: "movie",
+      shows: "show",
+      music: "artist",
+    };
+
+    if (!validTypes[type]) return false;
+
+    // Get sections first to identify what needs refreshing
+    const sectionsResponse = await axios.get(`${config.tautulliUrl}/api/v2`, {
+      params: {
+        apikey: config.tautulliApiKey,
+        cmd: "get_libraries_table",
+      },
+    });
+
+    const allSections = sectionsResponse.data?.response?.data?.data || [];
+
+    // Filter sections by type and optional section ID
+    const matchingSections = allSections.filter((s) => {
+      const sectionType = (s.section_type || s.type || "")
+        .toString()
+        .toLowerCase();
+      const matchesType = sectionType === validTypes[type];
+
+      if (section) {
+        return matchesType && s.section_id.toString() === section.toString();
+      }
+
+      return matchesType;
+    });
+
+    // Fetch and cache section media
+    for (const section of matchingSections) {
+      const sectionCacheKey = `section:${section.section_id}:media`;
+
+      // Fetch from API
+      const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
+        params: {
+          apikey: config.tautulliApiKey,
+          cmd: "get_recently_added",
+          section_id: section.section_id,
+          count: 50,
+        },
+      });
+
+      const sectionMedia = (
+        response.data?.response?.data?.recently_added || []
+      ).map((item) => ({
+        ...item,
+        section_id: section.section_id,
+        section_name: section.section_name || section.name,
+      }));
+
+      // Cache the section media
+      mediaCache.set(sectionCacheKey, sectionMedia);
+      logDebug(
+        `Background refresh: Updated cache for section ${section.section_id}`
+      );
+    }
+
+    // Main cache key update
+    const mainCacheKey = `media:${type}:${section || "all"}:${count}`;
+
+    // Process the full data like the main endpoint would
+    // We won't fetch metadata as that's a separate cache and would slow this down
+    const cacheEntry = {
+      total: matchingSections.length,
+      sections: matchingSections.map((s) => ({
+        id: s.section_id,
+        name: s.section_name || s.name,
+      })),
+      _timestamp: Date.now(),
+    };
+
+    // Update the main cache entry
+    mediaCache.set(mainCacheKey, cacheEntry);
+    logDebug(`Background refresh: Updated main cache for ${mainCacheKey}`);
+
+    return true;
+  } catch (error) {
+    logError("Error in background cache refresh:", error);
+    return false;
+  } finally {
+    // Remove from pending list
+    pendingRefreshes.delete(refreshKey);
+  }
+};
 
 // ======================================================================
 // Dynamic Proxy Helper
@@ -641,7 +1149,7 @@ const createDynamicProxy = (serviceName, options = {}) => {
           new RegExp(`^/api/${serviceName.toLowerCase()}`),
           ""
         );
-        console.log(`${serviceName} path rewrite:`, {
+        logDebug(`${serviceName} path rewrite:`, {
           from: path,
           to: newPath,
         });
@@ -663,7 +1171,7 @@ const createDynamicProxy = (serviceName, options = {}) => {
         }
 
         // Log the proxied request (with sensitive data redacted)
-        console.log(`${serviceName} proxy request:`, {
+        logDebug(`${serviceName} proxy request:`, {
           path: proxyReq.path,
           headers: {
             ...proxyReq.getHeaders(),
@@ -685,7 +1193,7 @@ const createDynamicProxy = (serviceName, options = {}) => {
         ].join(", ");
 
         // Log the response (without sensitive data)
-        console.log(`${serviceName} proxy response:`, {
+        logDebug(`${serviceName} proxy response:`, {
           status: proxyRes.statusCode,
           url: req.url,
           headers: {
@@ -697,7 +1205,7 @@ const createDynamicProxy = (serviceName, options = {}) => {
         });
       },
       onError: (err, req, res) => {
-        console.error(`${serviceName} proxy error:`, {
+        logError(`${serviceName} proxy error:`, {
           message: err.message,
           code: err.code,
           stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
@@ -754,7 +1262,7 @@ app.options("*", cors(corsOptions)); // Handle OPTIONS preflight explicitly
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(
+  logDebug(
     `${req.method} ${req.url} - Origin: ${req.headers.origin || "none"}`
   );
   next();
@@ -764,7 +1272,7 @@ app.use(express.json());
 
 // Detailed logging middleware
 app.use((req, res, next) => {
-  console.log("Request:", {
+  logDebug("Request:", {
     method: req.method,
     url: req.url,
     origin: req.headers.origin,
@@ -775,6 +1283,124 @@ app.use((req, res, next) => {
     },
   });
   next();
+});
+
+// ======================================================================
+// Logging API Routes
+// ======================================================================
+
+// Get current log level
+app.get("/api/logs/level", (req, res) => {
+  try {
+    const level = getLogLevel();
+    res.json({
+      success: true,
+      level: level,
+    });
+    logDebug(`Log level requested: ${level}`);
+  } catch (error) {
+    logError("Error getting log level", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get log level",
+      error: error.message,
+    });
+  }
+});
+
+// Set log level
+app.post("/api/logs/level", (req, res) => {
+  try {
+    const { level } = req.body;
+
+    if (!level || typeof level !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or missing level parameter",
+      });
+    }
+
+    const success = setLogLevel(level.toUpperCase());
+
+    if (success) {
+      logInfo(`Log level changed to ${level}`, { source: "api" });
+      res.json({
+        success: true,
+        level: getLogLevel(),
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: "Invalid log level",
+        validLevels: getLogLevels(),
+      });
+    }
+  } catch (error) {
+    logError("Error setting log level", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to set log level",
+      error: error.message,
+    });
+  }
+});
+
+// Get server logs
+app.get("/api/logs", (req, res) => {
+  try {
+    const logs = getLogs();
+    logDebug(`Retrieved ${logs.length} logs`);
+    res.json({
+      success: true,
+      logs: logs,
+    });
+  } catch (error) {
+    logError("Error getting logs", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get logs",
+      error: error.message,
+    });
+  }
+});
+
+// Clear server logs
+app.post("/api/logs/clear", (req, res) => {
+  try {
+    clearLogs();
+    logInfo("Logs cleared via API");
+    res.json({ success: true });
+  } catch (error) {
+    logError("Error clearing logs", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to clear logs",
+      error: error.message,
+    });
+  }
+});
+
+// Download logs as text file
+app.get("/api/logs/download", (req, res) => {
+  try {
+    const logText = exportLogs();
+    const filename = `plex-tautulli-dashboard-logs-${
+      new Date().toISOString().split("T")[0]
+    }.txt`;
+
+    res.setHeader("Content-Type", "text/plain");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(logText);
+
+    logInfo(`Logs downloaded (${logText.length} bytes)`);
+  } catch (error) {
+    logError("Error downloading logs", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to download logs",
+      error: error.message,
+    });
+  }
 });
 
 // ======================================================================
@@ -796,7 +1422,7 @@ app.get("/api/formats", (req, res) => {
       users: formats.users || [],
     });
   } catch (error) {
-    console.error("Error reading formats:", error);
+    logError("Error reading formats:", error);
     res.status(500).json({ error: "Failed to read formats" });
   }
 });
@@ -842,7 +1468,7 @@ app.post("/api/formats", (req, res) => {
       throw new Error("Failed to save formats");
     }
   } catch (error) {
-    console.error("Error saving formats:", error);
+    logError("Error saving formats:", error);
     res.status(500).json({
       error: "Failed to save formats",
       message: error.message,
@@ -963,7 +1589,7 @@ app.get("/api/media/:type", async (req, res) => {
       media: formattedMedia,
     });
   } catch (error) {
-    console.error(`Error fetching ${req.params.type}:`, error);
+    logError(`Error fetching ${req.params.type}:`, error);
     res.status(500).json({
       error: `Failed to fetch ${req.params.type}`,
       message: error.message,
@@ -977,10 +1603,10 @@ app.get("/api/users", async (req, res) => {
     // Generate unique request ID for logging
     const requestId =
       Date.now().toString(36) + Math.random().toString(36).substring(2);
-    console.log(`[${requestId}] Starting /api/users request`);
+    logInfo(`[${requestId}] Starting /api/users request`);
 
     const config = getConfig();
-    const { count = 20 } = req.query; // Default to 20 if not specified
+    const { count = 50 } = req.query; // Default to 100 if not specified
     const requestedCount = Math.max(1, parseInt(count, 10) || 50);
     const forceRefresh = req.query.refresh === "true"; // Optional force refresh parameter
 
@@ -993,7 +1619,7 @@ app.get("/api/users", async (req, res) => {
     const formatsData = getFormats();
     const userFormats = formatsData.users || [];
 
-    console.log(`[${requestId}] Fetching active sessions and users...`);
+    logInfo(`[${requestId}] Fetching active sessions and users...`);
 
     // STEP 1: Fetch both active sessions and users in parallel
     let activeSessions = [];
@@ -1022,14 +1648,11 @@ app.get("/api/users", async (req, res) => {
         activeSessionsResponse.data?.response?.data?.sessions || [];
       allUsers = usersResponse.data?.response?.data?.data || [];
 
-      console.log(
+      logInfo(
         `[${requestId}] Successfully fetched ${activeSessions.length} active sessions and ${allUsers.length} users`
       );
     } catch (error) {
-      console.error(
-        `[${requestId}] Error fetching initial data:`,
-        error.message
-      );
+      logError(`[${requestId}] Error fetching initial data:`, error);
       throw new Error(`Failed to fetch initial user data: ${error.message}`);
     }
 
@@ -1045,7 +1668,8 @@ app.get("/api/users", async (req, res) => {
           media_type: session.media_type,
           progress_percent: session.progress_percent || "0",
           view_offset: Math.floor((session.view_offset || 0) / 1000),
-          duration: Math.floor((session.duration || 0) / 1000),
+          duration: Math.floor((session.duration || 0) / 1000), // Store in seconds for consistency
+          media_duration: session.duration || 0, // Actual media duration in milliseconds
           last_seen: Math.floor(Date.now() / 1000),
           parent_media_index: session.parent_media_index,
           media_index: session.media_index,
@@ -1086,14 +1710,14 @@ app.get("/api/users", async (req, res) => {
         return bLastSeen - aLastSeen;
       });
 
-    console.log(
+    logInfo(
       `[${requestId}] Sorted ${filteredUsers.length} users by active status and last seen time`
     );
 
     // STEP 4: Limit users to those we'll actually return
     const limitedUsers = filteredUsers.slice(0, requestedCount);
 
-    console.log(
+    logInfo(
       `[${requestId}] Processing ${limitedUsers.length} users (top ${requestedCount} active users)`
     );
 
@@ -1110,18 +1734,14 @@ app.get("/api/users", async (req, res) => {
           historyCache.delete(`user_history:${user.user_id}`);
         }
 
-        // Calculate formatted duration (match your existing logic)
-        const rawDuration = user.duration || watching?.duration || 0;
-        const formattedDuration = formatDuration(rawDuration);
-
-        // Create base user data object
+        // Create base user data object with default values
         return {
           friendly_name: user.friendly_name || "",
           user_id: user.user_id,
           email: user.email || "",
           plays: parseInt(user.plays || "0", 10),
-          duration: rawDuration,
-          formatted_duration: formattedDuration, // Add formatted duration
+          duration: watching?.media_duration || 0, // Initialize with media duration if watching
+          formatted_duration: "", // Will be set after we have the actual media duration
           last_seen: lastSeen,
           last_seen_formatted: watching
             ? "🟢"
@@ -1132,7 +1752,7 @@ app.get("/api/users", async (req, res) => {
           is_watching: watching ? "Watching" : "Watched",
           state: watching ? "watching" : "watched",
 
-          // Existing properties...
+          // Existing properties
           media_type: watching
             ? watching.media_type.charAt(0).toUpperCase() +
               watching.media_type.slice(1)
@@ -1184,7 +1804,7 @@ app.get("/api/users", async (req, res) => {
 
         if (cachedHistory) {
           // Use cached history data
-          console.log(
+          logDebug(
             `[${requestId}] Using cached history for user ${userData.friendly_name} (${userData.user_id})`
           );
 
@@ -1202,17 +1822,21 @@ app.get("/api/users", async (req, res) => {
             cachedHistory.parent_media_index || "";
           processedUsers[i].last_played_modified =
             cachedHistory.last_played_modified || processedUsers[i].last_played;
+          processedUsers[i].duration = cachedHistory.media_duration || 0; // Use cached media duration
+          processedUsers[i].formatted_duration = formatDuration(
+            processedUsers[i].duration
+          ); // Format it
           processedUsers[i]._cached = true;
         } else {
           // Queue up history fetch with index attached
-          console.log(
+          logDebug(
             `[${requestId}] Queueing history fetch for user ${userData.friendly_name} (${userData.user_id})`
           );
 
           historyPromises.push({
             index: i,
             userId: userData.user_id,
-            promise: getUserHistory(
+            promise: getUserHistoryWithMetadata(
               config.tautulliUrl,
               config.tautulliApiKey,
               userData.user_id,
@@ -1220,12 +1844,21 @@ app.get("/api/users", async (req, res) => {
             ),
           });
         }
+      } else if (userData.is_active) {
+        // If user is active, use the media duration from watching
+        const watching = watchingUsers[userData.user_id];
+        if (watching && watching.media_duration) {
+          processedUsers[i].duration = watching.media_duration;
+          processedUsers[i].formatted_duration = formatDuration(
+            watching.media_duration
+          );
+        }
       }
     }
 
-    // STEP 7: Fetch history for users with no cache hit
+    // STEP 7: Fetch history and metadata for users with no cache hit
     if (historyPromises.length > 0) {
-      console.log(
+      logInfo(
         `[${requestId}] Fetching history for ${historyPromises.length} users (cache miss or forced refresh)...`
       );
 
@@ -1242,6 +1875,9 @@ app.get("/api/users", async (req, res) => {
         if (result.status === "fulfilled" && result.value) {
           const historyItem = result.value;
           const cacheKey = `user_history:${userId}`;
+
+          // Get the media duration from the history item
+          const mediaDuration = historyItem.media_duration || 0;
 
           // Prepare the cache object
           const cacheObj = {
@@ -1262,10 +1898,11 @@ app.get("/api/users", async (req, res) => {
               ? String(historyItem.parent_media_index).padStart(2, "0")
               : "",
             last_played_modified: formatShowTitle(historyItem),
+            media_duration: mediaDuration, // Store actual media duration
             timestamp: Date.now(),
           };
 
-          // Update user data with history
+          // Update user data with history and media duration
           processedUsers[index].media_type = cacheObj.media_type;
           processedUsers[index].title = cacheObj.title;
           processedUsers[index].original_title = cacheObj.original_title;
@@ -1278,16 +1915,22 @@ app.get("/api/users", async (req, res) => {
             cacheObj.parent_media_index;
           processedUsers[index].last_played_modified =
             cacheObj.last_played_modified;
+          processedUsers[index].duration = mediaDuration; // Use actual media duration
+          processedUsers[index].formatted_duration =
+            formatDuration(mediaDuration); // Format it
 
           // Store in cache
           historyCache.set(cacheKey, cacheObj);
 
-          console.log(
-            `[${requestId}] Updated and cached history for user ${processedUsers[index].friendly_name}: ${processedUsers[index].media_type} - ${processedUsers[index].title}`
+          logDebug(
+            `[${requestId}] Updated and cached history for user ${processedUsers[index].friendly_name}: ${processedUsers[index].media_type} - ${processedUsers[index].title} - Duration: ${processedUsers[index].formatted_duration}`
           );
         } else {
-          // If history fetch failed, log the error
-          console.log(
+          // If history fetch failed, set a default formatted duration
+          processedUsers[index].formatted_duration = "Unknown";
+
+          // Log the error
+          logWarn(
             `[${requestId}] Failed to fetch history for user ${
               processedUsers[index].friendly_name
             }: ${
@@ -1297,6 +1940,15 @@ app.get("/api/users", async (req, res) => {
         }
       });
     }
+
+    // Final formatting of any users that might not have a formatted_duration yet
+    processedUsers.forEach((user, i) => {
+      if (!user.formatted_duration && user.duration) {
+        processedUsers[i].formatted_duration = formatDuration(user.duration);
+      } else if (!user.formatted_duration) {
+        processedUsers[i].formatted_duration = "0m";
+      }
+    });
 
     const formattedUsers = processedUsers.map((userData) => {
       const rawData = userData.raw_data || userData;
@@ -1323,9 +1975,9 @@ app.get("/api/users", async (req, res) => {
           const result = processTemplate(format.template, userData);
           formattedOutput[format.name] = result;
         } catch (err) {
-          console.error(
+          logError(
             `[${requestId}] Error applying format to user ${rawData.friendly_name}:`,
-            err.message
+            err
           );
           formattedOutput[format.name] = "";
         }
@@ -1341,7 +1993,7 @@ app.get("/api/users", async (req, res) => {
     });
 
     // STEP 9: Send response
-    console.log(
+    logInfo(
       `[${requestId}] Sending response with ${formattedUsers.length} users`
     );
 
@@ -1357,9 +2009,9 @@ app.get("/api/users", async (req, res) => {
       },
     });
 
-    console.log(`[${requestId}] Request completed successfully`);
+    logInfo(`[${requestId}] Request completed successfully`);
   } catch (error) {
-    console.error("Error processing users:", error.message);
+    logError("Error processing users:", error);
     res.status(500).json({
       error: "Failed to process users",
       message: error.message,
@@ -1367,7 +2019,10 @@ app.get("/api/users", async (req, res) => {
   }
 });
 
+// ==============================================================
 // Cache control
+// ==============================================================
+
 // Add a route to clear all caches
 app.post("/api/clear-cache", (req, res) => {
   try {
@@ -1391,6 +2046,7 @@ app.post("/api/clear-cache", (req, res) => {
       details: previousSizes,
     });
   } catch (error) {
+    logError("Failed to clear cache", error);
     res.status(500).json({
       error: "Failed to clear cache",
       message: error.message,
@@ -1409,6 +2065,7 @@ app.post("/api/users/clear-cache", (req, res) => {
       message: `Successfully cleared user history cache with ${previousSize} entries`,
     });
   } catch (error) {
+    logError("Failed to clear cache", error);
     res.status(500).json({
       error: "Failed to clear cache",
       message: error.message,
@@ -1451,12 +2108,710 @@ app.post("/api/clear-cache/:type", (req, res) => {
       details,
     });
   } catch (error) {
+    logError("Failed to clear cache", error);
     res.status(500).json({
       error: "Failed to clear cache",
       message: error.message,
     });
   }
 });
+
+// Add a route to clear image cache headers
+app.get("/api/clear-image-cache", (req, res) => {
+  try {
+    // Set cache control headers to prevent browser caching
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    // Generate a timestamp to use as a global cache breaker
+    const timestamp = Date.now();
+
+    logInfo(`Image cache clearing requested. New timestamp: ${timestamp}`);
+
+    res.json({
+      success: true,
+      message: "Image cache headers cleared",
+      timestamp: timestamp,
+    });
+  } catch (error) {
+    logError("Failed to clear image cache", error);
+    res.status(500).json({
+      error: "Failed to clear image cache",
+      message: error.message,
+    });
+  }
+});
+
+// =======================================================
+// POster Cache Api Routes
+// =======================================================
+
+// Refresh posters endpoint - used to clear specific cached images
+app.post("/api/refresh-posters", async (req, res) => {
+  try {
+    const { sectionId, mediaId } = req.body;
+    // Default count for cache keys
+    const defaultCount = 50;
+
+    // Generate a unique timestamp for cache busting
+    const timestamp = Date.now();
+    const requestId = `refresh-${timestamp}-${Math.random()
+      .toString(36)
+      .substring(2, 9)}`;
+
+    logInfo(
+      `[${requestId}] Poster refresh requested: ${
+        mediaId
+          ? `Media ID ${mediaId}`
+          : sectionId
+          ? `Section ID ${sectionId}`
+          : "All posters"
+      }`
+    );
+
+    if (mediaId) {
+      // Invalidate specific media item's metadata cache
+      const cacheKey = `metadata:${mediaId}`;
+      const hadCachedData = metadataCache.get(cacheKey) !== null;
+
+      if (hadCachedData) {
+        metadataCache.delete(cacheKey);
+        logInfo(
+          `[${requestId}] Cleared metadata cache for media ID ${mediaId}`
+        );
+      } else {
+        logInfo(
+          `[${requestId}] No cached metadata found for media ID ${mediaId}`
+        );
+      }
+
+      // Also try to clear any section cache that might contain this media
+      // This is more aggressive but ensures the changes get picked up
+      try {
+        const config = getConfig();
+
+        // Get the full metadata to find the section ID
+        const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
+          params: {
+            apikey: config.tautulliApiKey,
+            cmd: "get_metadata",
+            rating_key: mediaId,
+          },
+          timeout: 5000,
+        });
+
+        // If we got a section ID, clear that section's cache
+        const sectionId = response.data?.response?.data?.section_id;
+        if (sectionId) {
+          const sectionCacheKey = `section:${sectionId}:media`;
+          mediaCache.delete(sectionCacheKey);
+          logInfo(
+            `[${requestId}] Cleared section cache for section ID ${sectionId} containing media ID ${mediaId}`
+          );
+        }
+      } catch (metadataError) {
+        // Non-fatal error - we'll still return success since we cleared the metadata cache
+        logError(
+          `[${requestId}] Error getting section ID for media ${mediaId}:`,
+          metadataError
+        );
+      }
+    } else if (sectionId) {
+      // Invalidate all media in a section
+      const sectionCacheKey = `section:${sectionId}:media`;
+      const hadCachedData = mediaCache.get(sectionCacheKey) !== null;
+
+      if (hadCachedData) {
+        mediaCache.delete(sectionCacheKey);
+        logInfo(`[${requestId}] Cleared cache for section ID ${sectionId}`);
+      } else {
+        logInfo(
+          `[${requestId}] No cached data found for section ID ${sectionId}`
+        );
+      }
+
+      // Also look for any type-specific cache keys
+      const typeKeys = ["movies", "shows", "music"];
+      typeKeys.forEach((type) => {
+        // Fixed: Use defaultCount instead of undefined requestedCount
+        const typeCacheKey = `media:${type}:${sectionId}:${defaultCount}`;
+
+        try {
+          if (mediaCache.get(typeCacheKey)) {
+            mediaCache.delete(typeCacheKey);
+            logInfo(
+              `[${requestId}] Cleared type cache for ${type} section ${sectionId}`
+            );
+          }
+        } catch (cacheError) {
+          // Log but continue with other cache keys
+          logWarn(
+            `[${requestId}] Error clearing cache for ${type} section ${sectionId}: ${cacheError.message}`
+          );
+        }
+      });
+
+      // Also clear any query-cache keys that might exist for this section
+      try {
+        // Try to clear the React Query cache key format
+        const queryCacheKey = `section:${sectionId}`;
+        logInfo(
+          `[${requestId}] Attempting to clear query cache for ${queryCacheKey}`
+        );
+      } catch (queryCacheError) {
+        // This is optional, so just log and continue
+        logWarn(
+          `[${requestId}] Query cache clear attempt: ${queryCacheError.message}`
+        );
+      }
+    } else {
+      // Clear browser image cache by sending a response event that the frontend can handle
+      logInfo(`[${requestId}] Sending global image cache clear event`);
+    }
+
+    // Return success with timestamp for cache busting
+    res.json({
+      success: true,
+      message: mediaId
+        ? `Poster cache cleared for media ID ${mediaId}`
+        : sectionId
+        ? `Poster cache cleared for section ID ${sectionId}`
+        : "All poster caches cleared",
+      timestamp,
+    });
+
+    // Dispatch event for global updates if needed
+    if (!mediaId && !sectionId) {
+      // Trigger the imageCacheCleared event
+      try {
+        const eventPayload = {
+          timestamp,
+          requestId,
+        };
+
+        // This will only work if we have a real event emitter set up
+        // If not, just log it
+        logInfo(
+          `[${requestId}] Would dispatch imageCacheCleared event: ${JSON.stringify(
+            eventPayload
+          )}`
+        );
+      } catch (eventError) {
+        logError(`[${requestId}] Error dispatching event:`, eventError);
+      }
+    }
+  } catch (error) {
+    logError("Failed to refresh posters", error);
+    res.status(500).json({
+      error: "Failed to refresh posters",
+      message: error.message,
+    });
+  }
+});
+
+// Route to serve cached posters
+app.get("/api/posters/:ratingKey", (req, res) => {
+  const { ratingKey } = req.params;
+
+  // Ensure directory exists
+  if (!fs.existsSync(POSTER_CACHE_DIR)) {
+    try {
+      fs.mkdirSync(POSTER_CACHE_DIR, { recursive: true });
+      logInfo(`Created missing poster cache directory: ${POSTER_CACHE_DIR}`);
+    } catch (dirError) {
+      logError("Failed to create poster cache directory:", dirError);
+      // Continue as we'll fall back to Tautulli proxy
+    }
+  }
+
+  // Look for the poster in the cache
+  try {
+    const files = fs.readdirSync(POSTER_CACHE_DIR);
+    const posterFile = files.find((file) => file.startsWith(`${ratingKey}.`));
+
+    if (posterFile) {
+      const posterPath = path.join(POSTER_CACHE_DIR, posterFile);
+      const contentType = posterFile.endsWith(".png")
+        ? "image/png"
+        : posterFile.endsWith(".gif")
+        ? "image/gif"
+        : "image/jpeg";
+
+      // Set cache headers for browser caching
+      res.setHeader("Cache-Control", "public, max-age=31536000"); // 1 year
+      res.setHeader("Content-Type", contentType);
+
+      // Stream the file
+      const stream = fs.createReadStream(posterPath);
+      stream.on("error", (streamError) => {
+        logError(`Error streaming poster file ${posterPath}:`, streamError);
+        // If streaming fails, fall back to proxy
+        fallbackToTautulliProxy();
+      });
+
+      stream.pipe(res);
+    } else {
+      // If not found in cache, fall back to Tautulli proxy
+      fallbackToTautulliProxy();
+    }
+  } catch (error) {
+    logError(`Error serving poster for ${ratingKey}:`, error);
+    fallbackToTautulliProxy();
+  }
+
+  // Helper function to fall back to Tautulli proxy
+  function fallbackToTautulliProxy() {
+    const config = getConfig();
+    if (config.tautulliApiKey && config.tautulliUrl) {
+      // Fall back to Tautulli proxy
+      logDebug(`Poster not cached for ${ratingKey}, proxying from Tautulli`);
+
+      // Get metadata to find thumb path
+      axios
+        .get(`${config.tautulliUrl}/api/v2`, {
+          params: {
+            apikey: config.tautulliApiKey,
+            cmd: "get_metadata",
+            rating_key: ratingKey,
+          },
+          timeout: 5000,
+        })
+        .then((response) => {
+          if (response.data?.response?.result === "success") {
+            const metadata = response.data.response.data;
+
+            // Get appropriate thumb path
+            let thumbPath = metadata.thumb;
+
+            // For episodes, use grandparent_thumb or parent_thumb
+            if (metadata.media_type?.toLowerCase() === "episode") {
+              thumbPath =
+                metadata.grandparent_thumb ||
+                metadata.parent_thumb ||
+                metadata.thumb;
+            }
+
+            if (thumbPath) {
+              // Redirect to Tautulli image proxy
+              res.redirect(
+                `${config.tautulliUrl}/pms_image_proxy?img=${encodeURIComponent(
+                  thumbPath
+                )}&apikey=${config.tautulliApiKey}`
+              );
+
+              // Also cache this poster for next time
+              downloadPosterFromTautulli(
+                thumbPath,
+                config.tautulliApiKey,
+                ratingKey
+              ).catch((err) => {
+                logWarn(
+                  `Background caching after redirect failed for ${ratingKey}:`,
+                  err
+                );
+              });
+            } else {
+              res.status(404).send("No thumb path found");
+            }
+          } else {
+            res.status(404).send("Metadata not found");
+          }
+        })
+        .catch((error) => {
+          logError(`Error fetching metadata for ${ratingKey}:`, error);
+          res.status(500).send("Error fetching metadata");
+        });
+    } else {
+      res.status(404).json({
+        error: "Poster not found",
+        ratingKey,
+      });
+    }
+  }
+});
+
+// Route to download and cache posters
+app.post("/api/posters/cache", async (req, res) => {
+  const { ratingKey, thumbPath, apiKey, mediaType } = req.body;
+
+  if (!ratingKey || !thumbPath || !apiKey) {
+    return res.status(400).json({
+      error: "Missing required parameters",
+      success: false,
+    });
+  }
+
+  try {
+    // Check if poster is already cached
+    const files = fs.readdirSync(POSTER_CACHE_DIR);
+    const posterFile = files.find((file) => file.startsWith(`${ratingKey}.`));
+
+    if (posterFile) {
+      // Poster already cached
+      return res.json({
+        success: true,
+        cached: true,
+        message: "Poster already cached",
+      });
+    }
+
+    // For episodes, we need to handle differently
+    let actualThumbPath = thumbPath;
+
+    // If it's an episode, try to get metadata to find the best thumb
+    if (mediaType.toLowerCase() === "episode") {
+      try {
+        const config = getConfig();
+        const metadataResponse = await axios.get(
+          `${config.tautulliUrl}/api/v2`,
+          {
+            params: {
+              apikey: apiKey,
+              cmd: "get_metadata",
+              rating_key: ratingKey,
+            },
+            timeout: 10000,
+          }
+        );
+
+        const metadata = metadataResponse.data?.response?.data;
+
+        if (metadata) {
+          // Prefer grandparent_thumb or parent_thumb for episodes
+          actualThumbPath =
+            metadata.grandparent_thumb || metadata.parent_thumb || thumbPath;
+        }
+      } catch (error) {
+        logWarn(`Error fetching metadata for episode ${ratingKey}:`, error);
+        // Continue with the original thumb path
+      }
+    }
+
+    // Download and cache the poster
+    const result = await downloadPosterFromTautulli(
+      actualThumbPath,
+      apiKey,
+      ratingKey
+    );
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: "Poster cached successfully",
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: result.error || "Failed to cache poster",
+      });
+    }
+  } catch (error) {
+    logError(`Error caching poster ${ratingKey}:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Route to clear the poster cache
+app.post("/api/posters/cache/clear", (req, res) => {
+  try {
+    // Ensure directory exists
+    if (!fs.existsSync(POSTER_CACHE_DIR)) {
+      fs.mkdirSync(POSTER_CACHE_DIR, { recursive: true });
+      logInfo(`Created missing poster cache directory: ${POSTER_CACHE_DIR}`);
+
+      // If we just created the directory, it's empty so we're done
+      return res.json({
+        success: true,
+        message: `Poster cache directory created (was missing)`,
+        count: 0,
+      });
+    }
+
+    const files = fs.readdirSync(POSTER_CACHE_DIR);
+
+    let deletedCount = 0;
+    for (const file of files) {
+      try {
+        const filePath = path.join(POSTER_CACHE_DIR, file);
+        fs.unlinkSync(filePath);
+        deletedCount++;
+      } catch (fileError) {
+        logWarn(`Error deleting file ${file}:`, fileError);
+        // Continue with other files
+      }
+    }
+
+    logInfo(`Cleared poster cache, deleted ${deletedCount} files`);
+
+    res.json({
+      success: true,
+      message: `Cleared poster cache, deleted ${deletedCount} files`,
+      count: deletedCount,
+    });
+  } catch (error) {
+    logError("Error clearing poster cache:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Route to clean up unused poster cache files
+app.post("/api/posters/cache/cleanup", async (req, res) => {
+  try {
+    // Get all files in the poster cache directory
+    const files = fs.readdirSync(POSTER_CACHE_DIR);
+
+    // Get a list of all section IDs from saved sections
+    let savedSections = [];
+    try {
+      const sectionsResponse = await fs.promises.readFile(
+        SAVED_SECTIONS_PATH,
+        "utf8"
+      );
+      savedSections = JSON.parse(sectionsResponse);
+    } catch (error) {
+      logWarn("Error reading saved sections:", error);
+      // Continue with empty sections
+    }
+
+    const allSectionIds = savedSections
+      .map((section) => section.section_id)
+      .filter(Boolean);
+
+    // Skip if no sections found
+    if (allSectionIds.length === 0) {
+      return res.json({
+        success: true,
+        message: "No sections found, skipping poster cache cleanup",
+        count: 0,
+      });
+    }
+
+    // Get all media items from all sections
+    const config = getConfig();
+    if (!config.tautulliApiKey || !config.tautulliUrl) {
+      return res.status(400).json({
+        success: false,
+        error: "Tautulli not configured",
+      });
+    }
+
+    // Get recently added from each section to build a list of active media
+    const activeRatingKeys = new Set();
+
+    for (const sectionId of allSectionIds) {
+      try {
+        const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
+          params: {
+            apikey: config.tautulliApiKey,
+            cmd: "get_recently_added",
+            section_id: sectionId,
+            count: 100, // Get a large number to include most active content
+          },
+          timeout: 10000,
+        });
+
+        if (response.data?.response?.result === "success") {
+          const recentItems =
+            response.data?.response?.data?.recently_added || [];
+
+          // Add all rating keys to the active set
+          recentItems.forEach((item) => {
+            if (item.rating_key) {
+              activeRatingKeys.add(item.rating_key.toString());
+            }
+          });
+        }
+      } catch (error) {
+        logError(
+          `Error fetching recently added for section ${sectionId}:`,
+          error
+        );
+        // Continue with other sections
+      }
+    }
+
+    // Now determine which posters are unused
+    let deletedCount = 0;
+
+    for (const file of files) {
+      // Parse the rating key from the filename (e.g., "12345.jpg" -> "12345")
+      const ratingKeyMatch = file.match(/^(\d+)\./);
+      if (ratingKeyMatch) {
+        const ratingKey = ratingKeyMatch[1];
+
+        // If this rating key is not in the active set, delete the file
+        if (!activeRatingKeys.has(ratingKey)) {
+          const filePath = path.join(POSTER_CACHE_DIR, file);
+          fs.unlinkSync(filePath);
+          deletedCount++;
+        }
+      }
+    }
+
+    logInfo(`Cleaned up ${deletedCount} unused poster cache files`);
+
+    res.json({
+      success: true,
+      message: `Cleaned up ${deletedCount} unused poster cache files`,
+      count: deletedCount,
+      activeCount: activeRatingKeys.size,
+    });
+  } catch (error) {
+    logError("Error cleaning up poster cache:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Route to clear a specific poster from cache
+app.post("/api/posters/cache/clear/:ratingKey", (req, res) => {
+  try {
+    const { ratingKey } = req.params;
+
+    if (!ratingKey) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing rating key",
+      });
+    }
+
+    // Ensure directory exists
+    if (!fs.existsSync(POSTER_CACHE_DIR)) {
+      fs.mkdirSync(POSTER_CACHE_DIR, { recursive: true });
+      logInfo(`Created missing poster cache directory: ${POSTER_CACHE_DIR}`);
+    }
+
+    // Find the poster file for this rating key
+    const files = fs.readdirSync(POSTER_CACHE_DIR);
+    const posterFiles = files.filter((file) =>
+      file.startsWith(`${ratingKey}.`)
+    );
+
+    let deletedCount = 0;
+    for (const file of posterFiles) {
+      const filePath = path.join(POSTER_CACHE_DIR, file);
+      fs.unlinkSync(filePath);
+      deletedCount++;
+    }
+
+    logInfo(
+      `Cleared poster cache for rating key ${ratingKey}, deleted ${deletedCount} files`
+    );
+
+    res.json({
+      success: true,
+      message: `Cleared poster cache for rating key ${ratingKey}`,
+      count: deletedCount,
+    });
+  } catch (error) {
+    logError(
+      `Error clearing poster cache for rating key ${req.params.ratingKey}:`,
+      error
+    );
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Route to get poster cache stats
+app.get("/api/posters/cache/stats", (req, res) => {
+  try {
+    // Check if the poster cache directory exists, create it if not
+    if (!fs.existsSync(POSTER_CACHE_DIR)) {
+      try {
+        fs.mkdirSync(POSTER_CACHE_DIR, { recursive: true });
+        logInfo(`Created missing poster cache directory: ${POSTER_CACHE_DIR}`);
+      } catch (dirError) {
+        // If we can't create the directory, return a more informative error
+        logError(
+          `Failed to create poster cache directory: ${POSTER_CACHE_DIR}`,
+          dirError
+        );
+        return res.status(500).json({
+          success: false,
+          error: "Could not create poster cache directory",
+          details: dirError.message,
+          directory: POSTER_CACHE_DIR,
+        });
+      }
+    }
+
+    // After ensuring directory exists, try to read its contents
+    try {
+      // Use readdirSync with error handling
+      const files = fs.readdirSync(POSTER_CACHE_DIR);
+
+      // Calculate total size with better error handling
+      let totalSize = 0;
+      if (files.length > 0) {
+        for (const file of files) {
+          try {
+            const filePath = path.join(POSTER_CACHE_DIR, file);
+            const stats = fs.statSync(filePath);
+            totalSize += stats.size;
+          } catch (fileStatError) {
+            // Skip this file if we can't get its stats
+            logWarn(`Could not get stats for file ${file}:`, fileStatError);
+          }
+        }
+      }
+
+      // Helper function to format file size
+      const formatFileSize = (bytes) => {
+        if (!bytes || bytes === 0) return "0 Bytes";
+        const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
+      };
+
+      res.json({
+        success: true,
+        count: files.length,
+        size: totalSize,
+        sizeFormatted: totalSize > 0 ? formatFileSize(totalSize) : "0 Bytes",
+        directory: POSTER_CACHE_DIR,
+      });
+    } catch (readError) {
+      // Handle read error
+      logError(
+        `Error reading poster cache directory: ${POSTER_CACHE_DIR}`,
+        readError
+      );
+      return res.status(500).json({
+        success: false,
+        error: "Failed to read poster cache directory",
+        details: readError.message,
+        directory: POSTER_CACHE_DIR,
+      });
+    }
+  } catch (error) {
+    // Catch-all for any other errors
+    logError("Unexpected error getting poster cache stats:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      directory: POSTER_CACHE_DIR,
+    });
+  }
+});
+
+// ================================================
+// Format Enpoints
+// ================================================
 
 // Downloads endpoint
 app.get("/api/downloads", async (req, res) => {
@@ -1506,7 +2861,7 @@ app.get("/api/downloads", async (req, res) => {
 
     res.json(processedData);
   } catch (error) {
-    console.error("Error processing downloads:", error);
+    logError("Error processing downloads:", error);
     res.status(500).json({
       error: "Failed to process downloads",
       message: error.message,
@@ -1607,7 +2962,7 @@ app.get("/api/libraries", async (req, res) => {
       libraries: filteredLibraries,
     });
   } catch (error) {
-    console.error("Error fetching libraries:", error);
+    logError("Error fetching libraries:", error);
     res.status(500).json({
       error: "Failed to fetch libraries",
       message: error.message,
@@ -1679,7 +3034,7 @@ app.get("/api/sections", async (req, res) => {
       sections: formattedSections,
     });
   } catch (error) {
-    console.error("Error reading saved sections:", error);
+    logError("Error reading saved sections:", error);
     res.status(500).json({
       error: "Failed to read saved sections",
       message: error.message,
@@ -1717,7 +3072,7 @@ app.post("/api/sections", async (req, res) => {
     const sectionsWithDetails = await Promise.all(
       sections.map(async (section) => {
         try {
-          console.log(`Fetching details for section ${section.section_id}`);
+          logDebug(`Fetching details for section ${section.section_id}`);
 
           // Get library details from libraries table
           const libraryResponse = await axios.get(
@@ -1731,7 +3086,7 @@ app.post("/api/sections", async (req, res) => {
           );
 
           if (libraryResponse.data?.response?.result !== "success") {
-            console.error("Library response error:", libraryResponse.data);
+            logError("Library response error:", libraryResponse.data);
             throw new Error("Failed to fetch library details");
           }
 
@@ -1740,7 +3095,7 @@ app.post("/api/sections", async (req, res) => {
             libraryData.find((lib) => lib.section_id === section.section_id) ||
             {};
 
-          console.log(
+          logDebug(
             "Library details found:",
             JSON.stringify(libraryDetails, null, 2)
           );
@@ -1757,7 +3112,7 @@ app.post("/api/sections", async (req, res) => {
             section_name: libraryDetails.section_name || section.name,
           };
         } catch (error) {
-          console.error(
+          logError(
             `Error fetching details for section ${section.section_id}:`,
             error
           );
@@ -1779,13 +3134,17 @@ app.post("/api/sections", async (req, res) => {
       message: `Successfully saved ${sectionsWithDetails.length} sections`,
     });
   } catch (error) {
-    console.error("Error saving sections:", error);
+    logError("Error saving sections:", error);
     res.status(500).json({
       error: "Failed to save sections",
       message: error.message,
     });
   }
 });
+
+// ======================================================================
+// Recently Added API Endpoint with Improved Caching
+// ======================================================================
 
 // Recently Added endpoint
 app.get("/api/recent/:type", async (req, res) => {
@@ -1799,7 +3158,7 @@ app.get("/api/recent/:type", async (req, res) => {
     // Generate request ID for logging and cache key
     const requestId =
       Date.now().toString(36) + Math.random().toString(36).substring(2);
-    console.log(`[${requestId}] Processing /api/recent/${type} request`);
+    logDebug(`[${requestId}] Processing /api/recent/${type} request`);
 
     // Validate type
     const validTypes = {
@@ -1812,28 +3171,121 @@ app.get("/api/recent/:type", async (req, res) => {
       return res.status(400).json({ error: "Invalid media type" });
     }
 
+    // Verify Tautulli configuration
+    if (!config.tautulliUrl || !config.tautulliApiKey) {
+      return res.status(500).json({
+        error: "Tautulli not configured",
+        message: "Please configure Tautulli URL and API key in settings",
+        config: {
+          hasTautulliUrl: !!config.tautulliUrl,
+          hasTautulliApiKey: !!config.tautulliApiKey,
+        },
+      });
+    }
+
+    // Test Tautulli connection before proceeding
+    try {
+      logDebug(`[${requestId}] Testing Tautulli connection`);
+      const testResponse = await axios.get(`${config.tautulliUrl}/api/v2`, {
+        params: {
+          apikey: config.tautulliApiKey,
+          cmd: "status",
+        },
+        timeout: 5000,
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+      });
+
+      if (testResponse.data?.response?.result !== "success") {
+        logError(
+          `[${requestId}] Tautulli connection test failed:`,
+          testResponse.data
+        );
+        return res.status(502).json({
+          error: "Tautulli connection failed",
+          message: "Could not connect to Tautulli API",
+          details: testResponse.data,
+        });
+      }
+
+      logDebug(`[${requestId}] Tautulli connection test successful`);
+    } catch (error) {
+      logError(`[${requestId}] Tautulli connection test error:`, {
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+
+      return res.status(502).json({
+        error: "Tautulli connection failed",
+        message: `Error connecting to Tautulli: ${error.message}`,
+        details: {
+          code: error.code,
+          status: error.response?.status,
+        },
+      });
+    }
+
     // Create cache key based on request parameters
     const cacheKey = `media:${type}:${section || "all"}:${requestedCount}`;
 
-    // Try to get from cache if not forcing refresh
+    // Get from cache first if not forcing refresh
     if (!forceRefresh) {
       const cachedMedia = mediaCache.get(cacheKey);
       if (cachedMedia) {
-        console.log(`[${requestId}] Cache hit for ${cacheKey}`);
+        logDebug(`[${requestId}] Cache hit for ${cacheKey}`);
 
-        // Add cache metadata to response
-        return res.json({
-          ...cachedMedia,
-          _cache: {
-            hit: true,
-            age: Math.floor((Date.now() - cachedMedia._timestamp) / 1000) + "s",
-            key: cacheKey,
-          },
-        });
+        // Verify cache data has media
+        if (
+          !cachedMedia.media ||
+          !Array.isArray(cachedMedia.media) ||
+          cachedMedia.media.length === 0
+        ) {
+          logWarn(
+            `[${requestId}] Cache hit but media array is invalid. Forcing refresh.`
+          );
+        } else {
+          // Create a deep copy to prevent reference issues
+          const cachedResponse = JSON.parse(JSON.stringify(cachedMedia));
+
+          // Add cache metadata
+          const response = {
+            ...cachedResponse,
+            _cache: {
+              hit: true,
+              age:
+                Math.floor((Date.now() - cachedResponse._timestamp) / 1000) +
+                "s",
+              key: cacheKey,
+            },
+          };
+
+          // Trigger background refresh if cache is more than 5 minutes old
+          if (Date.now() - cachedResponse._timestamp > 5 * 60 * 1000) {
+            setTimeout(() => {
+              try {
+                logDebug(
+                  `[${requestId}] Refreshing cache in background for ${cacheKey}`
+                );
+                refreshCacheInBackground(type, section, requestedCount);
+              } catch (e) {
+                logError(
+                  `[${requestId}] Error refreshing cache in background:`,
+                  e
+                );
+              }
+            }, 100);
+          }
+
+          return res.json(response);
+        }
       }
-      console.log(`[${requestId}] Cache miss for ${cacheKey}`);
+      logDebug(`[${requestId}] Cache miss for ${cacheKey}`);
     } else {
-      console.log(`[${requestId}] Forced refresh, bypassing cache`);
+      logDebug(`[${requestId}] Forced refresh, bypassing cache`);
     }
 
     // Get formats
@@ -1848,14 +3300,34 @@ app.get("/api/recent/:type", async (req, res) => {
           apikey: config.tautulliApiKey,
           cmd: "get_libraries_table",
         },
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
       });
 
       allSections = sectionsResponse.data?.response?.data?.data || [];
+
+      if (
+        !allSections ||
+        !Array.isArray(allSections) ||
+        allSections.length === 0
+      ) {
+        logWarn(`[${requestId}] No sections found in Tautulli response`);
+        return res.status(404).json({
+          error: "No library sections found",
+          message:
+            "No sections were returned from Tautulli. Please check your library configuration.",
+        });
+      }
+
+      logDebug(`[${requestId}] Found ${allSections.length} total sections`);
     } catch (sectionsError) {
-      console.error("Error fetching sections:", sectionsError);
+      logError(`[${requestId}] Error fetching sections:`, sectionsError);
       return res.status(500).json({
         error: "Failed to fetch library sections",
         message: sectionsError.message,
+        details: sectionsError.response?.data,
       });
     }
 
@@ -1875,6 +3347,10 @@ app.get("/api/recent/:type", async (req, res) => {
       return matchesType;
     });
 
+    logDebug(
+      `[${requestId}] Found ${matchingSections.length} matching sections for type ${type}`
+    );
+
     // If no matching sections, return empty result
     if (matchingSections.length === 0) {
       return res.json({
@@ -1887,73 +3363,143 @@ app.get("/api/recent/:type", async (req, res) => {
       });
     }
 
-    // Fetch media for matching sections
-    const sectionMediaPromises = matchingSections.map(async (section) => {
-      try {
-        // Generate section cache key
-        const sectionCacheKey = `section:${section.section_id}:media`;
-        let sectionMedia;
+    // Helper function for sequentially processing sections
+    const fetchSectionMediaSequentially = async (sections) => {
+      const results = [];
 
-        // Try to get section media from cache unless forced refresh
-        if (!forceRefresh) {
-          sectionMedia = mediaCache.get(sectionCacheKey);
-          if (sectionMedia) {
-            console.log(
-              `[${requestId}] Using cached media for section ${section.section_id}`
-            );
-            return sectionMedia;
+      for (const section of sections) {
+        try {
+          // Generate section cache key
+          const sectionCacheKey = `section:${section.section_id}:media`;
+          let sectionMedia;
+
+          // Try to get section media from cache unless forced refresh
+          if (!forceRefresh) {
+            sectionMedia = mediaCache.get(sectionCacheKey);
+            if (sectionMedia) {
+              logDebug(
+                `[${requestId}] Using cached media for section ${section.section_id}`
+              );
+              results.push(sectionMedia);
+              continue;
+            }
           }
+
+          // If not in cache, fetch from API
+          logDebug(
+            `[${requestId}] Fetching media for section ${section.section_id}`
+          );
+
+          // Add detailed error handling and request headers
+          try {
+            const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
+              params: {
+                apikey: config.tautulliApiKey,
+                cmd: "get_recently_added",
+                section_id: section.section_id,
+                count: 50, // Fetch enough items
+              },
+              headers: {
+                "Cache-Control": "no-cache, no-store",
+                Pragma: "no-cache",
+                "If-Modified-Since": "0",
+                "If-None-Match": "", // Prevent 304 responses
+              },
+              timeout: 10000, // Increase timeout
+            });
+
+            // Check if we have a valid response
+            if (response.data?.response?.result !== "success") {
+              throw new Error(
+                `Tautulli returned error: ${JSON.stringify(response.data)}`
+              );
+            }
+
+            // Process and cache the section media data
+            sectionMedia = (
+              response.data?.response?.data?.recently_added || []
+            ).map((item) => ({
+              ...item,
+              section_id: section.section_id,
+              section_name: section.section_name || section.name,
+            }));
+
+            // Only cache if we have items
+            if (sectionMedia.length > 0) {
+              // Clone data before caching
+              const clonedData = JSON.parse(JSON.stringify(sectionMedia));
+              mediaCache.set(sectionCacheKey, clonedData);
+              logDebug(
+                `[${requestId}] Cached ${clonedData.length} items for section ${section.section_id}`
+              );
+            } else {
+              logDebug(
+                `[${requestId}] No media items found for section ${section.section_id}`
+              );
+            }
+
+            results.push(sectionMedia);
+          } catch (error) {
+            // Detailed error logging
+            logError(
+              `Error fetching recently added for section ${section.section_id}:`,
+              {
+                message: error.message,
+                code: error.code,
+                response: error.response?.data,
+                status: error.response?.status,
+                details: error.toJSON ? error.toJSON() : error,
+              }
+            );
+
+            // Add empty array for this section
+            results.push([]);
+          }
+
+          // Add a short delay between requests to avoid rate limiting
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        } catch (outerError) {
+          logError(
+            `Unexpected error processing section ${section.section_id}:`,
+            outerError
+          );
+          results.push([]);
         }
-
-        // If not in cache, fetch from API
-        console.log(
-          `[${requestId}] Fetching media for section ${section.section_id}`
-        );
-        const response = await axios.get(`${config.tautulliUrl}/api/v2`, {
-          params: {
-            apikey: config.tautulliApiKey,
-            cmd: "get_recently_added",
-            section_id: section.section_id,
-            count: 50, // Fetch enough items to ensure we have at least the requested count
-          },
-        });
-
-        // Process and cache the section media data
-        sectionMedia = (
-          response.data?.response?.data?.recently_added || []
-        ).map((item) => ({
-          ...item,
-          section_id: section.section_id,
-          section_name: section.section_name || section.name,
-        }));
-
-        // Cache the section media for future requests
-        mediaCache.set(sectionCacheKey, sectionMedia);
-
-        return sectionMedia;
-      } catch (error) {
-        console.error(
-          `Error fetching recently added for section ${section.section_id}:`,
-          error
-        );
-        return [];
       }
-    });
 
-    // Wait for all section media fetches
-    let allMedia = await Promise.all(sectionMediaPromises);
+      return results;
+    };
+
+    // Use sequential fetching instead of parallel promises
+    let allMedia = await fetchSectionMediaSequentially(matchingSections);
     allMedia = allMedia.flat();
 
-    // If no media found
+    // Handle case where no media was found
     if (allMedia.length === 0) {
-      return res.json({
+      const emptyResponse = {
         total: 0,
         media: [],
         sections: matchingSections.map((s) => ({
           id: s.section_id,
           name: s.section_name || s.name,
         })),
-        error: "No recently added media found",
+        message: "No recently added media found in any section",
+        _timestamp: Date.now(),
+      };
+
+      // Don't cache empty responses
+      logDebug(
+        `[${requestId}] No media found, returning empty response without caching`
+      );
+
+      return res.json({
+        ...emptyResponse,
+        _cache: {
+          hit: false,
+          fresh: true,
+          empty: true,
+          key: cacheKey,
+        },
       });
     }
 
@@ -1965,134 +3511,18 @@ app.get("/api/recent/:type", async (req, res) => {
     // Limit results to the requested count
     const limitedMedia = allMedia.slice(0, requestedCount);
 
-    const processedMedia = await Promise.all(
-      limitedMedia.map(async (media) => {
-        // Try to get metadata from cache
-        const metadataCacheKey = `metadata:${media.rating_key}`;
-        let videoResolution = "Unknown";
-        let cachedMetadata = false;
+    // Process media with batched metadata and formatting
+    logDebug(`[${requestId}] Processing ${limitedMedia.length} media items`);
+    const processedMedia = await processMediaInBatches(
+      limitedMedia,
+      requestId,
+      config,
+      recentlyAddedFormats,
+      type
+    );
 
-        // Check metadata cache
-        if (!forceRefresh && media.rating_key) {
-          const metadata = metadataCache.get(metadataCacheKey);
-          if (metadata) {
-            videoResolution = metadata.video_full_resolution || "Unknown";
-            cachedMetadata = true;
-            console.log(
-              `[${requestId}] Using cached metadata for ${media.rating_key}`
-            );
-          }
-        }
-
-        // Fetch metadata if not cached
-        if (!cachedMetadata && media.rating_key) {
-          try {
-            console.log(
-              `[${requestId}] Fetching metadata for ${media.rating_key}`
-            );
-            const metadataResponse = await axios.get(
-              `${config.tautulliUrl}/api/v2`,
-              {
-                params: {
-                  apikey: config.tautulliApiKey,
-                  cmd: "get_metadata",
-                  rating_key: media.rating_key,
-                },
-                timeout: 5000, // Add a timeout to prevent hanging
-              }
-            );
-
-            // Extract video resolution from metadata
-            const mediaInfo =
-              metadataResponse.data?.response?.data?.media_info?.[0];
-            if (mediaInfo && mediaInfo.video_full_resolution) {
-              videoResolution = mediaInfo.video_full_resolution;
-
-              // Cache the metadata
-              metadataCache.set(metadataCacheKey, {
-                video_full_resolution: videoResolution,
-                media_info: mediaInfo,
-                timestamp: Date.now(),
-              });
-            }
-          } catch (error) {
-            console.error(
-              `Failed to fetch metadata for ${media.rating_key}:`,
-              error
-            );
-          }
-        }
-
-        // Calculate formatted duration once
-        const formattedDuration = formatDuration(media.duration || 0);
-
-        // Enhanced media object with both aliases and formatted data
-        const enhancedMedia = {
-          ...media,
-          mediaType: type,
-          media_type: type,
-          formatted_duration: formattedDuration,
-          video_full_resolution: videoResolution, // Add resolution to the media object
-          // Add both key variations for timestamps
-          addedAt: media.added_at,
-          added_at: media.added_at,
-        };
-
-        const formattedData = {};
-
-        // Apply formats based on media type
-        recentlyAddedFormats
-          .filter(
-            (format) =>
-              format.type === type &&
-              (format.sectionId === "all" ||
-                format.sectionId === media.section_id.toString())
-          )
-          .forEach((format) => {
-            // Process special variables before template processing
-            let processedTemplate = format.template;
-
-            // Handle added_at:format pattern specifically
-            const dateFormatPattern = /\{added_at:([^}]+)\}/g;
-            processedTemplate = processedTemplate.replace(
-              dateFormatPattern,
-              (match, formatType) => {
-                return formatDate(media.added_at, formatType);
-              }
-            );
-
-            // Same for addedAt:format
-            const dateFormatPattern2 = /\{addedAt:([^}]+)\}/g;
-            processedTemplate = processedTemplate.replace(
-              dateFormatPattern2,
-              (match, formatType) => {
-                return formatDate(media.added_at, formatType);
-              }
-            );
-
-            // Special handling for duration
-            processedTemplate = processedTemplate.replace(
-              /\{duration\}/g,
-              formattedDuration
-            );
-
-            // Now process the template with the enhanced media data
-            formattedData[format.name] = enhancedProcessTemplate(
-              processedTemplate,
-              enhancedMedia
-            );
-          });
-
-        return {
-          ...formattedData,
-          raw_data: {
-            ...media,
-            formatted_duration: formattedDuration,
-            video_full_resolution: videoResolution,
-            _cached_metadata: cachedMetadata,
-          },
-        };
-      })
+    logDebug(
+      `[${requestId}] Processed ${processedMedia.length} media items successfully`
     );
 
     // Prepare the full response
@@ -2112,13 +3542,44 @@ app.get("/api/recent/:type", async (req, res) => {
       _timestamp: Date.now(),
     };
 
-    // Cache the entire response
-    mediaCache.set(cacheKey, responseData);
-    console.log(`[${requestId}] Cached response with key ${cacheKey}`);
+    // Add additional validation to ensure the media array is present and not empty
+    if (!responseData.media || responseData.media.length === 0) {
+      logWarn(
+        `[${requestId}] Processed media array is empty or null even though raw media was found`
+      );
+      responseData.media = limitedMedia.map((item) => ({
+        raw_data: item,
+        // Add basic formatted info if custom formatting failed
+        title: item.title || "Unknown",
+        year: item.year || "",
+        type: item.media_type || type,
+      }));
+      responseData.total = responseData.media.length;
+      logDebug(
+        `[${requestId}] Created fallback media array with ${responseData.media.length} items`
+      );
+    }
+
+    // Log the final structure before caching
+    logDebug(
+      `[${requestId}] Final response structure: Total: ${
+        responseData.total
+      }, Media array length: ${responseData.media?.length || 0}`
+    );
+
+    // Create a deep clone of the response data to prevent reference issues
+    const clonedForCache = JSON.parse(JSON.stringify(responseData));
+
+    // Cache the cloned response
+    mediaCache.set(cacheKey, clonedForCache);
+    logDebug(`[${requestId}] Cached response with key ${cacheKey}`);
+
+    // Create a fresh clone for the response
+    const responseClone = JSON.parse(JSON.stringify(responseData));
 
     // Send response
     res.json({
-      ...responseData,
+      ...responseClone,
       _cache: {
         hit: false,
         fresh: true,
@@ -2126,7 +3587,7 @@ app.get("/api/recent/:type", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error processing recently added media:", error);
+    logError("Error processing recently added media:", error);
     res.status(500).json({
       error: "Failed to process recently added media",
       message: error.message,
@@ -2139,7 +3600,7 @@ app.get("/api/recent/:type", async (req, res) => {
 app.post("/api/config", (req, res) => {
   const { plexUrl, plexToken, tautulliUrl, tautulliApiKey } = req.body;
 
-  console.log("Received config update:", {
+  logInfo("Received config update:", {
     plexUrl,
     plexToken: plexToken ? "[REDACTED]" : undefined,
     tautulliUrl,
@@ -2222,7 +3683,7 @@ app.post("/api/reset-all", (req, res) => {
     fs.writeFileSync(savedSectionsPath, JSON.stringify([], null, 2));
 
     // Log the reset action
-    console.log("All configurations have been reset:", {
+    logInfo("All configurations have been reset:", {
       configPath,
       formatsPath,
       savedSectionsPath,
@@ -2233,7 +3694,7 @@ app.post("/api/reset-all", (req, res) => {
       message: "All configurations reset successfully",
     });
   } catch (error) {
-    console.error("Failed to reset configurations:", error);
+    logError("Failed to reset configurations:", error);
     res.status(500).json({
       status: "error",
       message: "Failed to reset configurations",
@@ -2287,7 +3748,7 @@ app.get("/api/health", async (req, res) => {
           healthData.services.plex.serverName =
             response.data?.MediaContainer?.friendlyName || null;
         } catch (error) {
-          console.error("Plex health check failed:", error.message);
+          logError("Plex health check failed:", error.message);
           healthData.services.plex.error = error.message;
         }
       }
@@ -2315,7 +3776,7 @@ app.get("/api/health", async (req, res) => {
             healthData.services.tautulli.data = response.data.response.data;
           }
         } catch (error) {
-          console.error("Tautulli health check failed:", error.message);
+          logError("Tautulli health check failed:", error.message);
           healthData.services.tautulli.error = error.message;
         }
       }
@@ -2325,7 +3786,7 @@ app.get("/api/health", async (req, res) => {
     res.setHeader("Content-Type", "application/json");
     return res.json(healthData);
   } catch (error) {
-    console.error("Health API error:", error);
+    logError("Health API error:", error);
     return res.status(500).json({
       status: "error",
       error: "Server error during health check",
@@ -2370,7 +3831,7 @@ app.post("/api/health/check-service", async (req, res) => {
           serverName: response.data?.MediaContainer?.friendlyName || null,
         });
       } catch (error) {
-        console.error("Plex service check failed:", error.message);
+        logError("Plex service check failed:", error.message);
         return res.json({
           status: "offline",
           message: "Failed to connect to Plex",
@@ -2413,7 +3874,7 @@ app.post("/api/health/check-service", async (req, res) => {
           });
         }
       } catch (error) {
-        console.error("Tautulli service check failed:", error.message);
+        logError("Tautulli service check failed:", error.message);
         return res.json({
           status: "offline",
           message: "Failed to connect to Tautulli",
@@ -2422,7 +3883,7 @@ app.post("/api/health/check-service", async (req, res) => {
       }
     }
   } catch (error) {
-    console.error("Service check error:", error);
+    logError("Service check error:", error);
     return res.status(500).json({
       status: "error",
       message: "Server error during service check",
@@ -2435,32 +3896,107 @@ app.use("/api/plex", createDynamicProxy("Plex"));
 app.use("/api/tautulli", createDynamicProxy("Tautulli"));
 
 // ======================================================================
-// Server Startup
+// Server Startup with Environment-Specific Banners
 // ======================================================================
 
-const serverBanner = `
+// Production banner - more professional, with red highlights for caution
+const productionBanner = (version) => {
+  return (
+    chalk.white("╔════════════════════════════════════════════════════╗\n") +
+    chalk.white("║") +
+    "                                                    " +
+    chalk.white("║\n") +
+    chalk.white("║") +
+    "            " +
+    chalk.red.bold("Plex & Tautulli Dashboard") +
+    "               " +
+    chalk.white("║\n") +
+    chalk.white("║") +
+    "                " +
+    chalk.red.bold("*** PRODUCTION ***") +
+    "                  " +
+    chalk.white("║\n") +
+    chalk.white("╚════════════════════════════════════════════════════╝")
+  );
+};
+
+// Development banner - more colorful and playful
+const developmentBanner = (version) => {
+  return (
+    chalk.cyan("╔════════════════════════════════════════════════════╗\n") +
+    chalk.cyan("║") +
+    "                                                    " +
+    chalk.cyan("║\n") +
+    chalk.cyan("║") +
+    "            " +
+    chalk.yellow.bold("Plex & Tautulli Dashboard") +
+    "               " +
+    chalk.cyan("║\n") +
+    chalk.cyan("║") +
+    "                " +
+    chalk.magenta.bold("~~ DEVELOPMENT ~~") +
+    "                   " +
+    chalk.cyan("║\n") +
+    chalk.cyan("║") +
+    "                                                    " +
+    chalk.cyan("║\n") +
+    chalk.cyan("╚════════════════════════════════════════════════════╝")
+  );
+};
+
+// Fallback banner in case environment detection fails
+const fallbackBanner = (version) => {
+  return `
 ╔════════════════════════════════════════════════════╗
 ║                                                    ║
 ║            Plex & Tautulli Dashboard               ║
-║                  Version: ${appVersion}                    ║
 ║                                                    ║
 ╚════════════════════════════════════════════════════╝`;
+};
+
+// Select banner based on environment
+const selectBanner = (version) => {
+  const environment = process.env.NODE_ENV || "development";
+
+  if (environment === "production") {
+    return productionBanner(version);
+  } else if (environment === "development") {
+    return developmentBanner(version);
+  } else {
+    // Fallback for unknown environments
+    return fallbackBanner(version);
+  }
+};
 
 const PORT = process.env.PORT || 3006;
 app.listen(PORT, "0.0.0.0", () => {
   console.clear();
-  console.log(serverBanner);
+
+  // Display the appropriate banner based on environment
+  console.log(selectBanner(appVersion));
+
+  // Environment indicator for log clarity
+  const environment = process.env.NODE_ENV || "development";
+  const envColor =
+    environment === "production" ? chalk.red.bold : chalk.green.bold;
+
   console.log("\nServer Information:");
   console.log("==================================");
-  console.log("Status: Running");
-  console.log(`Version: ${appVersion}`);
-  console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
-  console.log("Time:", new Date().toLocaleString());
-  console.log(`\nListening on: ${process.env.VITE_API_BASE_URL}`);
-  console.log(`Allowed CORS: ${ALLOWED_ORIGINS}`);
+  console.log(chalk.white.bold("Status:"), "Running");
+  console.log(chalk.white.bold("Version:"), appVersion);
+  console.log(chalk.white.bold("Environment:"), envColor(environment));
+  console.log(chalk.white.bold("Time:"), new Date().toLocaleString());
+  console.log(
+    chalk.white.bold("\nListening on:"),
+    chalk.blue(process.env.VITE_API_BASE_URL || `http://localhost:${PORT}`)
+  );
+  console.log(chalk.white.bold("Allowed CORS:"), ALLOWED_ORIGINS.join(", "));
   console.log("==================================\n");
   console.log("Current Service Configuration:");
   console.log("==================================\n");
   console.log(formatConfig(getConfig()));
   console.log("==================================\n");
 });
+
+// Export app for testing
+export default app;

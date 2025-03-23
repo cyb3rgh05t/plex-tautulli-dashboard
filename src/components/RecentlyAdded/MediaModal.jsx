@@ -1,18 +1,100 @@
-// with theme styling applied
-
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import * as Icons from "lucide-react";
 import ThemedButton from "../common/ThemedButton";
+import { useTheme } from "../../context/ThemeContext.jsx";
+import axios from "axios";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
+import * as posterCacheService from "../../services/posterCacheService";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
 
 const MediaModal = ({ media, onClose, apiKey }) => {
+  const { accentColor, accentRgb } = useTheme();
   const [isExpanded, setIsExpanded] = useState(false);
-  const [showMore, setShowMore] = useState(false);
+  const [showCast, setShowCast] = useState(false);
+  const [mediaDetails, setMediaDetails] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [posterUrl, setPosterUrl] = useState(null);
+  const [backdropUrl, setBackdropUrl] = useState(null);
 
-  if (!media) return null;
+  // Fetch additional media details when modal opens
+  useEffect(() => {
+    const fetchMediaDetails = async () => {
+      if (!media || !media.rating_key) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const response = await axios.get(`/api/tautulli/api/v2`, {
+          params: {
+            apikey: apiKey,
+            cmd: "get_metadata",
+            rating_key: media.rating_key,
+            include_children: true,
+          },
+        });
+
+        if (response.data?.response?.result === "success") {
+          // Merge metadata with existing media props
+          const enhancedMedia = {
+            ...media,
+            ...response.data.response.data,
+            // Extract media info details if available
+            ...(response.data.response.data?.media_info?.[0] || {}),
+          };
+          setMediaDetails(enhancedMedia);
+
+          // Get poster URL from cache
+          const cachedPosterUrl = posterCacheService.getCachedPosterUrl(
+            media.rating_key
+          );
+          if (cachedPosterUrl) {
+            setPosterUrl(cachedPosterUrl);
+          } else {
+            // If not cached, get appropriate thumb path and cache it
+            const thumbPath =
+              posterCacheService.getAppropriateThumbPath(enhancedMedia);
+            if (thumbPath) {
+              // Request to cache the poster
+              await posterCacheService.cachePoster(
+                media.rating_key,
+                thumbPath,
+                apiKey,
+                enhancedMedia.media_type
+              );
+
+              // Now get the cached URL
+              setPosterUrl(
+                posterCacheService.getCachedPosterUrl(media.rating_key)
+              );
+            }
+          }
+
+          // For art/backdrop, we'll use Tautulli directly since these are less frequently used
+          if (enhancedMedia.art) {
+            setBackdropUrl(
+              `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
+                enhancedMedia.art
+              )}&apikey=${apiKey}`
+            );
+          }
+        } else {
+          setMediaDetails(media); // Use original media data as fallback
+        }
+      } catch (error) {
+        logError("Error fetching media details:", error);
+        setMediaDetails(media); // Use original media data as fallback
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchMediaDetails();
+  }, [media, apiKey]);
 
   // Create modal root if it doesn't exist
   useEffect(() => {
@@ -55,12 +137,10 @@ const MediaModal = ({ media, onClose, apiKey }) => {
     };
   }, []);
 
-  const getBackgroundUrl = () => {
-    if (!media.art) return null;
-    return `/api/tautulli/pms_image_proxy?img=${encodeURIComponent(
-      media.art
-    )}&apikey=${apiKey}`;
-  };
+  if (!media) return null;
+
+  // Use mediaDetails if available, otherwise fall back to the original media object
+  const displayData = mediaDetails || media;
 
   const formatDuration = (ms) => {
     if (!ms) return "";
@@ -88,38 +168,45 @@ const MediaModal = ({ media, onClose, apiKey }) => {
     return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
   };
 
+  // Get quality badge info with theme classes
   const getQualityBadge = () => {
-    const resolution = media.stream_video_full_resolution?.toLowerCase() || "";
+    // Try multiple properties that might contain resolution information
+    const resolution = (
+      displayData.video_full_resolution ||
+      displayData.stream_video_full_resolution ||
+      ""
+    ).toLowerCase();
+
     if (resolution.includes("4k") || resolution.includes("2160")) {
       return {
-        label: "4K",
-        icon: Icons.CircleDot,
-        className: "bg-accent-light text-accent-base border-accent",
+        label: "2160p",
+        icon: Icons.TvMinimalPlay,
+        className: "bg-accent-light text-accent border-accent/20",
       };
     }
     if (resolution.includes("1080")) {
       return {
-        label: "HD",
-        icon: Icons.Circle,
+        label: "1080p",
+        icon: Icons.TvMinimalPlay,
         className: "bg-green-500/20 text-green-400 border-green-500/30",
       };
     }
     if (resolution.includes("720")) {
       return {
-        label: "HD",
-        icon: Icons.Circle,
+        label: "720p",
+        icon: Icons.TvMinimalPlay,
         className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
       };
     }
     return {
-      label: "SD",
-      icon: Icons.CircleDashed,
+      label: "480p",
+      icon: Icons.TvMinimalPlay,
       className: "bg-gray-500/20 text-gray-400 border-gray-500/30",
     };
   };
 
   const getMediaTypeIcon = () => {
-    switch (media.media_type?.toLowerCase()) {
+    switch (displayData.media_type?.toLowerCase()) {
       case "movie":
         return Icons.Film;
       case "episode":
@@ -128,36 +215,43 @@ const MediaModal = ({ media, onClose, apiKey }) => {
         return Icons.Tv2;
       case "season":
         return Icons.List;
+      case "artist":
+        return Icons.Mic2; // Icon for artist
+      case "album":
+        return Icons.Disc; // Icon for album
+      case "track":
+        return Icons.Music; // Icon for track
       default:
         return Icons.Film;
     }
   };
 
   const getMediaSpecificInfo = () => {
-    switch (media.media_type?.toLowerCase()) {
+    switch (displayData.media_type?.toLowerCase()) {
       case "movie":
         return (
           <>
-            {media.studio && (
+            {displayData.studio && (
               <div className="space-y-1.5">
                 <h3 className="text-theme-muted text-sm">Studio</h3>
-                <p className="text-theme">{media.studio}</p>
+                <p className="text-theme">{displayData.studio}</p>
               </div>
             )}
-            {media.director && (
+
+            {displayData.writers && displayData.writers.length > 0 && (
               <div className="space-y-1.5">
-                <h3 className="text-theme-muted text-sm">Director</h3>
-                <p className="text-theme">{media.director}</p>
+                <h3 className="text-theme-muted text-sm">Writers</h3>
+                <p className="text-theme">{displayData.writers.join(", ")}</p>
               </div>
             )}
-            {media.genres && (
+            {displayData.genres && (
               <div className="space-y-1.5">
                 <h3 className="text-theme-muted text-sm">Genres</h3>
                 <div className="flex flex-wrap gap-2">
-                  {media.genres.map((genre) => (
+                  {displayData.genres.map((genre) => (
                     <span
                       key={genre}
-                      className="px-2 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50 text-theme text-sm"
+                      className="px-2 py-1 rounded-lg border border-accent bg-accent-light text-accent text-sm"
                     >
                       {genre}
                     </span>
@@ -172,37 +266,136 @@ const MediaModal = ({ media, onClose, apiKey }) => {
           <>
             <div className="space-y-1.5">
               <h3 className="text-theme-muted text-sm">Show</h3>
-              <p className="text-theme">{media.grandparent_title}</p>
+              <p className="text-theme">{displayData.grandparent_title}</p>
             </div>
             <div className="space-y-1.5">
               <h3 className="text-theme-muted text-sm">Season</h3>
-              <p className="text-theme">{media.parent_media_index}</p>
+              <p className="text-theme">{displayData.parent_media_index}</p>
             </div>
             <div className="space-y-1.5">
               <h3 className="text-theme-muted text-sm">Episode</h3>
-              <p className="text-theme">{media.media_index}</p>
+              <p className="text-theme">{displayData.media_index}</p>
             </div>
+            {displayData.writers && displayData.writers.length > 0 && (
+              <div className="space-y-1.5">
+                <h3 className="text-theme-muted text-sm">Writers</h3>
+                <p className="text-theme">{displayData.writers.join(", ")}</p>
+              </div>
+            )}
           </>
         );
       case "show":
         return (
           <>
-            {media.network && (
+            {displayData.studio && (
               <div className="space-y-1.5">
-                <h3 className="text-theme-muted text-sm">Network</h3>
-                <p className="text-theme">{media.network}</p>
+                <h3 className="text-theme-muted text-sm">Studio</h3>
+                <p className="text-theme">{displayData.studio}</p>
               </div>
             )}
-            {media.season_count && (
+            {displayData.genres && displayData.genres.length > 0 && (
               <div className="space-y-1.5">
-                <h3 className="text-theme-muted text-sm">Seasons</h3>
-                <p className="text-theme">{media.season_count}</p>
+                <h3 className="text-theme-muted text-sm">Genres</h3>
+                <div className="flex flex-wrap gap-2">
+                  {displayData.genres.map((genre) => (
+                    <span
+                      key={genre}
+                      className="px-2 py-1 rounded-lg border border-accent/30 bg-accent-light text-accent text-sm"
+                    >
+                      {genre}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
-            {media.episode_count && (
+          </>
+        );
+      case "artist":
+        return (
+          <>
+            {displayData.genres && displayData.genres.length > 0 && (
               <div className="space-y-1.5">
-                <h3 className="text-theme-muted text-sm">Episodes</h3>
-                <p className="text-theme">{media.episode_count}</p>
+                <h3 className="text-theme-muted text-sm">Genres</h3>
+                <div className="flex flex-wrap gap-2">
+                  {displayData.genres.map((genre) => (
+                    <span
+                      key={genre}
+                      className="px-2 py-1 rounded-lg border border-accent/30 bg-accent-light text-accent text-sm"
+                    >
+                      {genre}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        );
+      case "album":
+        return (
+          <>
+            {displayData.studio && (
+              <div className="space-y-1.5">
+                <h3 className="text-theme-muted text-sm">Label</h3>
+                <p className="text-theme">{displayData.studio}</p>
+              </div>
+            )}
+            {displayData.parent_title && (
+              <div className="space-y-1.5">
+                <h3 className="text-theme-muted text-sm">Artist</h3>
+                <p className="text-theme">{displayData.parent_title}</p>
+              </div>
+            )}
+            {displayData.genres && displayData.genres.length > 0 && (
+              <div className="space-y-1.5">
+                <h3 className="text-theme-muted text-sm">Genres</h3>
+                <div className="flex flex-wrap gap-2">
+                  {displayData.genres.map((genre) => (
+                    <span
+                      key={genre}
+                      className="px-2 py-1 rounded-lg border border-accent/30 bg-accent-light text-accent text-sm"
+                    >
+                      {genre}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        );
+      case "track":
+        return (
+          <>
+            {displayData.parent_title && (
+              <div className="space-y-1.5">
+                <h3 className="text-theme-muted text-sm">Album</h3>
+                <p className="text-theme">{displayData.parent_title}</p>
+              </div>
+            )}
+            {displayData.grandparent_title && (
+              <div className="space-y-1.5">
+                <h3 className="text-theme-muted text-sm">Artist</h3>
+                <p className="text-theme">{displayData.grandparent_title}</p>
+              </div>
+            )}
+            {displayData.studio && (
+              <div className="space-y-1.5">
+                <h3 className="text-theme-muted text-sm">Label</h3>
+                <p className="text-theme">{displayData.studio}</p>
+              </div>
+            )}
+            {displayData.genres && displayData.genres.length > 0 && (
+              <div className="space-y-1.5">
+                <h3 className="text-theme-muted text-sm">Genres</h3>
+                <div className="flex flex-wrap gap-2">
+                  {displayData.genres.map((genre) => (
+                    <span
+                      key={genre}
+                      className="px-2 py-1 rounded-lg border border-accent/30 bg-accent-light text-accent text-sm"
+                    >
+                      {genre}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </>
@@ -210,6 +403,62 @@ const MediaModal = ({ media, onClose, apiKey }) => {
       default:
         return null;
     }
+  };
+
+  // Get cast/actors section
+  const getCastSection = () => {
+    if (!displayData.actors || !displayData.actors.length) {
+      return null;
+    }
+
+    return (
+      <div className="mt-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-medium text-white">Cast</h3>
+          {displayData.actors.length > 6 && (
+            <button
+              onClick={() => setShowCast(!showCast)}
+              className="text-sm flex items-center gap-1 cursor-pointer text-accent hover:text-accent-hover transition-theme"
+            >
+              {showCast ? (
+                <>
+                  <Icons.ChevronUp size={14} />
+                  Show Less
+                </>
+              ) : (
+                <>
+                  <Icons.ChevronDown size={14} />
+                  Show All
+                </>
+              )}
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          {displayData.actors
+            .slice(0, showCast ? undefined : 6)
+            .map((actor, index) => (
+              <div
+                key={`${actor.name || actor}-${index}`}
+                className="flex items-center gap-3 p-3 rounded-lg border border-accent/20 bg-accent-light"
+              >
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-accent-lighter">
+                  <Icons.User className="text-accent" size={16} />
+                </div>
+                <div>
+                  <p className="text-white text-sm font-medium">
+                    {actor.name || actor}
+                  </p>
+                  {actor.role && (
+                    <p className="text-gray-400 text-xs">{actor.role}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+        </div>
+      </div>
+    );
   };
 
   const quality = getQualityBadge();
@@ -222,98 +471,107 @@ const MediaModal = ({ media, onClose, apiKey }) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" />
+      {/* Black Backdrop with accent color */}
+      <div className="fixed inset-0 backdrop-blur-sm bg-black/80" />
 
       {/* Modal Content */}
       <div
-        style={{ borderColor: "rgb(var(--accent-color))" }}
-        className="relative w-full max-w-4xl bg-modal rounded-xl overflow-hidden shadow-2xl 
-          shadow-accent/10 border border-solid animate-in fade-in duration-200
-          max-h-[90vh] flex flex-col"
+        className="relative w-full max-w-4xl bg-theme-modal rounded-xl overflow-hidden shadow-accent 
+        border border-accent animate-in fade-in duration-200
+        max-h-[90vh] flex flex-col"
       >
+        {/* Loading state */}
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-modal/90 backdrop-blur-sm z-50">
+            <div className="animate-spin mr-2">
+              <Icons.Loader2 className="h-8 w-8 text-accent" />
+            </div>
+            <span className="text-white">Loading media details...</span>
+          </div>
+        )}
+
         {/* Hero Section */}
         <div className="relative">
           {/* Background Image */}
           <div className="aspect-video relative overflow-hidden">
-            {getBackgroundUrl() ? (
+            {backdropUrl ? (
               <div
                 className="absolute inset-0 bg-cover bg-center scale-105"
                 style={{
-                  backgroundImage: `url(${getBackgroundUrl()})`,
+                  backgroundImage: `url(${backdropUrl})`,
                 }}
               >
-                {/* Removed gradient overlay */}
-                <div className="absolute inset-0 bg-black/50" />{" "}
-                {/* Simple dark overlay instead */}
+                {/* Black gradient overlay for readability */}
+                <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80"></div>
               </div>
             ) : (
-              <div className="absolute inset-0 gradient-accent" />
+              <div className="absolute inset-0 bg-gradient-accent opacity-30"></div>
             )}
 
             {/* Content */}
             <div className="relative h-full flex flex-col justify-end p-6">
               {/* Media Type Badge */}
               <div className="flex items-center gap-2 mb-4">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-700/50">
-                  <MediaTypeIcon size={14} className="text-accent-base" />
-                  <span className="text-sm text-theme">
-                    {media.media_type.charAt(0).toUpperCase() +
-                      media.media_type.slice(1).toLowerCase()}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 backdrop-blur-sm rounded-lg border border-accent/20 bg-accent-light">
+                  <MediaTypeIcon size={14} className="text-accent" />
+                  <span className="text-sm text-accent">
+                    {displayData.media_type.charAt(0).toUpperCase() +
+                      displayData.media_type.slice(1).toLowerCase()}
                   </span>
                 </div>
               </div>
 
               {/* Title */}
-              <h2 className="text-4xl font-bold text-white mb-4">
-                {media.title}
+              <h2 className="text-4xl font-bold text-white mb-4 drop-shadow-sm">
+                {displayData.title}
               </h2>
 
               {/* Metadata */}
               <div className="flex flex-wrap items-center gap-3 text-sm">
-                {media.year && (
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-700/50">
-                    <Icons.Calendar size={14} className="text-theme-muted" />
-                    <span className="text-theme">{media.year}</span>
+                {displayData.year && (
+                  <div className="flex items-center gap-1.5 px-2 py-1 backdrop-blur-sm rounded-lg border border-accent/20 bg-accent-light">
+                    <Icons.Calendar size={14} className="text-accent" />
+                    <span className="text-white">{displayData.year}</span>
                   </div>
                 )}
 
-                {media.duration && (
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-700/50">
-                    <Icons.Clock size={14} className="text-theme-muted" />
-                    <span className="text-theme">
-                      {formatDuration(media.duration)}
+                {displayData.duration && (
+                  <div className="flex items-center gap-1.5 px-2 py-1 backdrop-blur-sm rounded-lg border border-accent/20 bg-accent-light">
+                    <Icons.Clock size={14} className="text-accent" />
+                    <span className="text-white">
+                      {formatDuration(displayData.duration)}
                     </span>
                   </div>
                 )}
 
-                {media.rating && (
+                {displayData.rating && (
                   <div className="flex items-center gap-1.5 px-2 py-1 bg-yellow-500/10 backdrop-blur-sm rounded-lg border border-yellow-500/20">
                     <Icons.Star size={14} className="text-yellow-400" />
-                    <span className="text-yellow-400">{media.rating}</span>
+                    <span className="text-yellow-400">
+                      {displayData.rating}
+                    </span>
                   </div>
                 )}
 
-                {media.content_rating && (
-                  <div className="px-2 py-1 bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-700/50 text-theme">
-                    {media.content_rating}
+                {displayData.content_rating && (
+                  <div className="px-2 py-1 backdrop-blur-sm rounded-lg border border-accent/20 bg-accent-light text-white">
+                    {displayData.content_rating}
                   </div>
                 )}
 
-                {media.stream_video_full_resolution && (
+                {(displayData.video_full_resolution ||
+                  displayData.stream_video_full_resolution) && (
                   <div
-                    className={`flex items-center gap-1.5 px-2 py-1 backdrop-blur-sm rounded-lg border ${quality.className}`}
+                    className={`flex items-center gap-1.5 px-2 py-1 backdrop-blur-sm rounded-lg border ${
+                      quality.className || "border-accent/20 bg-accent-light"
+                    }`}
                   >
-                    <quality.icon size={14} />
-                    <span>{quality.label}</span>
-                  </div>
-                )}
-
-                {media.file_size && (
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-700/50">
-                    <Icons.HardDrive size={14} className="text-theme-muted" />
-                    <span className="text-theme">
-                      {formatFileSize(media.file_size)}
+                    <quality.icon
+                      size={14}
+                      className={quality.className ? "" : "text-accent"}
+                    />
+                    <span className={quality.className ? "" : "text-accent"}>
+                      {quality.label}
                     </span>
                   </div>
                 )}
@@ -323,25 +581,25 @@ const MediaModal = ({ media, onClose, apiKey }) => {
         </div>
 
         {/* Accent color strip under hero section */}
-        <div className="h-1 w-full bg-accent-base"></div>
+        <div className="h-1 w-full bg-gradient-accent"></div>
 
         {/* Scrollable Content Section */}
         <div className="overflow-y-auto flex-1">
           <div className="p-6 space-y-6">
             {/* Summary */}
-            {media.summary && (
+            {displayData.summary && (
               <div className="relative">
                 <p
                   className={`text-theme text-lg leading-relaxed ${
                     !isExpanded ? "line-clamp-4" : ""
                   }`}
                 >
-                  {media.summary}
+                  {displayData.summary}
                 </p>
-                {media.summary.split(" ").length > 60 && (
+                {displayData.summary.split(" ").length > 60 && (
                   <button
                     onClick={() => setIsExpanded(!isExpanded)}
-                    className="text-accent-base hover:text-accent-hover text-sm mt-2 flex items-center gap-1 bg-transparent border-none"
+                    className="text-sm mt-2 flex items-center gap-1 bg-transparent border-none px-2 py-1 rounded text-accent hover:text-accent-hover hover:bg-accent-light transition-theme"
                   >
                     {isExpanded ? (
                       <>
@@ -359,8 +617,11 @@ const MediaModal = ({ media, onClose, apiKey }) => {
               </div>
             )}
 
-            {/* Details Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+            {/* Cast section */}
+            {getCastSection()}
+
+            {/* Details Grid with accent bg */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-6 p-5 rounded-lg border border-accent/20 bg-accent-light">
               {/* Media Specific Info */}
               {getMediaSpecificInfo()}
 
@@ -368,42 +629,21 @@ const MediaModal = ({ media, onClose, apiKey }) => {
               <div className="space-y-1.5">
                 <h3 className="text-theme-muted text-sm">Added</h3>
                 <div className="flex items-center gap-1.5">
-                  <Icons.Calendar size={14} className="text-theme-muted" />
-                  <p className="text-theme">{formatDate(media.added_at)}</p>
+                  <Icons.Calendar size={14} className="text-accent" />
+                  <p className="text-theme">
+                    {formatDate(displayData.added_at)}
+                  </p>
                 </div>
               </div>
-
-              {media.last_viewed_at && (
-                <div className="space-y-1.5">
-                  <h3 className="text-theme-muted text-sm">Last Viewed</h3>
-                  <div className="flex items-center gap-1.5">
-                    <Icons.Eye size={14} className="text-theme-muted" />
-                    <p className="text-theme">
-                      {formatDate(media.last_viewed_at)}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {media.stream_video_full_resolution && (
-                <div className="space-y-1.5">
-                  <h3 className="text-theme-muted text-sm">Quality</h3>
-                  <div className="flex items-center gap-1.5">
-                    <quality.icon size={14} className="text-theme-muted" />
-                    <p className="text-theme">
-                      {media.stream_video_full_resolution}
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
 
-        {/* Close Button - now white */}
+        {/* Close Button with accent hover */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full bg-black/40 text-white hover:bg-black/60 transition-colors"
+          className="absolute top-4 right-4 p-2 rounded-full bg-black/40 text-white border border-transparent 
+          hover:bg-accent-light hover:text-accent hover:border-accent/20 transition-theme"
           aria-label="Close"
         >
           <Icons.X size={20} />

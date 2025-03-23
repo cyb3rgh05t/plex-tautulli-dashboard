@@ -1,9 +1,5 @@
 import React from "react";
 
-/**
- * A customizable button component that matches the navbar style with dark background and colored text
- * Uses the current accent color from CSS variables
- */
 const ThemedButton = ({
   children,
   variant = "primary",
@@ -22,27 +18,27 @@ const ThemedButton = ({
     lg: "px-6 py-3 text-lg",
   };
 
-  // Text and icon colors based on variant
-  const variantColors = {
-    primary: "text-accent-base", // Uses CSS variable for accent color
-    secondary: "text-[#7952e4]",
-    accent: "text-accent-base", // Uses CSS variable for accent color
-    danger: "text-red-500",
-    ghost: "text-gray-400 hover:text-white",
+  // Variant classes using our theme utilities
+  const variantClasses = {
+    primary: "bg-accent text-white hover:bg-accent-hover",
+    secondary: "bg-gray-800/50 text-white hover:bg-gray-700",
+    accent:
+      "bg-accent-light text-accent hover:bg-accent-hover hover:text-white", // Added hover:text-white
+    outline:
+      "bg-transparent border border-accent text-accent hover:bg-accent-lighter hover:text-white", // Also added to outline for consistency
+    ghost:
+      "bg-transparent text-theme-muted hover:text-accent hover:bg-gray-800/50",
+    danger: "bg-red-600 hover:bg-red-700 text-white",
   };
-
-  // Common background for all buttons (dark semi-transparent)
-  const baseBackground = "bg-accent-light text-accent-base";
 
   // Combine all classes
   const buttonClasses = `
-    ${baseBackground}
-    ${variantColors[variant]}
-    rounded-lg font-medium transition-all duration-200
+    ${variantClasses[variant] || variantClasses.primary}
+    ${sizeClasses[size] || sizeClasses.md}
+    rounded-lg font-medium transition-theme
     inline-flex items-center justify-center gap-2
-    focus:outline-none border border-accent/20
+    focus:outline-none focus-accent
     disabled:opacity-50 disabled:cursor-not-allowed
-    ${sizeClasses[size]}
     ${className}
   `;
 
@@ -54,17 +50,11 @@ const ThemedButton = ({
       {...props}
     >
       {Icon && !iconRight && (
-        <Icon
-          size={size === "sm" ? 14 : size === "lg" ? 20 : 16}
-          className={variantColors[variant]}
-        />
+        <Icon size={size === "sm" ? 14 : size === "lg" ? 20 : 16} />
       )}
-      {children}
+      <span>{children}</span>
       {Icon && iconRight && (
-        <Icon
-          size={size === "sm" ? 14 : size === "lg" ? 20 : 16}
-          className={variantColors[variant]}
-        />
+        <Icon size={size === "sm" ? 14 : size === "lg" ? 20 : 16} />
       )}
     </button>
   );

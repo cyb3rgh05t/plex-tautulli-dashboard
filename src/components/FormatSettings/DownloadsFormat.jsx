@@ -1,11 +1,10 @@
-// with theme styling applied
-
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Trash2, Code, Plus, Variable, Edit, Save, X } from "lucide-react";
 import * as Icons from "lucide-react";
 import toast from "react-hot-toast";
 import ThemedCard from "../common/ThemedCard";
 import ThemedButton from "../common/ThemedButton";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
@@ -31,7 +30,7 @@ const VariableButton = ({ variable, onClick }) => (
   <button
     onClick={() => onClick(variable.name)}
     className="bg-gray-800/50 p-4 rounded-lg text-left hover:bg-gray-800/70 
-      border border-gray-700/50 transition-all duration-200 group"
+      border  border-accent transition-all duration-200 group"
   >
     <div className="flex items-start justify-between">
       <div>
@@ -76,14 +75,14 @@ const FormatCard = ({ format, onDelete, onEdit, previewValue }) => (
       </div>
     </div>
     <div className="space-y-3">
-      <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+      <div className="bg-gray-900/50 rounded-lg p-3 border  border-accent">
         <div className="flex items-center gap-2 text-theme-muted text-sm mb-2">
           <Code size={14} className="text-accent-base" />
           <span>Template</span>
         </div>
         <code className="text-sm text-theme font-mono">{format.template}</code>
       </div>
-      <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+      <div className="bg-gray-900/50 rounded-lg p-3 border  border-accent">
         <div className="flex items-center gap-2 text-theme-muted text-sm mb-2">
           <Variable size={14} className="text-accent-base" />
           <span>Preview</span>
@@ -129,7 +128,7 @@ const DownloadsFormat = () => {
         const data = await response.json();
         setFormats(data.downloads || []);
       } catch (error) {
-        console.error("Failed to load activity formats:", error);
+        logError("Failed to load activity formats:", error);
         toast.error("Failed to load formats");
       } finally {
         setIsLoading(false);
@@ -224,7 +223,7 @@ const DownloadsFormat = () => {
         setIsEditing(false);
         setEditingFormatName(null);
       } catch (error) {
-        console.error("Failed to save format:", error);
+        logError("Failed to save format:", error);
         toast.error(
           isEditing ? "Failed to update format" : "Failed to create format"
         );
@@ -290,7 +289,7 @@ const DownloadsFormat = () => {
         handleCancelEdit();
       }
     } catch (error) {
-      console.error("Failed to delete format:", error);
+      logError("Failed to delete format:", error);
       toast.error("Failed to delete format");
     }
   };
@@ -299,7 +298,7 @@ const DownloadsFormat = () => {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center py-12">
-        <div className="animate-spin mr-2">
+        <div className="text-accent animate-spin mr-2">
           <Icons.Loader2 className="h-8 w-8 text-accent-base" />
         </div>
         <span className="text-theme">Loading Formats...</span>
@@ -354,7 +353,7 @@ const DownloadsFormat = () => {
               onChange={(e) =>
                 setNewFormat({ ...newFormat, name: e.target.value })
               }
-              className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-4 py-3
+              className="w-full bg-gray-900/50 text-white border  border-accent rounded-lg px-4 py-3
                 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200"
               placeholder="e.g., Custom Format 1"
@@ -374,7 +373,7 @@ const DownloadsFormat = () => {
               onChange={(e) =>
                 setNewFormat({ ...newFormat, template: e.target.value })
               }
-              className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-4 py-3
+              className="w-full bg-gray-900/50 text-white border  border-accent rounded-lg px-4 py-3
                 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200 font-mono"
               placeholder="e.g., {title} - {progress}%"
@@ -383,7 +382,7 @@ const DownloadsFormat = () => {
 
           {/* Live Preview */}
           {newFormat.template && (
-            <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700/50">
+            <div className="bg-gray-900/50 rounded-lg p-4 border  border-accent">
               <label className="block text-theme font-medium mb-2">
                 Preview
               </label>
@@ -420,7 +419,7 @@ const DownloadsFormat = () => {
               <Icons.List className="text-accent-base" size={18} />
               Existing Formats
             </h3>
-            <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-gray-700/50">
+            <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border  border-accent">
               <span className="text-sm font-medium text-theme-muted">
                 {formats.length} Format{formats.length !== 1 ? "s" : ""}
               </span>

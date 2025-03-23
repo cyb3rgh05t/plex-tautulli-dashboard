@@ -112,4 +112,47 @@ module.exports = {
     },
   },
   plugins: [],
+  safelist: [
+    // Accent text colors
+    "text-accent-base",
+    "text-accent-hover",
+    "hover:text-accent-base",
+    "hover:text-accent-hover",
+
+    // Accent backgrounds
+    "bg-accent-base",
+    "bg-accent-light",
+    "bg-accent-light/5",
+    "bg-accent-light/10",
+    "bg-accent-light/15",
+    "bg-accent-light/20",
+    "bg-accent-light/30",
+    "hover:bg-accent-base",
+    "hover:bg-accent-light",
+    "hover:bg-accent-light/10",
+    "hover:bg-accent-light/30",
+
+    // Accent borders
+    "border-accent",
+    "border-accent/20",
+    "border-accent/30",
+    "hover:border-accent",
+    "hover:border-accent/30",
+
+    // Accent shadows
+    "shadow-accent-lg",
+    "hover:shadow-accent-lg",
+
+    // Commonly used color classes that might be getting purged
+    "text-theme",
+    "text-theme-muted",
+    "text-accent",
+    "border-accent",
+    "bg-modal",
+
+    "checked:bg-accent",
+    "checked:border-accent",
+    "focus:ring-accent",
+    "focus:ring-accent/50",
+  ],
 };

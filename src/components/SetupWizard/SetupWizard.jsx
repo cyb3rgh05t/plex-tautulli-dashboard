@@ -2,10 +2,9 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
-import { useTheme } from "../../context/ThemeContext";
+import { useTheme } from "../../context/ThemeContext.jsx";
 import { testPlexConnection } from "../../services/plexService";
 import { testTautulliConnection } from "../../services/tautulliService";
-import { logInfo, logError } from "../../utils/logger";
 import { FaExternalLinkAlt, FaGithub } from "react-icons/fa";
 import * as Icons from "lucide-react";
 import toast from "react-hot-toast";
@@ -13,6 +12,8 @@ import BackdropSlideshow from "./BackdropSlideshow";
 import LoadingScreen from "../common/LoadingScreen";
 import ThemedButton from "../common/ThemedButton";
 import ThemeToggle from "../common/ThemeToggle";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
+import axios from "axios";
 
 const API_BASE_URL = "";
 
@@ -21,7 +22,7 @@ const HelpLink = ({ href, children }) => (
     href={href}
     target="_blank"
     rel="noopener noreferrer"
-    className="inline-flex items-center gap-1 text-xs text-accent-base hover:text-accent-hover transition-colors"
+    className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent-hover transition-theme"
   >
     <Icons.HelpCircle size={12} />
     {children}
@@ -55,9 +56,52 @@ const SetupWizard = () => {
   const [isRestoreLoading, setIsRestoreLoading] = useState(false);
   const fileInputRef = useRef(null);
 
+  // Check for existing sections on mount
+  useEffect(() => {
+    const checkExistingSections = async () => {
+      try {
+        // Check if sections already exist - if they do, we can skip setup
+        const sectionsResponse = await axios.get("/api/sections");
+        const sections = sectionsResponse.data.sections || [];
+
+        if (sections.length > 0) {
+          logInfo(`Found ${sections.length} existing sections`);
+
+          // Check if we already have poster cache
+          try {
+            const posterStatsResponse = await axios.get(
+              "/api/posters/cache/stats"
+            );
+            const posterCount = posterStatsResponse.data.count || 0;
+
+            if (posterCount > 0) {
+              logInfo(`Found ${posterCount} cached posters`);
+            }
+          } catch (error) {
+            logWarn("Error checking poster cache stats:", error);
+          }
+        } else {
+          logInfo("No existing sections found. Setup will be required.");
+        }
+      } catch (error) {
+        logWarn("Error checking existing sections:", error);
+      }
+    };
+
+    checkExistingSections();
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setTesting(true);
+
+    // Create a normalized copy of form data for testing
+    const normalizedFormData = {
+      ...formData,
+      // Remove trailing slashes from URLs except when they're part of the protocol
+      plexUrl: formData.plexUrl.replace(/\/+$/, ""),
+      tautulliUrl: formData.tautulliUrl.replace(/\/+$/, ""),
+    };
 
     try {
       const loadingToast = toast.loading("Testing connections...");
@@ -95,19 +139,44 @@ const SetupWizard = () => {
       // Update config to trigger the app to recognize we're configured
       await updateConfig(formData);
 
-      // Start preloading dashboard data
+      // Check for saved sections
+      let hasSavedSections = false;
       try {
-        await Promise.all([
-          queryClient.prefetchQuery("plexActivities"),
-          queryClient.prefetchQuery("recentlyAdded"),
-          queryClient.prefetchQuery("libraries"),
-        ]);
+        const sectionsResponse = await axios.get("/api/sections");
+        if (
+          sectionsResponse.data.sections &&
+          sectionsResponse.data.sections.length > 0
+        ) {
+          hasSavedSections = true;
+        }
       } catch (error) {
-        console.error("Error preloading data:", error);
+        logWarn("Error checking for saved sections:", error);
       }
 
-      // Navigate to the main dashboard
-      navigate("/activities");
+      // If we have saved sections, we can start the application with preloading
+      // otherwise we need to navigate to the libraries page to let the user configure sections
+      if (hasSavedSections) {
+        // Start preloading dashboard data
+        try {
+          await Promise.all([
+            queryClient.prefetchQuery("plexActivities"),
+            queryClient.prefetchQuery("recentlyAdded"),
+            queryClient.prefetchQuery("libraries"),
+          ]);
+        } catch (error) {
+          logError("Error preloading data:", error);
+        }
+
+        // Navigate to the main dashboard
+        navigate("/activities");
+      } else {
+        // Go to the libraries page to set up sections
+        toast.success("Please select library sections to display", {
+          duration: 4000,
+        });
+
+        navigate("/libraries");
+      }
     } catch (err) {
       toast.error(err.message || "Setup failed. Please check your settings.", {
         style: {
@@ -125,18 +194,7 @@ const SetupWizard = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
-    // Allow typing '/' in URL fields - only remove trailing slashes when needed
-    let formattedValue = value;
-
-    // For URL fields, we'll only remove a trailing slash if it's not part of typing a path
-    // This allows users to type a slash, but cleans up trailing slashes upon completion
-    if (name.includes("Url") && value.endsWith("/") && !value.endsWith("://")) {
-      // Only remove trailing slash if it's not immediately after protocol (http://)
-      formattedValue = value.replace(/\/$/, "");
-    }
-
-    setFormData((prev) => ({ ...prev, [name]: formattedValue }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const togglePasswordVisibility = (field) => {
@@ -158,7 +216,7 @@ const SetupWizard = () => {
     }
   };
 
-  // Handle backup file restore
+  // Handle backup file restore with complete restoration
   const handleRestore = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -181,7 +239,7 @@ const SetupWizard = () => {
       // Extract configuration data
       const configData = backupData.config;
 
-      // Set form data from backup
+      // Set form data from backup for visual confirmation
       setFormData({
         plexUrl: configData.plexUrl || "",
         plexToken: configData.plexToken || "",
@@ -189,20 +247,139 @@ const SetupWizard = () => {
         tautulliApiKey: configData.tautulliApiKey || "",
       });
 
-      // Show success message
-      toast.success("Backup data loaded successfully", {
-        style: {
-          border: "1px solid #059669",
-          padding: "16px",
-          background: "#064E3B",
-        },
-        duration: 3000,
-      });
+      // Ask user if they want to restore all data now or just use the connection settings
+      const loadingToast = toast.loading("Processing backup file...");
 
-      // Exit restore mode
-      setIsRestoreMode(false);
+      // Add option to fully restore right away
+      toast(
+        (t) => (
+          <div className="flex flex-col gap-2">
+            <p className="font-medium mb-1">Backup loaded successfully</p>
+            <p className="text-sm mb-2">
+              Would you like to restore all settings now or just use the
+              connection details?
+            </p>
+            <div className="flex gap-2 mt-1">
+              <ThemedButton
+                variant="primary"
+                className="px-3 py-1.5 text-sm"
+                onClick={async () => {
+                  toast.dismiss(t.id);
+
+                  // Show loading indicator
+                  const restoreToast = toast.loading(
+                    "Restoring all settings..."
+                  );
+
+                  try {
+                    // Step 1: Restore config
+                    await fetch("/api/config", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(backupData.config),
+                    });
+
+                    // Step 2: Restore formats - process each format type
+                    const formatTypes = Object.keys(backupData.formats);
+                    for (const type of formatTypes) {
+                      if (Array.isArray(backupData.formats[type])) {
+                        await fetch("/api/formats", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            type: type,
+                            formats: backupData.formats[type],
+                          }),
+                        });
+                      }
+                    }
+
+                    // Step 3: Restore sections
+                    if (
+                      backupData.sections &&
+                      Array.isArray(backupData.sections)
+                    ) {
+                      // Handle case where sections is a direct array
+                      await fetch("/api/sections", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(backupData.sections),
+                      });
+                    } else if (
+                      backupData.sections &&
+                      Array.isArray(backupData.sections.sections)
+                    ) {
+                      // Handle case where sections are nested in a sections property
+                      // Extract and flatten the raw_data structure if present
+                      const sectionsArray = backupData.sections.sections.map(
+                        (section) => {
+                          return section.raw_data || section;
+                        }
+                      );
+
+                      await fetch("/api/sections", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(sectionsArray),
+                      });
+                    }
+
+                    // Update config through ConfigContext to trigger the app
+                    await updateConfig(configData);
+
+                    // Show success message
+                    toast.success("All settings restored successfully", {
+                      id: restoreToast,
+                      duration: 3000,
+                    });
+
+                    // Check for saved sections to determine where to navigate
+                    const sectionsResponse = await axios.get("/api/sections");
+                    const hasSavedSections =
+                      sectionsResponse.data.sections &&
+                      sectionsResponse.data.sections.length > 0;
+
+                    // Navigate to appropriate page after short delay
+                    setTimeout(() => {
+                      if (hasSavedSections) {
+                        navigate("/activities");
+                      } else {
+                        navigate("/libraries");
+                      }
+                    }, 1500);
+                  } catch (error) {
+                    logError("Full restore failed:", error);
+                    toast.error(`Restore failed: ${error.message}`, {
+                      id: restoreToast,
+                      duration: 4000,
+                    });
+                  }
+                }}
+              >
+                Restore Everything
+              </ThemedButton>
+              <ThemedButton
+                className="px-3 py-1.5"
+                variant="accent"
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  toast.success("Connection details loaded", {
+                    id: loadingToast,
+                    duration: 3000,
+                  });
+                  // This option just keeps the form fields populated but doesn't restore anything yet
+                  setIsRestoreMode(false);
+                }}
+              >
+                Restore Only Config
+              </ThemedButton>
+            </div>
+          </div>
+        ),
+        { id: loadingToast, duration: 30000 }
+      );
     } catch (error) {
-      console.error("Restore failed:", error);
+      logError("Restore failed:", error);
       toast.error("Failed to restore from backup: " + error.message, {
         style: {
           border: "1px solid #DC2626",
@@ -260,7 +437,7 @@ const SetupWizard = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-3">
-            <Icons.ActivitySquare className="text-accent-base text-3xl" />
+            <Icons.ActivitySquare className="text-accent text-3xl" />
             <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
               Plex & Tautulli Dashboard
             </h1>
@@ -270,39 +447,18 @@ const SetupWizard = () => {
           </p>
         </div>
 
-        {/* Restore from backup toggle */}
-        <div className="w-full max-w-lg mb-4 flex justify-center">
-          <button
-            onClick={toggleRestoreMode}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-900/60 border border-gray-700/70 text-theme hover:bg-gray-800/70 transition-all duration-200"
-          >
-            {isRestoreMode ? (
-              <>
-                <Icons.ArrowLeft size={16} />
-                Back to manual setup
-              </>
-            ) : (
-              <>
-                <Icons.Upload size={16} />
-                Restore from backup
-              </>
-            )}
-          </button>
-        </div>
-
         {/* Setup Form or Restore UI */}
-        <div className="w-full max-w-lg p-6 rounded-xl shadow-xl shadow-black/30 bg-gray-900/90 border border-gray-700/50">
+        <div className="w-full max-w-lg p-6 rounded-xl shadow-xl shadow-black/30 bg-gray-900/90 border border-accent">
           {isRestoreMode ? (
-            /* Restore from backup UI */
             <div className="space-y-6">
-              <div className="flex items-center gap-2 pb-2 border-b border-gray-700/50">
-                <Icons.Save size={16} className="text-accent-base" />
+              <div className="flex items-center gap-2 pb-2 border-b border-accent">
+                <Icons.Save size={16} className="text-accent" />
                 <h2 className="text-lg font-medium text-white">
                   Restore Configuration
                 </h2>
               </div>
 
-              <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-4 space-y-4">
+              <div className="bg-gray-800/50 border border-accent rounded-lg p-4 space-y-4">
                 <p className="text-theme-muted text-sm">
                   Upload a backup file to quickly restore your dashboard
                   configuration.
@@ -333,9 +489,9 @@ const SetupWizard = () => {
                 </div>
               </div>
 
-              <div className="bg-accent-light/10 border border-accent-base/20 rounded-lg p-3">
+              <div className="bg-accent-lighter border border-accent/20 rounded-lg p-3">
                 <div className="flex items-start gap-2">
-                  <Icons.Info size={16} className="text-accent-base mt-0.5" />
+                  <Icons.Info size={16} className="text-accent mt-0.5" />
                   <p className="text-sm text-theme-muted">
                     After restoring your configuration, you'll still need to
                     test the connections before proceeding to the dashboard.
@@ -348,8 +504,8 @@ const SetupWizard = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Plex Section */}
               <div className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-gray-700/50">
-                  <Icons.Server size={16} className="text-accent-base" />
+                <div className="flex items-center gap-2 pb-2 border-b border-accent">
+                  <Icons.Server size={16} className="text-accent" />
                   <h2 className="text-lg font-medium text-white">
                     Plex Configuration
                   </h2>
@@ -366,9 +522,9 @@ const SetupWizard = () => {
                         name="plexUrl"
                         value={formData.plexUrl}
                         onChange={handleChange}
-                        className="w-full bg-gray-900/80 border border-gray-700/50 rounded-lg px-4 py-2.5 
-                          text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
-                          transition-all duration-200"
+                        className="w-full bg-gray-900/80 border border-accent rounded-lg px-4 py-2.5 
+            text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+            transition-theme"
                         placeholder="http://your-plex-server:32400"
                         required
                         disabled={testing}
@@ -395,9 +551,9 @@ const SetupWizard = () => {
                         name="plexToken"
                         value={formData.plexToken}
                         onChange={handleChange}
-                        className="w-full bg-gray-900/80 border border-gray-700/50 rounded-lg px-4 py-2.5 
-                          text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
-                          transition-all duration-200 font-mono pr-24"
+                        className="w-full bg-gray-900/80 border border-accent rounded-lg px-4 py-2.5 
+            text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+            transition-theme font-mono pr-24"
                         required
                         disabled={testing}
                       />
@@ -405,7 +561,7 @@ const SetupWizard = () => {
                         type="button"
                         onClick={() => togglePasswordVisibility("plexToken")}
                         className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 
-                          hover:text-white transition-colors bg-transparent border-none outline-none focus:outline-none focus:ring-0"
+            hover:text-white transition-theme bg-transparent border-none outline-none focus:outline-none focus:ring-0"
                       >
                         {showPasswords.plexToken ? (
                           <Icons.EyeOff size={16} />
@@ -427,8 +583,8 @@ const SetupWizard = () => {
 
               {/* Tautulli Section */}
               <div className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-gray-700/50">
-                  <Icons.Database size={16} className="text-accent-base" />
+                <div className="flex items-center gap-2 pb-2 border-b border-accent">
+                  <Icons.Database size={16} className="text-accent" />
                   <h2 className="text-lg font-medium text-white">
                     Tautulli Configuration
                   </h2>
@@ -445,9 +601,9 @@ const SetupWizard = () => {
                         name="tautulliUrl"
                         value={formData.tautulliUrl}
                         onChange={handleChange}
-                        className="w-full bg-gray-900/80 border border-gray-700/50 rounded-lg px-4 py-2.5 
-                          text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
-                          transition-all duration-200"
+                        className="w-full bg-gray-900/80 border border-accent rounded-lg px-4 py-2.5 
+            text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+            transition-theme"
                         placeholder="http://your-tautulli-server:8181"
                         required
                         disabled={testing}
@@ -479,9 +635,9 @@ const SetupWizard = () => {
                         name="tautulliApiKey"
                         value={formData.tautulliApiKey}
                         onChange={handleChange}
-                        className="w-full bg-gray-900/80 border border-gray-700/50 rounded-lg px-4 py-2.5 
-                          text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
-                          transition-all duration-200 font-mono pr-24"
+                        className="w-full bg-gray-900/80 border border-accent rounded-lg px-4 py-2.5 
+            text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+            transition-theme font-mono pr-24"
                         required
                         disabled={testing}
                       />
@@ -491,7 +647,7 @@ const SetupWizard = () => {
                           togglePasswordVisibility("tautulliApiKey")
                         }
                         className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 
-                          hover:text-white transition-colors bg-transparent border-none outline-none focus:outline-none focus:ring-0"
+            hover:text-white transition-theme bg-transparent border-none outline-none focus:outline-none focus:ring-0"
                       >
                         {showPasswords.tautulliApiKey ? (
                           <Icons.EyeOff size={16} />
@@ -514,16 +670,36 @@ const SetupWizard = () => {
                 </div>
               </div>
 
-              {/* Submit Button */}
-              <ThemedButton
-                type="submit"
-                disabled={testing}
-                variant="accent"
-                className="w-full"
-                icon={testing ? Icons.Loader2 : Icons.CheckCircle2}
-              >
-                {testing ? "Testing Connections..." : "Save Configuration"}
-              </ThemedButton>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <ThemedButton
+                  type="submit"
+                  disabled={testing}
+                  variant="accent"
+                  className="flex-1"
+                  icon={testing ? Icons.Loader2 : Icons.CheckCircle2}
+                >
+                  {testing ? "Testing Connections..." : "Save Configuration"}
+                </ThemedButton>
+
+                <ThemedButton
+                  type="button"
+                  onClick={() => fileInputRef.current.click()}
+                  variant="accent"
+                  className="flex-1"
+                  icon={isRestoreLoading ? Icons.Loader2 : Icons.Upload}
+                  disabled={isRestoreLoading}
+                >
+                  {isRestoreLoading ? "Restoring..." : "Restore from Backup"}
+                </ThemedButton>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={handleRestore}
+                />
+              </div>
             </form>
           )}
         </div>
@@ -534,7 +710,7 @@ const SetupWizard = () => {
             href="https://github.com/cyb3rgh05t/plex-tautulli-dashboard"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-theme-muted hover:text-theme-hover transition-colors"
+            className="inline-flex items-center gap-2 text-theme-muted hover:text-accent transition-theme"
           >
             <FaGithub size={16} />
             <span className="text-sm">View on GitHub</span>

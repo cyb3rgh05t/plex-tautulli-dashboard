@@ -7,14 +7,10 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import axios from "axios";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
 /**
  * A badge component that displays the connection status of a service
- *
- * @param {string} type - The type of service ('plex' or 'tautulli')
- * @param {string} url - The URL of the service (for display purposes)
- * @param {string} apiKey - The API key for Tautulli (not directly used)
- * @param {string} token - The token for Plex (not directly used)
  */
 const ServiceStatusBadge = ({ type, url, apiKey, token }) => {
   const [status, setStatus] = useState("unknown"); // 'online', 'offline', 'unconfigured', 'unknown'
@@ -30,13 +26,6 @@ const ServiceStatusBadge = ({ type, url, apiKey, token }) => {
     unconfigured: "bg-yellow-500",
     unknown: "bg-gray-500",
   };
-
-  // Text color - now using accent-base for all states
-  const textColor = "text-accent-base";
-
-  // Border and background - using accent color with opacity
-  const bgColor = "bg-accent-light/20";
-  const borderColor = "border-accent/30";
 
   const StatusIcon = {
     online: CheckCircle,
@@ -75,7 +64,7 @@ const ServiceStatusBadge = ({ type, url, apiKey, token }) => {
         setErrorMessage("Unknown response from server");
       }
     } catch (error) {
-      console.error(`Failed to check ${type} status:`, error);
+      logError(`Failed to check ${type} status:`, error);
       setStatus("offline");
       setErrorMessage(error.message || "Connection error");
     } finally {
@@ -101,33 +90,49 @@ const ServiceStatusBadge = ({ type, url, apiKey, token }) => {
 
   return (
     <div
-      className={`inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-sm font-medium 
-        ${bgColor} ${borderColor} border transition-colors relative group hover:bg-accent-light/30`}
+      className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-sm font-medium 
+        bg-transparent border border-accent transition-theme relative group
+        hover:bg-accent-light hover:shadow-accent"
     >
       <Icon
-        className={`mr-1.5 ${isChecking ? "animate-pulse" : ""} ${textColor}`}
+        className={`mr-1.5 ${
+          isChecking ? "animate-pulse" : ""
+        } text-accent group-hover:text-accent`}
         size={16}
       />
-      <span className={textColor}>{type === "plex" ? "Plex" : "Tautulli"}</span>
+      <span className="text-accent group-hover:text-accent">
+        {type === "plex" ? "Plex" : "Tautulli"}
+      </span>
 
       {/* Status indicator dot */}
       <div className="relative ml-1.5">
         <div
           className={`w-2 h-2 rounded-full ${indicatorColor[status]} ${
             isChecking ? "animate-pulse" : ""
-          }`}
+          } transition-all duration-300`}
         />
       </div>
 
       {/* Hover tooltip with detailed status */}
       <div
-        className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 hidden group-hover:block 
-        bg-gray-800/90 border border-accent/20 text-white text-xs px-3 py-2 rounded shadow-lg whitespace-nowrap z-50 min-w-[120px]"
+        className="absolute -bottom-14 left-1/2 transform -translate-x-1/2 hidden group-hover:block 
+          bg-gray-800/90 border border-accent/20 text-white text-xs px-3 py-2 rounded-lg shadow-lg 
+          whitespace-nowrap z-50 min-w-[120px] backdrop-blur-sm
+          after:content-[''] after:absolute after:top-[-5px] after:left-1/2 after:ml-[-5px] 
+          after:border-l-[5px] after:border-l-transparent after:border-r-[5px] after:border-r-transparent
+          after:border-b-[5px] after:border-b-accent/20"
       >
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-1.5">
-            <div
-              className={`w-1.5 h-1.5 rounded-full ${indicatorColor[status]}`}
+            <StatusIcon
+              size={12}
+              className={`${
+                status === "online"
+                  ? "text-green-500"
+                  : status === "offline"
+                  ? "text-red-500"
+                  : "text-yellow-500"
+              }`}
             />
             <span>
               {status === "online"
@@ -140,10 +145,14 @@ const ServiceStatusBadge = ({ type, url, apiKey, token }) => {
             </span>
           </div>
           {errorMessage && (
-            <span className="text-red-300 text-[10px]">{errorMessage}</span>
+            <span className="text-red-300 text-[10px] mt-1 border-t border-red-500/30 pt-1">
+              {errorMessage}
+            </span>
           )}
           {isChecking && (
-            <span className="text-gray-400 text-[10px]">Checking...</span>
+            <span className="text-accent/70 text-[10px] flex items-center gap-1 animate-pulse">
+              <CheckCircle size={10} /> Checking...
+            </span>
           )}
         </div>
       </div>

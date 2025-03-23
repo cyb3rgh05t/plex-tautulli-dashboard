@@ -1,8 +1,8 @@
 # Use an official Node runtime as the base image
 FROM node:20-alpine
 
-LABEL maintainer=cyb3rgh05t
-LABEL org.opencontainers.image.source https://github.com/cyb3rgh05t/plex-tautulli-dashboard
+LABEL maintainer="cyb3rgh05t"
+LABEL org.opencontainers.image.source="https://github.com/cyb3rgh05t/plex-tautulli-dashboard"
 
 # Set the working directory in the container
 WORKDIR /app
@@ -10,20 +10,20 @@ WORKDIR /app
 # Copy package.json and package-lock.json (if available)
 COPY package*.json ./
 
-# Copy version.js (needed for the version update script)
-COPY version.js ./
+# Copy release.js (needed for the version update script)
+COPY release.js ./
 
 # Copy the update-version script
-COPY update-version.js ./
+COPY update-release.js ./
 
 # Install project dependencies
 RUN npm install
 
-# Update package.json with the correct version from version.js
+# Update package.json with the correct version from release.js
 # Set NODE_ENV based on build arg (default to development)
 ARG NODE_ENV=development
 ENV NODE_ENV=${NODE_ENV}
-RUN node update-version.js
+RUN node update-release.js
 
 # Copy the rest of the application code
 COPY . .

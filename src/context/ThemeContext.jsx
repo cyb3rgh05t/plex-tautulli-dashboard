@@ -1,103 +1,132 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
-import { logInfo } from "../utils/logger";
+import { logInfo, logError, logDebug } from "../utils/logger";
 
 // Create context
 const ThemeContext = createContext(null);
 
-// THEME DEFINITIONS - Only dark theme
-const THEMES = {
-  dark: {
-    "--main-bg-color":
-      "radial-gradient(circle, #3a3a3a, #2d2d2d, #202020, #141414, #000000) center center/cover no-repeat fixed",
-    "--modal-bg-color": "#1f2937",
-    "--modal-header-color": "#1f2937",
-    "--modal-footer-color": "#1f2937",
-    "--drop-down-menu-bg": "#2d2d2d",
-    "--button-color": "#7a7a7a",
-    "--button-color-hover": "#9b9b9b",
-    "--button-text": "#eee",
-    "--button-text-hover": "#fff",
-    "--text": "#ddd",
-    "--text-hover": "#fff",
-    "--text-muted": "#999",
-  },
-};
-
-// RENAMED: default → purple, purple → maroon, light → grey
+// Accent color definitions
 const ACCENTS = {
   purple: {
-    "--accent-color": "167, 139, 250",
-    "--link-color": "#6366f1",
-    "--link-color-hover": "#a78bfa",
+    name: "Purple",
+    rgb: "167, 139, 250",
   },
   grey: {
-    "--accent-color": "220, 220, 220",
-    "--link-color": "#e5e7eb",
-    "--link-color-hover": "#ffffff",
+    name: "Grey",
+    rgb: "220, 220, 220",
   },
   green: {
-    "--accent-color": "109, 247, 81",
-    "--link-color": "rgb(109, 247, 81)",
-    "--link-color-hover": "rgba(109, 247, 81, 0.8)",
+    name: "Green",
+    rgb: "109, 247, 81",
   },
   maroon: {
-    "--accent-color": "166, 40, 140",
-    "--link-color": "rgb(223, 21, 179)",
-    "--link-color-hover": "rgb(255, 0, 200)",
+    name: "Maroon",
+    rgb: "166, 40, 140",
   },
   orange: {
-    "--accent-color": "255, 153, 0",
-    "--link-color": "rgb(255, 153, 0)",
-    "--link-color-hover": "rgba(255, 153, 0, 0.8)",
+    name: "Orange",
+    rgb: "255, 153, 0",
   },
   blue: {
-    "--accent-color": "0, 98, 255",
-    "--link-color": "rgb(61, 126, 255)",
-    "--link-color-hover": "rgb(0, 98, 255)",
+    name: "Blue",
+    rgb: "0, 98, 255",
   },
   red: {
-    "--accent-color": "232, 12, 11",
-    "--link-color": "rgb(232, 12, 11)",
-    "--link-color-hover": "rgba(232, 12, 11, 0.8)",
+    name: "Red",
+    rgb: "232, 12, 11",
+  },
+  neon: {
+    name: "Neon",
+    rgb: "224, 255, 0",
+  },
+  cyber: {
+    name: "Cyber",
+    rgb: "191, 0, 255",
   },
 };
 
-// Storage key constants
-const STORAGE_KEYS = {
-  THEME: "theme",
-  ACCENT_COLOR: "accentColor",
+// Theme definitions - updated with all themes including new cyberpunk theme
+const THEMES = {
+  dark: {
+    name: "Dark",
+    description: "Dark Default Theme",
+    isDefault: true,
+  },
+  dracula: {
+    name: "Dracula",
+    description: "Dark theme with vivid colors",
+  },
+  plex: {
+    name: "Plex",
+    description: "Inspired by Plex Media Server",
+  },
+  overseerr: {
+    name: "Overseerr",
+    description: "Inspired by Overseerr UI",
+  },
+  onedark: {
+    name: "One Dark",
+    description: "Based on Atom One Dark",
+  },
+  nord: {
+    name: "Nord",
+    description: "Cool blue polar theme",
+  },
+  hotline: {
+    name: "Hotline",
+    description: "Vibrant pink and blue gradient",
+  },
+  aquamarine: {
+    name: "Aquamarine",
+    description: "Teal and blue gradient",
+  },
+  spacegray: {
+    name: "Space Gray",
+    description: "Subtle blue-gray theme",
+  },
+  organizr: {
+    name: "Organizr",
+    description: "Clean and minimal dark theme",
+  },
+  maroon: {
+    name: "Maroon",
+    description: "Deep burgundy and purple tones",
+  },
+  hotpink: {
+    name: "Hot Pink",
+    description: "Vibrant pink and blue theme",
+  },
+  cyberpunk: {
+    name: "Cyberpunk",
+    description: "Neon purple and yellow futuristic theme",
+  },
 };
 
 // Default values
-const DEFAULT_VALUES = {
-  THEME: "dark",
-  ACCENT_COLOR: "purple",
-};
-
-// Valid themes and accents
-const VALID_THEMES = ["dark"];
+const DEFAULT_ACCENT_COLOR = "grey";
+const DEFAULT_THEME = "dark";
 const VALID_ACCENTS = Object.keys(ACCENTS);
+const VALID_THEMES = Object.keys(THEMES);
+const ACCENT_STORAGE_KEY = "accentColor";
+const THEME_STORAGE_KEY = "themeName";
 
 // Storage helper functions
-const getStoredTheme = () => {
+const getStoredAccent = () => {
   try {
-    const stored = localStorage.getItem(STORAGE_KEYS.THEME);
-    return VALID_THEMES.includes(stored) ? stored : DEFAULT_VALUES.THEME;
+    const stored = localStorage.getItem(ACCENT_STORAGE_KEY);
+    return VALID_ACCENTS.includes(stored) ? stored : DEFAULT_ACCENT_COLOR;
   } catch (error) {
-    console.error("Error reading theme from localStorage:", error);
-    return DEFAULT_VALUES.THEME;
+    logError("Error reading accent from localStorage:", error);
+    return DEFAULT_ACCENT_COLOR;
   }
 };
 
-const getStoredAccent = () => {
+const getStoredTheme = () => {
   try {
-    const stored = localStorage.getItem(STORAGE_KEYS.ACCENT_COLOR);
-    return VALID_ACCENTS.includes(stored)
-      ? stored
-      : DEFAULT_VALUES.ACCENT_COLOR;
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    return VALID_THEMES.includes(stored) ? stored : DEFAULT_THEME;
   } catch (error) {
-    console.error("Error reading accent from localStorage:", error);
-    return DEFAULT_VALUES.ACCENT_COLOR;
+    logError("Error reading theme from localStorage:", error);
+    return DEFAULT_THEME;
   }
 };
 
@@ -106,7 +135,7 @@ const saveToStorage = (key, value) => {
     localStorage.setItem(key, value);
     return true;
   } catch (error) {
-    console.error(`Error saving ${key} to localStorage:`, error);
+    logError(`Error saving ${key} to localStorage:`, error);
     return false;
   }
 };
@@ -121,122 +150,188 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider = ({ children }) => {
-  // State for theme (always dark) and accent color
-  const [theme, setTheme] = useState(DEFAULT_VALUES.THEME);
-  const [accentColor, setAccentColor] = useState(DEFAULT_VALUES.ACCENT_COLOR);
+  // State for accent color and theme
+  const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT_COLOR);
+  const [themeName, setThemeName] = useState(DEFAULT_THEME);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Internal function to set accent color and save to storage
+  const handleAccentChange = (accent) => {
+    if (!VALID_ACCENTS.includes(accent)) {
+      logError(`Invalid accent color: ${accent}`);
+      return;
+    }
+
+    // Only allow changing accent color for dark theme
+    if (themeName === "dark") {
+      setAccentColor(accent);
+      setDarkThemeAccent(accent);
+      saveToStorage(ACCENT_STORAGE_KEY, accent);
+    } else {
+      logInfo("Accent color can only be changed in Dark theme");
+      // Keep the theme's default accent
+    }
+  };
+
+  // Get the default accent color for a theme
+  const getThemeDefaultAccent = (theme) => {
+    switch (theme) {
+      case "dracula":
+        return "purple"; // Dracula uses purple accent by default
+      case "plex":
+        return "orange"; // Plex uses orange accent
+      case "overseerr":
+        return "purple"; // Overseerr uses purple accent
+      case "onedark":
+        return "blue"; // OneDark uses blue accent
+      case "nord":
+        return "blue"; // Nord uses blue accent
+      case "hotline":
+        return "maroon"; // Hotline uses pink/maroon
+      case "aquamarine":
+        return "green"; // Aquamarine uses green accent
+      case "spacegray":
+        return "blue"; // Space Gray uses blue accent
+      case "organizr":
+        return "blue"; // Organizr uses blue accent
+      case "maroon":
+        return "maroon"; // Maroon uses maroon accent
+      case "hotpink":
+        return "maroon"; // Hot Pink uses maroon/pink
+      case "cyberpunk":
+        return "cyber"; // Cyberpunk uses cyber purple
+      default:
+        return accentColor; // Dark theme can use any accent
+    }
+  };
+
+  // Store the user's custom accent color for dark theme
+  const [darkThemeAccent, setDarkThemeAccent] = useState(accentColor);
+
+  // Internal function to set theme and save to storage
+  const handleThemeChange = (theme) => {
+    if (!VALID_THEMES.includes(theme)) {
+      logError(`Invalid theme: ${theme}`);
+      return;
+    }
+
+    // If switching to dark theme, restore the user's custom accent
+    if (theme === "dark") {
+      setAccentColor(darkThemeAccent);
+    } else {
+      // If switching to another theme, store current accent and use theme's default
+      if (themeName === "dark") {
+        setDarkThemeAccent(accentColor);
+      }
+      setAccentColor(getThemeDefaultAccent(theme));
+    }
+
+    setThemeName(theme);
+    saveToStorage(THEME_STORAGE_KEY, theme);
+  };
 
   // Load saved preferences from localStorage
   useEffect(() => {
     try {
       // Ensure we're in a browser environment
       if (typeof localStorage === "undefined") {
+        logDebug("localStorage not available, using default theme settings");
         setIsLoading(false);
         return;
       }
 
       // Get stored values
-      const storedTheme = getStoredTheme();
       const storedAccent = getStoredAccent();
+      const storedTheme = getStoredTheme();
 
       // Apply stored values
-      setTheme(storedTheme);
       setAccentColor(storedAccent);
+      setThemeName(storedTheme);
 
       logInfo("Theme preferences loaded", {
-        theme: storedTheme,
         accent: storedAccent,
+        theme: storedTheme,
       });
     } catch (error) {
-      console.error("Failed to load theme preferences:", error);
+      logError("Failed to load theme preferences:", error);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // Apply theme directly with inline styles
+  // Apply theme directly with CSS classes
   useEffect(() => {
     if (isLoading) return;
 
     // Safety check for browser environment
-    if (typeof document === "undefined") return;
+    if (typeof document === "undefined") {
+      logDebug("Document not available, skipping theme application");
+      return;
+    }
 
     try {
-      // Get document HTML and body elements with safety checks
+      // Get document HTML element with safety checks
       const htmlElement = document.documentElement;
       const bodyElement = document.body;
 
       if (!htmlElement || !bodyElement) {
-        console.warn("HTML or Body element not found for theme application");
+        logError("HTML or Body element not found for theme application");
         return;
       }
 
-      // Apply theme classes (for CSS that still uses class selectors)
-      htmlElement.classList.remove("theme-light");
-      htmlElement.classList.add("theme-dark");
+      // Apply theme class to HTML element
+      // First remove all possible theme classes
+      const allThemeClasses = VALID_THEMES.map((theme) => `theme-${theme}`);
+      htmlElement.classList.remove(...allThemeClasses);
+      bodyElement.classList.remove(...allThemeClasses);
+
+      // Add the selected theme class to both html and body
+      htmlElement.classList.add(`theme-${themeName}`);
+      bodyElement.classList.add(`theme-${themeName}`);
+
+      // Always add dark mode for Tailwind
+      htmlElement.classList.add("dark");
 
       // Apply accent classes - remove all possible classes first
-      const allAccentClasses = [
-        ...VALID_ACCENTS.map((accent) => `accent-${accent}`),
-        // Also include legacy class names for backward compatibility
-        "accent-default",
-        "accent-light",
-        "accent-purple",
-      ];
-
+      const allAccentClasses = VALID_ACCENTS.map(
+        (accent) => `accent-${accent}`
+      );
+      allAccentClasses.push("accent-default"); // Add legacy class
       htmlElement.classList.remove(...allAccentClasses);
       htmlElement.classList.add(`accent-${accentColor}`);
 
-      // DIRECT APPLICATION OF STYLES
-      // Apply theme variables directly to both html and body elements
-      const themeVars = THEMES.dark;
-      const accentVars = ACCENTS[accentColor] || ACCENTS.purple;
+      // Set data attributes for easy inspection
+      htmlElement.setAttribute("data-theme", themeName);
+      htmlElement.setAttribute("data-accent", accentColor);
 
-      // Merge theme and accent variables
-      const allVars = { ...themeVars, ...accentVars };
-
-      // Set --accent-color-hover derived from accent-color
-      allVars[
-        "--accent-color-hover"
-      ] = `rgba(${allVars["--accent-color"]}, 0.8)`;
-
-      // Set gradient variables
-      allVars[
-        "--overseerr-gradient"
-      ] = `linear-gradient(rgba(${allVars["--accent-color"]}, 0.3) 0%, rgba(0, 0, 0) 100%)`;
-
-      // Apply all variables directly to html element
-      Object.entries(allVars).forEach(([property, value]) => {
-        htmlElement.style.setProperty(property, value);
-        // Also apply to body as fallback
-        bodyElement.style.setProperty(property, value);
-      });
-
-      // Save preferences to localStorage (with safety check)
-      saveToStorage(STORAGE_KEYS.THEME, theme);
-      saveToStorage(STORAGE_KEYS.ACCENT_COLOR, accentColor);
-
-      logInfo("Applied theme directly", { theme, accentColor });
+      logInfo("Applied theme via CSS classes", { themeName, accentColor });
     } catch (error) {
-      console.error("Failed to apply theme:", error);
+      logError("Failed to apply theme:", error);
     }
-  }, [accentColor, isLoading]);
+  }, [accentColor, themeName, isLoading]);
 
   // Function to get accent RGB values based on current accent
   const getAccentRgb = () => {
-    const accentValue =
-      ACCENTS[accentColor]?.["--accent-color"] ||
-      ACCENTS.purple["--accent-color"];
-    return accentValue;
+    return ACCENTS[accentColor]?.rgb || ACCENTS.purple.rgb;
   };
 
   // Create the context value
   const contextValue = {
-    theme: "dark", // Always dark
-    setTheme: () => {}, // No-op function since we always use dark theme
+    // Accent color properties
     accentColor,
-    setAccentColor,
+    setAccentColor: handleAccentChange,
     accentRgb: getAccentRgb(),
+    accentName: ACCENTS[accentColor]?.name || "Purple",
+    allAccents: ACCENTS,
+
+    // Theme properties
+    themeName,
+    setThemeName: handleThemeChange,
+    themeDisplayName: THEMES[themeName]?.name || "Dark",
+    themeDescription: THEMES[themeName]?.description || "Default theme",
+    allThemes: THEMES,
+
+    // Status
     isLoading,
   };
 

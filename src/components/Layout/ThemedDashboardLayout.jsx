@@ -6,8 +6,9 @@ import ThemedNavbar from "./ThemedNavbar";
 import ThemedTabBar from "./ThemedTabBar";
 import ThemeToggleFooter from "./ThemedToggleFooter";
 import * as Icons from "lucide-react";
-import { appVersion } from "../../../version.js";
+import { appVersion } from "../../../release.js";
 import axios from "axios";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
 /**
  * Status indicator component for the footer
@@ -44,15 +45,17 @@ const ConnectionStatusIndicator = ({ status, service }) => {
 
   return (
     <div className="flex items-center gap-1.5 text-xs">
-      <Icon size={12} className="text-accent-base" />
-      <span className="text-accent-base">
+      <div className="w-5 h-5 flex items-center justify-center rounded-full bg-accent-light/30 border border-accent/20">
+        <Icon size={12} className="text-accent-base" />
+      </div>
+      <span className="text-accent-base font-medium">
         {service === "plex" ? "Plex" : "Tautulli"}:
       </span>
       <div className="flex items-center gap-1">
         <div
           className={`w-1.5 h-1.5 rounded-full ${getStatusColor(status)}`}
         ></div>
-        <span className="text-gray-300">{getStatusText(status)}</span>
+        <span className="text-gray-200">{getStatusText(status)}</span>
       </div>
     </div>
   );
@@ -62,7 +65,7 @@ const ConnectionStatusIndicator = ({ status, service }) => {
  * The main dashboard layout with themed components that respond to accent color changes
  */
 const ThemedDashboardLayout = () => {
-  const { accentColor } = useTheme();
+  const { accentColor, accentRgb, themeName } = useTheme();
   const { config } = useConfig();
 
   // Create state variables directly in this component instead of using useConnectionStatus
@@ -87,7 +90,7 @@ const ThemedDashboardLayout = () => {
           {
             service: "plex",
           },
-          { timeout: 5000 }
+          { timeout: 10000 }
         );
 
         return response.data?.status || "unknown";
@@ -101,13 +104,13 @@ const ThemedDashboardLayout = () => {
           {
             service: "tautulli",
           },
-          { timeout: 5000 }
+          { timeout: 10000 }
         );
 
         return response.data?.status || "unknown";
       }
     } catch (error) {
-      console.error(`Error checking ${service} status:`, error);
+      logError(`Error checking ${service} status:`, error);
       return "offline";
     }
 
@@ -130,7 +133,7 @@ const ThemedDashboardLayout = () => {
       setTautulli(tautulliStatus);
       setLastChecked(new Date());
     } catch (error) {
-      console.error("Error checking services:", error);
+      logError("Error checking services:", error);
     } finally {
       setIsChecking(false);
     }
@@ -153,13 +156,31 @@ const ThemedDashboardLayout = () => {
     return string.charAt(0).toUpperCase() + string.slice(1);
   };
 
+  // No need for getThemeBackgroundStyle anymore since we're using body classes
+
   return (
-    <div
-      className={`min-h-screen flex flex-col bg-main theme-dark accent-${accentColor} 
-        dashboard-accent-gradient relative`}
-    >
-      {/* Accent color overlay */}
-      <div className="dashboard-accent-overlay" />
+    <div className="min-h-screen flex flex-col relative">
+      {/* Enhanced accent gradient effects for background - only for dark theme */}
+      {themeName === "dark" && (
+        <div
+          className="fixed inset-0 pointer-events-none z-0"
+          style={{
+            background: `radial-gradient(circle at 15% 15%, rgba(${accentRgb}, 0.15) 0%, transparent 35%),
+                      radial-gradient(circle at 85% 85%, rgba(${accentRgb}, 0.15) 0%, transparent 35%)`,
+            opacity: 0.8,
+          }}
+        />
+      )}
+
+      {/* Subtle noise texture overlay */}
+      <div
+        className="fixed inset-0 pointer-events-none z-0 opacity-5"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+          backgroundRepeat: "repeat",
+          mixBlendMode: "overlay",
+        }}
+      />
 
       {/* Themed Navbar */}
       <ThemedNavbar />
@@ -173,16 +194,23 @@ const ThemedDashboardLayout = () => {
       </main>
 
       {/* Footer with accent color, connection status and theme toggle */}
-      <footer className="border-t border-gray-800/50 py-4 text-center text-sm text-gray-500 relative z-10">
+      <footer className="border-t border-gray-800/50 py-3 text-center text-sm text-gray-500 relative z-10 backdrop-blur-sm bg-black/30">
         <div className="container mx-auto px-4 flex items-center justify-between">
           {/* Left side with Accent info and Theme Toggle */}
           <div className="flex items-center gap-4 relative">
-            <p>
-              Plex &amp; Tautulli Dashboard {appVersion} —
-              <span className="text-accent-base ml-1">
-                Accent: {capitalizeFirstLetter(accentColor)}
-              </span>
-            </p>
+            <div className="flex items-center gap-2">
+              <div className="bg-accent-light/20 rounded-md px-2 py-1 border border-accent/20">
+                <p className="flex items-center gap-1">
+                  <Icons.Palette size={14} className="text-accent-base" />
+                  <span className="text-white">{appVersion}</span>
+                  <span className="text-accent-base ml-1 font-medium">
+                    {themeName === "dark"
+                      ? capitalizeFirstLetter(accentColor)
+                      : capitalizeFirstLetter(themeName)}
+                  </span>
+                </p>
+              </div>
+            </div>
 
             {/* Theme Toggle - positioned relative so its popup will appear above it */}
             <div className="relative">
@@ -195,7 +223,9 @@ const ThemedDashboardLayout = () => {
             {/* Connection Status Indicator with absolute positioned popup above */}
             <button
               onClick={() => setShowStatusDetails(!showStatusDetails)}
-              className="flex items-center gap-2 text-accent-base hover:text-accent-hover transition-colors px-2 py-1 rounded-md hover:bg-accent-light/10"
+              className="flex items-center gap-2 text-accent-base hover:text-accent-hover transition-colors 
+                px-3 py-1.5 rounded-md hover:bg-accent-light/20 border border-transparent
+                hover:border-accent/20 focus:outline-none"
               title="Check connection status"
             >
               <div
@@ -215,31 +245,44 @@ const ThemedDashboardLayout = () => {
                   : "Checking..."}
               </span>
               {isChecking && (
-                <Icons.RefreshCw size={12} className="animate-spin" />
+                <Icons.RefreshCw
+                  size={12}
+                  className="text-accent-base animate-spin"
+                />
               )}
             </button>
 
             {/* Connection Status Details Popup - positioned above the button */}
             {showStatusDetails && (
-              <div className="absolute bottom-full right-0 mb-2 bg-gray-800/90 rounded-lg px-4 py-2 border border-accent/30 shadow-lg flex flex-col gap-1.5">
+              <div
+                className="absolute bottom-full right-0 mb-2 bg-gray-800/90 backdrop-blur-sm 
+                rounded-lg px-4 py-3 border border-accent/30 shadow-lg flex flex-col gap-2
+                after:content-[''] after:absolute after:top-full after:right-4 
+                after:border-l-[6px] after:border-l-transparent after:border-r-[6px] after:border-r-transparent
+                after:border-t-[6px] after:border-t-accent/30"
+              >
                 <ConnectionStatusIndicator status={plex} service="plex" />
                 <ConnectionStatusIndicator
                   status={tautulli}
                   service="tautulli"
                 />
-                <div className="flex items-center gap-1 text-xs mt-1 text-gray-400 border-t border-accent/20 pt-1">
-                  <span>Last checked:</span>
-                  <span>
+                <div className="flex items-center gap-1 text-xs mt-1 text-gray-300 border-t border-accent/20 pt-2">
+                  <Icons.Clock size={12} className="text-accent-base/70" />
+                  <span className="text-gray-400">Last checked:</span>
+                  <span className="text-white">
                     {lastChecked ? lastChecked.toLocaleTimeString() : "Never"}
                   </span>
                   <button
                     onClick={() => checkNow()}
-                    className="ml-2 text-accent-base hover:text-accent-hover transition-colors"
+                    className="ml-auto text-accent-base hover:text-accent-hover transition-colors
+                      p-1 rounded hover:bg-accent-light/20"
                     disabled={isChecking}
                   >
                     <Icons.RefreshCw
-                      size={12}
-                      className={isChecking ? "animate-spin" : ""}
+                      size={14}
+                      className={
+                        isChecking ? "text-accent-base animate-spin" : ""
+                      }
                     />
                   </button>
                 </div>

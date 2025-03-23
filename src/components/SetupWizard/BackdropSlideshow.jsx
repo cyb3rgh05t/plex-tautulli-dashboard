@@ -49,7 +49,7 @@ const BackdropSlideshow = () => {
         const shuffledBackdrops = allBackdrops.sort(() => Math.random() - 0.5);
         setBackdrops(shuffledBackdrops);
       } catch (error) {
-        console.error("Error fetching backdrops:", error);
+        logError("Error fetching backdrops:", error);
       } finally {
         setLoading(false);
       }

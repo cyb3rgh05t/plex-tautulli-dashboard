@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import axios from "axios";
 import ThemedCard from "../common/ThemedCard";
 import ThemedButton from "../common/ThemedButton";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
@@ -54,7 +55,7 @@ const RequestExampleDisplay = ({ examples }) => {
       {examples.map((example, index) => (
         <div key={index} className="space-y-2">
           <p className="text-theme-muted text-sm">{example.description}</p>
-          <pre className="bg-gray-900/50 p-4 rounded-lg border border-gray-700/50 overflow-x-auto">
+          <pre className="bg-gray-900/50 p-4 rounded-lg border border-accent overflow-x-auto">
             <code className="text-sm text-theme font-mono">
               {activeLanguage === "url" && example.curlCommand}
               {activeLanguage === "python" && example.pythonRequest}
@@ -181,7 +182,7 @@ const EndpointCard = ({
         // Remove the temporary textarea
         document.body.removeChild(textArea);
       } catch (err) {
-        console.error("Fallback copy method failed:", err);
+        logError("Fallback copy method failed:", err);
         toast.error("Failed to copy URL");
       }
     };
@@ -194,7 +195,7 @@ const EndpointCard = ({
           toast.success("Endpoint URL copied to clipboard");
         })
         .catch((err) => {
-          console.error("Clipboard write failed:", err);
+          logError("Clipboard write failed:", err);
           fallbackCopyMethod(urlToCopy);
         });
     } else {
@@ -232,7 +233,7 @@ const EndpointCard = ({
             {method === "GET" ? <FaCheck size={12} /> : null}
             {method}
           </span>
-          <code className="text-white font-mono bg-gray-900/50 px-4 py-2 rounded-lg border border-gray-700/50">
+          <code className="text-white font-mono bg-gray-900/50 px-4 py-2 rounded-lg border border-accent">
             {modifiedEndpoint}
           </code>
         </div>
@@ -261,7 +262,7 @@ const EndpointCard = ({
 
       {/* URL Parameters Input Fields */}
       {urlParams.length > 0 && (
-        <div className="mb-4 bg-gray-900/20 p-4 rounded-lg border border-gray-700/30">
+        <div className="mb-4 bg-gray-900/20 p-4 rounded-lg border border-accent">
           <h4 className="text-white font-medium mb-3">URL Parameters</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {urlParams.map((param) => (
@@ -274,7 +275,7 @@ const EndpointCard = ({
                   value={paramValues[param] || ""}
                   onChange={(e) => handleParamChange(param, e.target.value)}
                   placeholder={`Replace :${param}`}
-                  className="flex-1 bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-3 py-2 
+                  className="flex-1 bg-gray-900/50 text-white border border-accent rounded-lg px-3 py-2 
                     placeholder-gray-500 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                 />
               </div>
@@ -296,7 +297,7 @@ const EndpointCard = ({
 
       {/* Test Response Section */}
       {loading && (
-        <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700/50">
+        <div className="bg-gray-900/50 p-4 rounded-lg border border-accent">
           <p className="text-theme-muted animate-pulse">Testing endpoint...</p>
         </div>
       )}
@@ -326,7 +327,7 @@ const EndpointCard = ({
       {example && (
         <div className="space-y-2">
           <p className="text-gray-500 text-sm">Example Response:</p>
-          <pre className="bg-gray-900/50 p-4 rounded-lg border border-gray-700/50 overflow-x-auto">
+          <pre className="bg-gray-900/50 p-4 rounded-lg border border-accent overflow-x-auto">
             <code className="text-sm text-theme font-mono">
               {JSON.stringify(example, null, 2)}
             </code>
@@ -383,7 +384,7 @@ const ApiEndpoints = () => {
   // Get server configuration
   fetch('${baseUrl}/api/config')
     .then(response => response.json())
-    .then(config => console.log(config));
+    .then(config => logDebug(config));
           `.trim(),
         },
       ],
@@ -412,7 +413,7 @@ const ApiEndpoints = () => {
   // Check server health
   fetch('${baseUrl}/api/health')
     .then(response => response.json())
-    .then(healthStatus => console.log(healthStatus));
+    .then(healthStatus => logDebug(healthStatus));
           `.trim(),
         },
       ],
@@ -443,7 +444,7 @@ const ApiEndpoints = () => {
           javascriptFetch: `
   fetch('${baseUrl}/api/formats')
     .then(response => response.json())
-    .then(formats => console.log(formats));
+    .then(formats => logDebug(formats));
           `.trim(),
         },
       ],
@@ -478,7 +479,7 @@ const ApiEndpoints = () => {
           javascriptFetch: `
   fetch('${baseUrl}/api/downloads')
     .then(response => response.json())
-    .then(downloads => console.log(downloads));
+    .then(downloads => logDebug(downloads));
           `.trim(),
         },
       ],
@@ -514,7 +515,7 @@ const ApiEndpoints = () => {
   // Get all libraries
   fetch('${baseUrl}/api/libraries')
     .then(response => response.json())
-    .then(libraries => console.log(libraries));
+    .then(libraries => logDebug(libraries));
           `.trim(),
         },
       ],
@@ -549,7 +550,7 @@ const ApiEndpoints = () => {
           javascriptFetch: `
   fetch('${baseUrl}/api/sections')
     .then(response => response.json())
-    .then(sections => console.log(sections));
+    .then(sections => logDebug(sections));
           `.trim(),
         },
       ],
@@ -583,7 +584,7 @@ const ApiEndpoints = () => {
           javascriptFetch: `
   fetch('${baseUrl}/api/users')
     .then(response => response.json())
-    .then(users => console.log(users));
+    .then(users => logDebug(users));
           `.trim(),
         },
       ],
@@ -646,22 +647,22 @@ const ApiEndpoints = () => {
     // Get all movies
     fetch('${baseUrl}/api/media/movies')
       .then(response => response.json())
-      .then(movies => console.log(movies));
+      .then(movies => logDebug(movies));
     
     // Get movies from a specific section
     fetch('${baseUrl}/api/media/movies?section=1')
       .then(response => response.json())
-      .then(sectionMovies => console.log(sectionMovies));
+      .then(sectionMovies => logDebug(sectionMovies));
     
     // Limit number of results
     fetch('${baseUrl}/api/media/movies?count=10')
       .then(response => response.json())
-      .then(limitedMovies => console.log(limitedMovies));
+      .then(limitedMovies => logDebug(limitedMovies));
     
     // Advanced filtering
     fetch('${baseUrl}/api/media/movies?year=2010&resolution=4K')
       .then(response => response.json())
-      .then(filteredMovies => console.log(filteredMovies));
+      .then(filteredMovies => logDebug(filteredMovies));
           `.trim(),
         },
         {
@@ -686,17 +687,17 @@ const ApiEndpoints = () => {
     // Get TV shows by genre
     fetch('${baseUrl}/api/media/shows?genre=Drama')
       .then(response => response.json())
-      .then(dramaShows => console.log(dramaShows));
+      .then(dramaShows => logDebug(dramaShows));
     
     // Get shows with high rating
     fetch('${baseUrl}/api/media/shows?rating=8')
       .then(response => response.json())
-      .then(highlyRatedShows => console.log(highlyRatedShows));
+      .then(highlyRatedShows => logDebug(highlyRatedShows));
     
     // Combine filters
     fetch('${baseUrl}/api/media/shows?genre=Drama&rating=8&year=2020')
       .then(response => response.json())
-      .then(specificShows => console.log(specificShows));
+      .then(specificShows => logDebug(specificShows));
           `.trim(),
         },
       ],
@@ -819,12 +820,12 @@ const ApiEndpoints = () => {
   // Get recent movies
   fetch('${baseUrl}/api/recent/movies')
     .then(response => response.json())
-    .then(recentMovies => console.log(recentMovies));
+    .then(recentMovies => logDebug(recentMovies));
   
   // Get recent movies from a specific section
   fetch('${baseUrl}/api/recent/movies?section=1')
     .then(response => response.json())
-    .then(sectionMovies => console.log(sectionMovies));
+    .then(sectionMovies => logDebug(sectionMovies));
           `.trim(),
         },
       ],
@@ -911,7 +912,7 @@ fetch('${baseUrl}/api/formats', {
   body: JSON.stringify(payload)
 })
 .then(response => response.json())
-.then(result => console.log(result));
+.then(result => logDebug(result));
         `.trim(),
         },
       ],
@@ -1022,7 +1023,7 @@ fetch('${baseUrl}/api/formats', {
     body: JSON.stringify(payload)
   })
   .then(response => response.json())
-  .then(result => console.log(result));
+  .then(result => logDebug(result));
           `.trim(),
         },
       ],
@@ -1102,7 +1103,7 @@ fetch('${baseUrl}/api/formats', {
     body: JSON.stringify(payload)
   })
   .then(response => response.json())
-  .then(result => console.log(result));
+  .then(result => logDebug(result));
           `.trim(),
         },
       ],
@@ -1127,37 +1128,38 @@ fetch('${baseUrl}/api/formats', {
   return (
     <div className="space-y-8">
       {/* Server Configuration Section */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <FaServer className="text-accent-base text-xl" />
+          <h2 className="text-xl font-semibold text-white">
+            Server Configuration
+          </h2>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-900/50 border border-accent">
+          <div
+            className={`w-2 h-2 rounded-full ${
+              serverStatus === "active"
+                ? "bg-green-500"
+                : serverStatus === "inactive"
+                ? "bg-gray-500"
+                : "bg-red-500"
+            }`}
+          />
+          <span className="text-sm font-medium text-theme-muted">
+            {serverStatus === "active"
+              ? "Server Active"
+              : serverStatus === "inactive"
+              ? "Server Inactive"
+              : "Server Error"}
+          </span>
+        </div>
+      </div>
       <ThemedCard
-        title="Server Configuration"
-        icon={FaServer}
+        className="mb-4 hover:bg-gray-800/70 transition-all duration-200"
+        isInteractive
+        hasBorder
         useAccentBorder={true}
       >
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <FaServer className="text-accent-base text-xl" />
-            <h2 className="text-xl font-semibold text-white">
-              Server Configuration
-            </h2>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-900/50 border border-gray-700/50">
-            <div
-              className={`w-2 h-2 rounded-full ${
-                serverStatus === "active"
-                  ? "bg-green-500"
-                  : serverStatus === "inactive"
-                  ? "bg-gray-500"
-                  : "bg-red-500"
-              }`}
-            />
-            <span className="text-sm font-medium text-theme-muted">
-              {serverStatus === "active"
-                ? "Server Active"
-                : serverStatus === "inactive"
-                ? "Server Inactive"
-                : "Server Error"}
-            </span>
-          </div>
-        </div>
         <div className="space-y-2">
           <label className="block text-theme font-medium">API Server URL</label>
           <div className="relative">
@@ -1168,7 +1170,7 @@ fetch('${baseUrl}/api/formats', {
               type="url"
               value={baseUrl}
               onChange={(e) => handleBaseUrlChange(e.target.value)}
-              className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg pl-10 pr-4 py-3
+              className="w-full bg-gray-900/50 text-white border border-accent rounded-lg pl-10 pr-4 py-3
                 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200"
               placeholder="API Endpoint URL"
@@ -1199,8 +1201,8 @@ fetch('${baseUrl}/api/formats', {
           <h2 className="text-xl font-semibold text-white">
             {activeTab === "get" ? "GET" : "POST"} Endpoints
           </h2>
-          <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-gray-700/50">
-            <span className="text-sm font-medium text-theme-muted">
+          <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-accent">
+            <span className="text-sm font-medium text-accent-base">
               {activeTab === "get"
                 ? `${GET_ENDPOINTS.length} Endpoints`
                 : `${POST_ENDPOINTS.length} Endpoints`}

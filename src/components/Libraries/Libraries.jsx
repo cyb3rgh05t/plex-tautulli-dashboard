@@ -1,14 +1,12 @@
-// with theme styling applied
-
 import React, { useState, useEffect, useRef } from "react";
-import { useQuery } from "react-query";
+import { useQuery, useQueryClient } from "react-query";
 import { useConfig } from "../../context/ConfigContext";
-import { logError } from "../../utils/logger";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 import * as Icons from "lucide-react";
 import toast from "react-hot-toast";
 import ThemedCard from "../common/ThemedCard";
 import ThemedButton from "../common/ThemedButton";
-import { useTheme } from "../../context/ThemeContext";
+import { useTheme } from "../../context/ThemeContext.jsx";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3006";
@@ -20,62 +18,52 @@ const capitalizeFirstLetter = (string) => {
 const LibraryTypeIcon = ({ type }) => {
   switch (type.toLowerCase()) {
     case "movie":
-      return <Icons.Film className="text-accent-base" />;
+      return <Icons.Film className="text-accent" />;
     case "show":
-      return <Icons.Tv className="text-green-400" />;
+      return <Icons.Tv className="text-accent" />;
     case "artist":
-      return <Icons.Music className="text-purple-400" />;
+      return <Icons.Music className="text-accent" />;
     default:
-      return <Icons.Book className="text-yellow-400" />;
+      return <Icons.Book className="text-accent" />;
   }
 };
 
 const LibraryCard = ({ library, isSelected, onToggleSelect }) => {
-  const { accentColor } = useTheme();
-
   // Safely extract section ID and count
   const rawData = library.raw_data || library;
   const sectionId = rawData.section_id;
   const itemCount = rawData.count || rawData.parent_count || 0;
   const libraryType = rawData.section_type || rawData.type;
 
-  // Get RGB value for current accent
-  const getAccentRgb = () => {
-    const accentColorMap = {
-      default: "167, 139, 250",
-      green: "109, 247, 81",
-      purple: "166, 40, 140",
-      orange: "255, 153, 0",
-      blue: "0, 98, 255",
-      red: "232, 12, 11",
-    };
-
-    return accentColorMap[accentColor] || accentColorMap.default;
-  };
-
-  const accentRgb = getAccentRgb();
-
   return (
     <div
-      className={`transition-all duration-200 rounded-xl p-4 hover:bg-gray-800/50 ${
-        isSelected ? "shadow-accent-md" : ""
-      }`}
-      style={{
-        backgroundColor: "rgba(31, 41, 55, 0.5)",
-        border: `1px solid rgba(${accentRgb}, ${isSelected ? "0.5" : "0.3"})`,
-        marginBottom: "1rem",
-      }}
+      className={`transition-theme duration-200 rounded-xl p-4 hover:bg-gray-800/50
+        border border-accent ${isSelected ? "shadow-accent" : ""}
+        mb-4 bg-gray-900/50`}
     >
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <input
-              type="checkbox"
-              checked={isSelected}
-              onChange={() => onToggleSelect(sectionId)}
-              className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-accent-base focus:ring-accent focus:ring-offset-gray-800"
-            />
-            <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700/50">
+            {/* Updated checkbox with accent styling */}
+            <div className="relative flex items-center">
+              <input
+                type="checkbox"
+                id={`library-${sectionId}`}
+                checked={isSelected}
+                onChange={() => onToggleSelect(sectionId)}
+                className="peer h-5 w-5 appearance-none rounded border border-gray-600 bg-gray-800 
+                  checked:bg-accent checked:border-accent focus:outline-none focus:ring-2 
+                  focus:ring-accent/50 focus:ring-offset-1 focus:ring-offset-gray-900 
+                  cursor-pointer transition-colors"
+              />
+              <label
+                htmlFor={`library-${sectionId}`}
+                className="absolute inset-0 flex items-center justify-center text-transparent peer-checked:text-white"
+              >
+                <Icons.Check className="h-3.5 w-3.5" />
+              </label>
+            </div>
+            <div className="p-3 bg-gray-800/50 rounded-lg border border-accent">
               <LibraryTypeIcon type={libraryType} />
             </div>
             <div>
@@ -88,9 +76,9 @@ const LibraryCard = ({ library, isSelected, onToggleSelect }) => {
             </div>
           </div>
           <div className="text-right">
-            <div className="bg-gray-800/50 px-3 py-1 rounded-lg border border-gray-700/50">
+            <div className="bg-gray-800/50 px-3 py-1 rounded-lg border border-accent">
               <span className="text-theme-muted text-sm">Items: </span>
-              <span className="text-accent-base font-medium">
+              <span className="text-accent font-medium">
                 {itemCount.toLocaleString()}
               </span>
             </div>
@@ -104,6 +92,7 @@ const LibraryCard = ({ library, isSelected, onToggleSelect }) => {
 
 const Libraries = () => {
   const { config } = useConfig();
+  const queryClient = useQueryClient(); // Get React Query client for cache invalidation
   const [selectedLibraries, setSelectedLibraries] = useState(new Set());
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -131,7 +120,7 @@ const Libraries = () => {
           setSelectedLibraries(savedIds);
         }
       } catch (error) {
-        console.error("Failed to fetch saved sections:", error);
+        logError("Failed to fetch saved sections:", error);
       }
     };
 
@@ -180,7 +169,7 @@ const Libraries = () => {
 
       return sortedLibraries;
     } catch (error) {
-      console.error("Fetch error:", error);
+      logError("Fetch error:", error);
       throw error;
     }
   };
@@ -201,39 +190,77 @@ const Libraries = () => {
   const handleRefresh = async () => {
     // Prevent multiple refreshes happening at once
     if (isRefreshing) {
-      console.log("Skipping refresh - already in progress");
+      logInfo("Skipping refresh - already in progress");
       return;
     }
 
-    console.log("Starting libraries refresh");
+    logInfo("Starting libraries refresh");
     setIsRefreshing(true);
     try {
       const result = await refetch();
-      console.log("Libraries refresh completed:", {
+      logInfo("Libraries refresh completed:", {
         success: !!result,
         libraryCount: result?.length || 0,
       });
     } catch (err) {
-      console.error("Error refreshing libraries:", err);
+      logError("Error refreshing libraries:", err);
       // Try a direct fetch as fallback if refetch fails
       try {
-        console.log("Attempting direct fetch as fallback");
+        logInfo("Attempting direct fetch as fallback");
         const response = await fetch(`/api/libraries`);
         const data = await response.json();
         if (data && data.libraries) {
-          console.log(
+          logInfo(
             "Direct fetch succeeded with",
             data.libraries.length,
             "libraries"
           );
         }
       } catch (fallbackErr) {
-        console.error("Fallback fetch also failed:", fallbackErr);
+        logError("Fallback fetch also failed:", fallbackErr);
       }
     } finally {
       setIsRefreshing(false);
       setLastRefreshTime(Date.now());
       initialFetchDone.current = true;
+    }
+  };
+
+  // Trigger global preload after section changes
+  const triggerGlobalPreload = () => {
+    try {
+      // Since the GlobalPreloader decides fast path vs full preload based on:
+      // 1. fastPathReady flag
+      // 2. configHash
+      // We can force a full preload by manipulating these localStorage values
+
+      // Mark fast path as not ready to force full preload next time
+      localStorage.setItem("fastPathReady", "false");
+
+      // Remove the config hash to force a hash check failure
+      localStorage.removeItem("configHash");
+
+      // Set forceFullPreload ref to true via direct ref manipulation
+      if (window.forceGlobalPreload) {
+        window.forceGlobalPreload = true;
+      }
+
+      // Invalidate all caches using React Query
+      queryClient.invalidateQueries(["sections"]);
+
+      // Invalidate all section-specific caches
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          typeof query.queryKey[0] === "string" &&
+          query.queryKey[0].startsWith("section:"),
+      });
+
+      // Force refresh on next load
+      localStorage.setItem("forceRefreshOnLoad", Date.now().toString());
+
+      logInfo("Triggered global preload after saving sections");
+    } catch (error) {
+      logError("Failed to trigger global preload:", error);
     }
   };
 
@@ -251,7 +278,7 @@ const Libraries = () => {
         isFirstRender.current; // First render after navigation/reload
 
       if (shouldFetch) {
-        console.log("Libraries - triggering data fetch on mount");
+        logInfo("Libraries - triggering data fetch on mount");
         // Small timeout to ensure component is fully mounted and React Query is ready
         setTimeout(() => {
           handleRefresh();
@@ -271,9 +298,9 @@ const Libraries = () => {
     // Add event listener for page visibility changes (handles page reload)
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        console.log("Page became visible - checking if libraries need refresh");
+        logInfo("Page became visible - checking if libraries need refresh");
         if (!libraries?.length) {
-          console.log("No libraries data after visibility change - refreshing");
+          logInfo("No libraries data after visibility change - refreshing");
           handleRefresh();
         }
       }
@@ -283,7 +310,7 @@ const Libraries = () => {
 
     // Also handle focus events, which can occur on page reload
     window.addEventListener("focus", () => {
-      console.log("Window focus event - checking library data");
+      logInfo("Window focus event - checking library data");
       if (!libraries?.length) {
         handleRefresh();
       }
@@ -350,9 +377,22 @@ const Libraries = () => {
       }
 
       toast.success(`Successfully saved ${selectedData.length} sections`);
+
+      // Show loading toast for preload
+      toast.loading("Preloading dashboard with new sections...", {
+        duration: 3000,
+      });
+
+      // Trigger global preload to refresh all dashboard data with new sections
+      triggerGlobalPreload();
+
+      // Navigate to Recently Added page after a short delay
+      setTimeout(() => {
+        window.location.href = "/#/recent";
+      }, 1500);
     } catch (error) {
       toast.error(`Failed to save sections: ${error.message}`);
-      console.error("Detailed save error:", error);
+      logError("Detailed save error:", error);
     } finally {
       setIsSaving(false);
     }
@@ -366,8 +406,8 @@ const Libraries = () => {
             Plex Libraries
           </h2>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
-              <Icons.Film size={14} className="text-accent-base" />
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-800/50 rounded-lg border border-accent">
+              <Icons.Film size={14} className="text-accent" />
               <span className="text-theme-muted text-sm">
                 {Array.isArray(libraries) ? libraries.length : 0} Libraries
               </span>
@@ -404,7 +444,7 @@ const Libraries = () => {
             variant="accent"
             icon={
               isRefreshing
-                ? () => <Icons.RefreshCw className="animate-spin" />
+                ? () => <Icons.RefreshCw className="text-accent animate-spin" />
                 : Icons.RefreshCw
             }
           >
@@ -418,7 +458,7 @@ const Libraries = () => {
           {[1, 2, 3].map((n) => (
             <div
               key={n}
-              className="bg-modal rounded-xl p-4 animate-pulse border border-gray-700/50"
+              className="bg-modal rounded-xl p-4 animate-pulse border border-accent"
             >
               <div className="flex items-center gap-4">
                 <div className="w-5 h-5 bg-gray-700 rounded" />

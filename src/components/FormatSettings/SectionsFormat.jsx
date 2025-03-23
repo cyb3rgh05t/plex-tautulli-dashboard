@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { logError } from "../../utils/logger";
+import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 import toast from "react-hot-toast";
 import ThemedButton from "../common/ThemedButton";
 import ThemedCard from "../common/ThemedCard";
@@ -31,7 +31,7 @@ const formatDate = (timestamp, format = "default") => {
       date = new Date(timestamp);
     }
   } catch (e) {
-    console.error(`Error parsing date: ${timestamp}`, e);
+    logError(`Error parsing date: ${timestamp}`, e);
     return "Invalid Date";
   }
 
@@ -210,7 +210,7 @@ const processTemplate = (template, data) => {
         value = data[key] !== undefined ? data[key] : "";
       }
     } catch (error) {
-      console.error(`Error processing template variable ${key}:`, error);
+      logError(`Error processing template variable ${key}:`, error);
       value = "";
     }
 
@@ -306,7 +306,7 @@ const VariableButton = ({ variable, onClick }) => (
   <button
     onClick={() => onClick(variable.name)}
     className="bg-gray-800/50 p-4 rounded-lg text-left hover:bg-gray-800/70 
-      border border-gray-700/50 transition-all duration-200 group"
+      border  border-accent transition-all duration-200 group"
   >
     <div className="flex items-start justify-between">
       <div>
@@ -381,7 +381,7 @@ const FormatCard = ({ format, onDelete, onEdit, previewValue, sections }) => {
           </div>
         </div>
         <div className="space-y-3">
-          <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+          <div className="bg-gray-900/50 rounded-lg p-3 border  border-accent">
             <div className="flex items-center gap-2 text-theme-muted text-sm mb-2">
               <Icons.Code size={14} className="text-accent-base" />
               <span>Template</span>
@@ -390,7 +390,7 @@ const FormatCard = ({ format, onDelete, onEdit, previewValue, sections }) => {
               {format.template}
             </code>
           </div>
-          <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+          <div className="bg-gray-900/50 rounded-lg p-3 border  border-accent">
             <div className="flex items-center gap-2 text-theme-muted text-sm mb-2">
               <Icons.Variable size={14} className="text-accent-base" />
               <span>Preview</span>
@@ -495,9 +495,9 @@ const SectionsFormat = () => {
       });
 
       setSections(processedSections);
-      console.log("Processed sections:", processedSections);
+      logInfo("Processed sections:", processedSections);
     } catch (error) {
-      console.error("Failed to fetch sections:", error);
+      logError("Failed to fetch sections:", error);
     }
   };
 
@@ -771,7 +771,7 @@ const SectionsFormat = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
-        <div className="animate-spin mr-2">
+        <div className="text-accent animate-spin mr-2">
           <Icons.Loader2 className="h-8 w-8 text-accent-base" />
         </div>
         <span className="text-theme">Loading Formats...</span>
@@ -839,7 +839,7 @@ const SectionsFormat = () => {
               onChange={(e) =>
                 setNewFormat({ ...newFormat, name: e.target.value })
               }
-              className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-4 py-3
+              className="w-full bg-gray-900/50 text-white border  border-accent rounded-lg px-4 py-3
                 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200"
               placeholder="e.g., Section Status"
@@ -853,7 +853,7 @@ const SectionsFormat = () => {
               onChange={(e) =>
                 setNewFormat({ ...newFormat, sectionId: e.target.value })
               }
-              className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-4 py-3
+              className="w-full bg-gray-900/50 text-white border  border-accent rounded-lg px-4 py-3
                 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200"
             >
@@ -884,7 +884,7 @@ const SectionsFormat = () => {
               onChange={(e) =>
                 setNewFormat({ ...newFormat, template: e.target.value })
               }
-              className="w-full bg-gray-900/50 text-white border border-gray-700/50 rounded-lg px-4 py-3
+              className="w-full bg-gray-900/50 text-white border  border-accent rounded-lg px-4 py-3
                 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
                 transition-all duration-200 font-mono"
               placeholder="e.g., {title} ({year}) - Added {added_at:relative}"
@@ -897,7 +897,7 @@ const SectionsFormat = () => {
 
           {/* Live Preview */}
           {newFormat.template && (
-            <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700/50">
+            <div className="bg-gray-900/50 rounded-lg p-4 border  border-accent">
               <label className="block text-theme font-medium mb-2">
                 Preview
               </label>
@@ -908,7 +908,7 @@ const SectionsFormat = () => {
           )}
 
           {/* Current Section Info Display */}
-          <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+          <div className="bg-gray-900/50 rounded-lg p-3 border  border-accent">
             <div className="flex items-center gap-2">
               <Icons.Database className="text-accent-base" size={16} />
               <span className="text-theme-muted">Section:</span>
@@ -954,7 +954,7 @@ const SectionsFormat = () => {
               <Icons.List className="text-accent-base" size={18} />
               Section Metadata Formats
             </h3>
-            <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border border-gray-700/50">
+            <div className="px-3 py-1.5 bg-gray-900/50 rounded-lg border  border-accent">
               <span className="text-sm font-medium text-theme-muted">
                 {formats.length} Format{formats.length !== 1 ? "s" : ""}
               </span>
