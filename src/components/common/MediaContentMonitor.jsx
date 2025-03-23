@@ -231,14 +231,13 @@ const MediaContentMonitor = () => {
                 posterCacheService.getAppropriateThumbPath(metadata);
 
               if (thumbPath) {
-                await posterCacheService.cachePoster(
+                // Cache the poster in the background
+                posterCacheService.cachePoster(
                   newItem.rating_key,
                   thumbPath,
                   config.tautulliApiKey,
                   newItem.media_type
                 );
-
-                logInfo(`Cached poster for new item: ${newItem.title}`);
               }
             }
           } catch (error) {
@@ -246,8 +245,16 @@ const MediaContentMonitor = () => {
           }
         }
 
-        // Dispatch event to notify components
+        // Dispatch event to notify components - ensure this happens only once
         window.dispatchEvent(new CustomEvent("newMediaDetected"));
+
+        // Show a toast notification to the user
+        toast.success(
+          `${newMediaItems.length} new items added to your library`,
+          {
+            duration: 5000,
+          }
+        );
       }
 
       // Update last check timestamp
@@ -260,32 +267,32 @@ const MediaContentMonitor = () => {
     }
   };
 
-  // Set up content checking interval
+  // Set up content checking interval with optimized timing
   useEffect(() => {
     if (!isConfigured()) return;
 
     // Clear the processed items set when component mounts
     processedItems.current = new Set();
 
-    // Initial check after 30 seconds (let the app load first)
+    // Stagger initial check to allow app to fully load first
     const initialCheckTimeout = setTimeout(() => {
       checkForNewContent();
-    }, 30000);
+    }, 45000); // 45 seconds
 
-    // Set up interval for checking every 5 minutes
+    // Set up interval for checking
     checkInterval.current = setInterval(() => {
       checkForNewContent();
     }, 5 * 60 * 1000); // 5 minutes
 
-    // Set up interval to clean up unused poster cache files every hour
+    // Clean up poster cache less frequently
     const posterCacheCleanupInterval = setInterval(() => {
-      // This will trigger a server-side cleanup of unused poster cache files
-      axios.post("/api/posters/cache/cleanup").catch((error) => {
-        logError("Failed to trigger poster cache cleanup:", error);
+      // Run cache cleanup in background
+      axios.post("/api/posters/cache/cleanup").catch(() => {
+        // Silently ignore errors during cleanup
       });
     }, 60 * 60 * 1000); // 60 minutes
 
-    logInfo("✅ Media content monitor initialized (5 minute interval)");
+    logInfo("✅ Media content monitor initialized");
 
     return () => {
       clearTimeout(initialCheckTimeout);

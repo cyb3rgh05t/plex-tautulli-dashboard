@@ -1,245 +1,254 @@
-// src/services/posterCacheService.js
-import axios from "axios";
+// Enhanced poster cache service with persistent in-memory cache
 import { logError, logInfo, logDebug, logWarn } from "../utils/logger";
+import axios from "axios";
+
+// Create a persistent, application-lifetime poster URL cache
+// This cache will survive component unmounts and tab switches
+const GLOBAL_POSTER_CACHE = new Map();
+
+// Also create a persistent pending requests tracker to prevent duplicate requests
+const PENDING_REQUESTS = new Map();
 
 /**
- * Get cached poster URL for a rating key
- * @param {String} ratingKey - Unique identifier for the media item
- * @returns {String|null} - Cached poster URL or null if not found
+ * Enhanced poster cache service with persistent in-memory cache
+ * This service manages poster URLs and caching to improve performance
+ */
+
+/**
+ * Get cached poster URL from global cache first, then from server
+ * @param {string} ratingKey - Media rating key
+ * @returns {string|null} - Cached poster URL or null
  */
 export const getCachedPosterUrl = (ratingKey) => {
   if (!ratingKey) return null;
 
-  try {
-    // Generate cached poster URL with cache buster to ensure fresh retrieval
-    return `/api/posters/${ratingKey}?t=${Date.now()}`;
-  } catch (error) {
-    logError("Error retrieving cached poster URL:", error);
-    return null;
+  // Check our global in-memory cache first (fastest)
+  if (GLOBAL_POSTER_CACHE.has(ratingKey)) {
+    return GLOBAL_POSTER_CACHE.get(ratingKey);
   }
+
+  // Generate server-side cached poster URL
+  const posterUrl = `/api/posters/${ratingKey}?t=${Date.now()}`;
+
+  // Store in global cache
+  GLOBAL_POSTER_CACHE.set(ratingKey, posterUrl);
+
+  return posterUrl;
 };
 
 /**
- * Request the server to download and cache a poster
- * @param {String} ratingKey - Rating key of the media item
- * @param {String} thumbPath - Path to the thumbnail
- * @param {String} apiKey - Tautulli API key
- * @param {String} mediaType - Type of media (movie, show, episode, etc.)
- * @returns {Promise<Boolean>} - Success status
+ * Force refresh the cached poster URL
+ * @param {string} ratingKey - Media rating key
+ * @returns {string} - New poster URL with cache-busting parameter
  */
-export const cachePoster = async (
-  ratingKey,
-  thumbPath,
-  apiKey,
-  mediaType = ""
-) => {
-  if (!ratingKey || !thumbPath || !apiKey) return false;
+export const refreshCachedPosterUrl = (ratingKey) => {
+  if (!ratingKey) return null;
 
-  try {
-    const response = await axios.post("/api/posters/cache", {
-      ratingKey,
-      thumbPath,
-      apiKey,
-      mediaType,
-    });
+  // Generate a new URL with cache busting
+  const refreshedUrl = `/api/posters/${ratingKey}?t=${Date.now()}`;
 
-    if (response.data && response.data.success) {
-      logDebug(`Cached poster for ${ratingKey}`);
-      return true;
-    }
+  // Update global cache
+  GLOBAL_POSTER_CACHE.set(ratingKey, refreshedUrl);
 
-    return false;
-  } catch (error) {
-    logError(`Error caching poster for ${ratingKey}:`, error);
-    return false;
-  }
+  return refreshedUrl;
 };
 
 /**
- * Get appropriate thumb path based on media type, especially for episodes
- * @param {Object} mediaItem - Media item object
- * @returns {String|null} - Appropriate thumb path
+ * Determine the appropriate thumb path based on media type
+ * @param {Object} media - Media object
+ * @returns {string|null} - Appropriate thumb path or null
  */
-export const getAppropriateThumbPath = (mediaItem) => {
-  if (!mediaItem) return null;
+export const getAppropriateThumbPath = (media) => {
+  if (!media) return null;
 
-  const mediaType = (mediaItem.media_type || "").toLowerCase();
+  // Get media type with fallback
+  const mediaType = media.media_type?.toLowerCase() || "unknown";
 
-  // For episodes, use grandparent_thumb (show poster) or parent_thumb (season poster)
-  if (mediaType === "episode") {
-    return mediaItem.grandparent_thumb || mediaItem.parent_thumb;
-  }
-
-  // For seasons, use grandparent_thumb (show poster)
-  if (mediaType === "season") {
-    return (
-      mediaItem.grandparent_thumb || mediaItem.parent_thumb || mediaItem.thumb
-    );
-  }
-
-  // For other media types
   switch (mediaType) {
     case "movie":
-      return mediaItem.thumb || mediaItem.parent_thumb;
+      return media.thumb || null;
     case "show":
-      return mediaItem.thumb || mediaItem.parent_thumb;
+      return media.thumb || null;
+    case "season":
+      // For seasons, try parent or grandparent thumb first
+      return (
+        media.parent_thumb || media.grandparent_thumb || media.thumb || null
+      );
+    case "episode":
+      // For episodes, grandparent (show) thumb is usually better
+      return (
+        media.grandparent_thumb || media.parent_thumb || media.thumb || null
+      );
     case "artist":
-      return mediaItem.thumb;
+      return media.thumb || null;
     case "album":
-      return mediaItem.thumb || mediaItem.parent_thumb;
+      return media.thumb || media.parent_thumb || null;
     case "track":
       return (
-        mediaItem.grandparent_thumb || mediaItem.parent_thumb || mediaItem.thumb
+        media.grandparent_thumb || media.parent_thumb || media.thumb || null
       );
     default:
-      return (
-        mediaItem.thumb || mediaItem.parent_thumb || mediaItem.grandparent_thumb
-      );
+      return media.thumb || null;
   }
 };
 
 /**
- * Get poster URL for a media item - checks cache first, then requests caching if not found
- * @param {Object} mediaItem - Media item with rating_key and thumb
- * @param {String} apiKey - Tautulli API key
- * @returns {Promise<String|null>} - URL to poster or null if not available
+ * Cache a poster with the server
+ * @param {string} ratingKey - Media rating key
+ * @param {string} thumbPath - Thumb path
+ * @param {string} apiKey - API key
+ * @param {string} mediaType - Media type
+ * @returns {Promise<boolean>} - Success status
  */
-export const getPosterUrl = async (mediaItem, apiKey) => {
-  if (!mediaItem || !mediaItem.rating_key) return null;
+export const cachePoster = async (ratingKey, thumbPath, apiKey, mediaType) => {
+  if (!ratingKey || !thumbPath || !apiKey) {
+    return false;
+  }
 
-  const ratingKey = mediaItem.rating_key;
+  // Check if we're already caching this poster
+  const pendingKey = `cache:${ratingKey}`;
+  if (PENDING_REQUESTS.has(pendingKey)) {
+    // A request is already in progress, return its promise
+    return PENDING_REQUESTS.get(pendingKey);
+  }
 
-  // First check if we have it in cache - use synchronous method to get URL immediately
-  const cachedUrl = getCachedPosterUrl(ratingKey);
-
-  // Request the server to cache it if thumb path is available
-  if (
-    mediaItem.thumb ||
-    mediaItem.grandparent_thumb ||
-    mediaItem.parent_thumb
-  ) {
-    // Get appropriate thumb path based on media type
-    const thumbPath = getAppropriateThumbPath(mediaItem);
-
-    if (thumbPath) {
-      // Request caching (this is async, but we return the URL immediately)
-      cachePoster(
+  // Create a promise for this request
+  const requestPromise = new Promise(async (resolve) => {
+    try {
+      // Send request to cache the poster
+      const response = await axios.post("/api/posters/cache", {
         ratingKey,
         thumbPath,
         apiKey,
-        mediaItem.media_type || ""
-      ).catch((err) => {
-        logWarn(`Background caching failed for ${ratingKey}:`, err);
+        mediaType,
       });
-    }
-  }
 
-  return cachedUrl;
+      // If successful, update our global cache
+      if (response.data.success) {
+        // We don't need to update the URL here, as the server-side cache will handle it
+        logDebug(`Cached poster for ${ratingKey}`);
+        resolve(true);
+      } else {
+        logWarn(
+          `Failed to cache poster for ${ratingKey}: ${response.data.error}`
+        );
+        resolve(false);
+      }
+    } catch (error) {
+      logError(`Error caching poster for ${ratingKey}:`, error);
+      resolve(false);
+    } finally {
+      // Remove from pending requests
+      PENDING_REQUESTS.delete(pendingKey);
+    }
+  });
+
+  // Store the promise in pending requests
+  PENDING_REQUESTS.set(pendingKey, requestPromise);
+
+  return requestPromise;
 };
 
 /**
- * Prefetch posters for multiple media items
- * @param {Array} mediaItems - Array of media items
- * @param {String} apiKey - Tautulli API key
- * @returns {Promise<Object>} - Result stats
+ * Preload multiple posters in the background
+ * @param {Array} mediaItems - Array of media items to preload posters for
+ * @param {string} apiKey - API key
+ * @returns {Promise<void>}
  */
-export const prefetchPosters = async (mediaItems, apiKey) => {
-  if (!mediaItems || !mediaItems.length || !apiKey) {
-    return { total: 0, success: 0, failed: 0 };
-  }
+export const preloadPosters = async (mediaItems, apiKey) => {
+  if (!mediaItems || !mediaItems.length || !apiKey) return;
 
-  logInfo(`Prefetching ${mediaItems.length} posters...`);
+  // Track how many posters we're preloading for logging
+  let preloadCount = 0;
 
-  let success = 0;
-  let failed = 0;
-
-  // Process in batches to avoid overwhelming the server
+  // Process in smaller batches to avoid overwhelming the server
   const BATCH_SIZE = 5;
-  const batches = [];
-
   for (let i = 0; i < mediaItems.length; i += BATCH_SIZE) {
-    batches.push(mediaItems.slice(i, i + BATCH_SIZE));
-  }
+    const batch = mediaItems.slice(i, i + BATCH_SIZE);
 
-  // Process each batch sequentially
-  for (const batch of batches) {
-    const results = await Promise.allSettled(
-      batch.map((item) => {
-        const thumbPath = getAppropriateThumbPath(item);
-        if (!thumbPath)
-          return Promise.reject(new Error("No thumb path available"));
+    // Process this batch in parallel
+    await Promise.allSettled(
+      batch.map(async (item) => {
+        try {
+          if (!item.rating_key) return;
 
-        return cachePoster(
-          item.rating_key,
-          thumbPath,
-          apiKey,
-          item.media_type || ""
-        );
+          // Skip if already in global cache
+          if (GLOBAL_POSTER_CACHE.has(item.rating_key)) return;
+
+          // Get appropriate thumb path
+          const thumbPath = getAppropriateThumbPath(item);
+          if (!thumbPath) return;
+
+          // Request caching (don't wait for completion)
+          cachePoster(item.rating_key, thumbPath, apiKey, item.media_type);
+          preloadCount++;
+        } catch (error) {
+          // Ignore errors during preloading
+        }
       })
     );
 
-    results.forEach((result) => {
-      if (result.status === "fulfilled" && result.value) {
-        success++;
-      } else {
-        failed++;
-      }
-    });
-
-    // Small delay between batches to prevent overwhelming the server
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-
-  logInfo(`Poster prefetch complete: ${success} succeeded, ${failed} failed`);
-
-  return { total: mediaItems.length, success, failed };
-};
-
-/**
- * Clear poster cache
- * @returns {Promise<Boolean>} - Success status
- */
-export const clearPosterCache = async () => {
-  try {
-    const response = await axios.post("/api/posters/cache/clear");
-
-    if (response.data && response.data.success) {
-      logInfo("Poster cache cleared");
-      return true;
+    // Small pause between batches
+    if (i + BATCH_SIZE < mediaItems.length) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
+  }
 
-    return false;
-  } catch (error) {
-    logError("Error clearing poster cache:", error);
-    return false;
+  if (preloadCount > 0) {
+    logInfo(`Preloaded ${preloadCount} posters in the background`);
   }
 };
 
 /**
- * Get poster cache stats
- * @returns {Promise<Object>} - Cache stats
+ * Get poster cache statistics from the server
+ * @returns {Promise<Object>} - Cache statistics
  */
 export const getPosterCacheStats = async () => {
   try {
     const response = await axios.get("/api/posters/cache/stats");
-
-    if (response.data) {
-      return response.data;
-    }
-
-    return { count: 0, size: 0 };
+    return response.data;
   } catch (error) {
-    logError("Error getting poster cache stats:", error);
-    return { count: 0, size: 0, error: error.message };
+    logError("Failed to get poster cache stats:", error);
+    throw error;
   }
+};
+
+/**
+ * Clear the poster cache for a specific rating key
+ * @param {string} ratingKey - Media rating key
+ * @returns {Promise<boolean>} - Success status
+ */
+export const clearPosterCache = async (ratingKey) => {
+  if (!ratingKey) return false;
+
+  try {
+    // Remove from global cache
+    GLOBAL_POSTER_CACHE.delete(ratingKey);
+
+    // Clear from server
+    const response = await axios.post(`/api/posters/cache/clear/${ratingKey}`);
+    return response.data.success;
+  } catch (error) {
+    logError(`Failed to clear poster cache for ${ratingKey}:`, error);
+    return false;
+  }
+};
+
+/**
+ * Get the current size of the in-memory poster cache
+ * @returns {number} - Number of cached poster URLs
+ */
+export const getInMemoryCacheSize = () => {
+  return GLOBAL_POSTER_CACHE.size;
 };
 
 export default {
   getCachedPosterUrl,
-  cachePoster,
-  getPosterUrl,
-  prefetchPosters,
-  clearPosterCache,
-  getPosterCacheStats,
+  refreshCachedPosterUrl,
   getAppropriateThumbPath,
+  cachePoster,
+  preloadPosters,
+  getPosterCacheStats,
+  clearPosterCache,
+  getInMemoryCacheSize,
 };

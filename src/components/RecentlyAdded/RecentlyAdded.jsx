@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import { useLocation } from "react-router-dom";
 import { useConfig } from "../../context/ConfigContext";
 import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
@@ -6,12 +12,33 @@ import * as Icons from "lucide-react";
 import MediaCard from "./MediaCard";
 import ThemedButton from "../common/ThemedButton";
 import ThemedCard from "../common/ThemedCard";
-import { useTheme } from "../../context/ThemeContext.jsx";
-import axios from "axios";
 import ThemedTabButton from "../common/ThemedTabButton";
 import { useQuery, useQueryClient, useQueries } from "react-query";
 import toast from "react-hot-toast";
 import * as posterCacheService from "../../services/posterCacheService";
+import axios from "axios";
+
+// Store active tab filter in session storage to preserve between tab switches
+const getStoredActiveFilter = () => {
+  try {
+    return sessionStorage.getItem("recentlyAddedFilter") || "all";
+  } catch (e) {
+    return "all";
+  }
+};
+
+// Store filtered section data in session storage to preserve between tab switches
+const getStoredSectionData = () => {
+  try {
+    const data = sessionStorage.getItem("recentlyAddedSections");
+    return data ? JSON.parse(data) : null;
+  } catch (e) {
+    return null;
+  }
+};
+
+// Track component mounts/unmounts globally to avoid refetching on tab switches
+let componentWasMounted = false;
 
 const LoadingCard = () => (
   <div className="space-y-3">
@@ -171,17 +198,32 @@ const mapSectionType = (section) => {
 const RecentlyAdded = () => {
   const { config } = useConfig();
   const queryClient = useQueryClient();
-  const [activeMediaTypeFilter, setActiveMediaTypeFilter] = useState("all");
+  // Use stored filter from session storage (or default to 'all')
+  const [activeMediaTypeFilter, setActiveMediaTypeFilter] = useState(
+    getStoredActiveFilter
+  );
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const location = useLocation();
   const prevPathRef = useRef(location.pathname);
 
-  // NEW: Track if we've already loaded data at least once
-  const initialLoadCompleted = useRef(false);
-
-  // NEW: Use central loading state instead of component loading
+  // Track if initial data fetch has occurred
+  const initialDataFetched = useRef(false);
+  // Track if posters have been preloaded
+  const postersPreloaded = useRef(false);
+  // Keep track of tab visibility to optimize loading
+  const [isVisible, setIsVisible] = useState(true);
+  // Central loading state
   const [isComponentLoading, setIsComponentLoading] = useState(true);
+
+  // Save active filter to session storage when it changes
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("recentlyAddedFilter", activeMediaTypeFilter);
+    } catch (e) {
+      // Ignore storage errors
+    }
+  }, [activeMediaTypeFilter]);
 
   // IMPROVED: Sections query with better caching configuration
   const {
@@ -192,20 +234,39 @@ const RecentlyAdded = () => {
     ["sections"],
     async () => {
       logInfo("Fetching sections data");
+
+      // First, check if we have cached data from previous visits
+      const cachedData = getStoredSectionData();
+      if (cachedData && !isRefreshing) {
+        // Use the cached data if not refreshing
+        logInfo("Using cached sections data from session storage");
+        return cachedData;
+      }
+
       const response = await fetch(`/api/sections`);
       if (!response.ok) throw new Error("Failed to load sections");
-      return response.json();
+      const data = await response.json();
+
+      // Cache the data for future quick loading
+      try {
+        sessionStorage.setItem("recentlyAddedSections", JSON.stringify(data));
+      } catch (e) {
+        // Ignore storage errors
+      }
+
+      return data;
     },
     {
       staleTime: 30 * 60 * 1000, // Consider data fresh for 30 minutes
       cacheTime: 60 * 60 * 1000, // Keep in cache for 1 hour
       refetchOnWindowFocus: false,
-      refetchOnMount: !initialLoadCompleted.current, // Only refetch on first mount
-      onError: (err) => setError("Failed to load sections: " + err.message),
+      refetchOnMount: !componentWasMounted, // Only refetch if first time mounting
       onSuccess: () => {
-        // Mark initial load as completed when sections data is successfully loaded
-        initialLoadCompleted.current = true;
+        // Mark that we've successfully mounted this component
+        componentWasMounted = true;
+        initialDataFetched.current = true;
       },
+      onError: (err) => setError("Failed to load sections: " + err.message),
     }
   );
 
@@ -230,7 +291,19 @@ const RecentlyAdded = () => {
       .filter(Boolean);
   }, [processedSections]);
 
-  // Instead of using media type queries, fetch each section directly
+  // Preload posters for visible media in the background
+  const preloadVisiblePosters = useCallback((mediaItems, apiKey) => {
+    if (postersPreloaded.current || !mediaItems?.length || !apiKey) return;
+
+    // Delay the preloading to prioritize UI rendering
+    setTimeout(() => {
+      // Only preload posters for the first 12 items per section
+      posterCacheService.preloadPosters(mediaItems.slice(0, 12), apiKey);
+      postersPreloaded.current = true;
+    }, 500);
+  }, []);
+
+  // Optimized section queries that respect component mount state
   const sectionQueries = useQueries(
     allSectionIds.map((sectionId) => ({
       queryKey: [`section:${sectionId}`],
@@ -241,7 +314,12 @@ const RecentlyAdded = () => {
         try {
           // Check if we have data in cache already from preloading
           const cachedData = queryClient.getQueryData([`section:${sectionId}`]);
-          if (cachedData && cachedData.media && cachedData.media.length > 0) {
+          if (
+            cachedData &&
+            cachedData.media &&
+            cachedData.media.length > 0 &&
+            !isRefreshing
+          ) {
             logDebug(`Using cached data for section ${sectionId}`);
             return cachedData;
           }
@@ -265,46 +343,19 @@ const RecentlyAdded = () => {
             (s) => s.section_id === sectionId
           );
 
-          // Process each media item to ensure it has a cached poster
-          const mediaItems = await Promise.all(
-            (response.data?.response?.data?.recently_added || []).map(
-              async (item) => {
-                const enhancedItem = {
-                  ...item,
-                  apiKey: config.tautulliApiKey,
-                  section_id: sectionId,
-                  section_type: section?.type || "unknown",
-                };
+          // Process media items with minimal enhancements to improve performance
+          const mediaItems =
+            response.data?.response?.data?.recently_added.map((item) => ({
+              ...item,
+              apiKey: config.tautulliApiKey,
+              section_id: sectionId,
+              section_type: section?.type || "unknown",
+            })) || [];
 
-                // Check if this item has a thumb path we can use for the poster
-                const thumbPath =
-                  posterCacheService.getAppropriateThumbPath(enhancedItem);
-
-                if (thumbPath) {
-                  // Request to cache this poster (but don't wait for completion)
-                  posterCacheService
-                    .cachePoster(
-                      item.rating_key,
-                      thumbPath,
-                      config.tautulliApiKey,
-                      enhancedItem.media_type
-                    )
-                    .catch((err) => {
-                      logWarn(
-                        `Background caching failed for ${item.rating_key}:`,
-                        err
-                      );
-                    });
-
-                  // Get the cached poster URL
-                  enhancedItem.cached_poster_url =
-                    posterCacheService.getCachedPosterUrl(item.rating_key);
-                }
-
-                return enhancedItem;
-              }
-            )
-          );
+          // Trigger background poster preloading for this section
+          if (mediaItems.length > 0) {
+            preloadVisiblePosters(mediaItems, config.tautulliApiKey);
+          }
 
           return {
             media: mediaItems,
@@ -320,16 +371,33 @@ const RecentlyAdded = () => {
       enabled:
         !!config?.tautulliApiKey &&
         !isSectionsLoading &&
-        !!allSectionIds.length,
+        !!allSectionIds.length &&
+        isVisible, // Only run queries when component is visible
       refetchOnWindowFocus: false,
+      refetchOnMount: !componentWasMounted, // Only refetch on first mount
       onError: (err) => logError(`Error fetching section ${sectionId}:`, err),
     }))
   );
 
+  // Listen for tab visibility changes to optimize loading
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsVisible(!document.hidden);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
   // Wait for all sections to load before showing content
   useEffect(() => {
     // Check if all section queries are done (success or error)
-    const allQueriesDone = sectionQueries.every((query) => !query.isLoading);
+    const allQueriesDone = sectionQueries.every(
+      (query) => !query.isLoading || query.isError
+    );
 
     // Set loading state based on section queries and sections data
     if (!isSectionsLoading && allQueriesDone) {
@@ -371,7 +439,7 @@ const RecentlyAdded = () => {
     // Listen for 'newMediaDetected' event
     const handleNewMediaDetected = () => {
       logInfo("New media detected event received, refreshing data");
-      handleRefresh();
+      handleRefresh(true); // Silent refresh to avoid unnecessary UI changes
     };
 
     window.addEventListener("newMediaDetected", handleNewMediaDetected);
@@ -381,44 +449,33 @@ const RecentlyAdded = () => {
     };
   }, []);
 
-  // Log state to aid debugging
-  useEffect(() => {
-    if (filteredSections.length > 0) {
-      logDebug(`Displaying ${filteredSections.length} sections with media`);
-
-      // Print them out
-      filteredSections.forEach((section) => {
-        logDebug(
-          `Section: ${section.section?.name || "Unknown"}, Items: ${
-            section.media.length
-          }`
-        );
-      });
-    }
-  }, [filteredSections]);
-
   // Track if any queries are still loading
   const isLoading =
     sectionQueries.some((query) => query.isLoading) ||
     isSectionsLoading ||
     isComponentLoading;
 
-  // Determine if we have any data
-  const hasAnyData = filteredSections.length > 0;
-
   // Handle refresh button click - force refresh all data
-  const handleRefresh = async () => {
+  const handleRefresh = async (silent = false) => {
     if (isRefreshing) return;
 
-    setIsRefreshing(true);
-    setError(null);
+    if (!silent) {
+      setIsRefreshing(true);
+      setError(null);
+      // Only show toast for manual refreshes
+      toast.success("Refreshing media content...");
+    }
 
     try {
-      // Notify user
-      toast.success("Refreshing media content...");
-
       // Clear image cache
       await axios.get("/api/clear-image-cache");
+
+      // Clear session storage cache
+      try {
+        sessionStorage.removeItem("recentlyAddedSections");
+      } catch (e) {
+        // Ignore storage errors
+      }
 
       // Invalidate all queries
       await queryClient.invalidateQueries(["sections"]);
@@ -428,14 +485,22 @@ const RecentlyAdded = () => {
         await queryClient.invalidateQueries([`section:${sectionId}`]);
       }
 
-      // Success notification
-      toast.success("Media content refreshed!");
+      // Reset poster preload tracker
+      postersPreloaded.current = false;
+
+      if (!silent) {
+        toast.success("Media content refreshed!");
+      }
     } catch (error) {
       logError("Failed to refresh media", error);
-      setError("Failed to refresh media");
-      toast.error("Failed to refresh media");
+      if (!silent) {
+        setError("Failed to refresh media");
+        toast.error("Failed to refresh media");
+      }
     } finally {
-      setIsRefreshing(false);
+      if (!silent) {
+        setIsRefreshing(false);
+      }
     }
   };
 
@@ -443,37 +508,28 @@ const RecentlyAdded = () => {
   useEffect(() => {
     // Check if we're navigating TO the recent tab
     if (location.pathname === "/recent" && prevPathRef.current !== "/recent") {
-      logInfo("Navigated to recently added tab, checking cache freshness");
+      logInfo("Navigated to recently added tab");
 
-      // Only trigger loading state if data is stale or missing
-      const needsRefresh = sectionQueries.some(
-        (query) => query.isStale || !query.data?.media?.length
-      );
-
-      if (needsRefresh) {
+      // Only trigger loading if we haven't loaded before
+      if (!initialDataFetched.current) {
         setIsComponentLoading(true);
+      } else {
+        // If we've already loaded, just check if data is stale
+        const isDataStale = sectionQueries.some(
+          (query) => query.isStale || !query.data?.media?.length
+        );
 
-        // Silently refresh data in background
-        setTimeout(() => {
-          // Force refetch sections
-          queryClient.invalidateQueries(["sections"]);
-
-          // Invalidate all section queries
-          for (const sectionId of allSectionIds) {
-            queryClient.invalidateQueries([`section:${sectionId}`]);
-          }
-
-          // Allow a little time for new data to load
-          setTimeout(() => {
-            setIsComponentLoading(false);
-          }, 800);
-        }, 100);
+        if (isDataStale && !isRefreshing) {
+          // Silently refresh in background without showing loading state
+          logInfo("Data is stale, refreshing in background");
+          handleRefresh(true); // Silent refresh
+        }
       }
     }
 
     // Update ref for next comparison
     prevPathRef.current = location.pathname;
-  }, [location.pathname, queryClient, allSectionIds, sectionQueries]);
+  }, [location.pathname, sectionQueries]);
 
   // Listen for image cache cleared events
   useEffect(() => {
@@ -494,6 +550,9 @@ const RecentlyAdded = () => {
       for (const sectionId of allSectionIds) {
         queryClient.invalidateQueries([`section:${sectionId}`]);
       }
+
+      // Reset poster preloaded flag
+      postersPreloaded.current = false;
     };
 
     window.addEventListener("posterCacheCleared", handlePosterCacheCleared);
@@ -508,7 +567,7 @@ const RecentlyAdded = () => {
   }, [allSectionIds, queryClient]);
 
   // Check if there are any sections for the current media type filter
-  const hasSectionsForCurrentFilter = () => {
+  const hasSectionsForCurrentFilter = useCallback(() => {
     const typeMap = {
       movies: "movie",
       shows: "show",
@@ -521,7 +580,7 @@ const RecentlyAdded = () => {
       const sectionType = mapSectionType(section);
       return sectionType === typeMap[activeMediaTypeFilter];
     });
-  };
+  }, [activeMediaTypeFilter, processedSections]);
 
   // Sort sections - movies first, then shows, then music
   const sortedSections = useMemo(() => {
@@ -569,7 +628,7 @@ const RecentlyAdded = () => {
         </div>
 
         <ThemedButton
-          onClick={handleRefresh}
+          onClick={() => handleRefresh()}
           disabled={isRefreshing}
           variant="accent"
           icon={
@@ -622,7 +681,7 @@ const RecentlyAdded = () => {
           </div>
           <p className="text-red-400">{error}</p>
           <ThemedButton
-            onClick={handleRefresh}
+            onClick={() => handleRefresh()}
             className="mt-4"
             variant="danger"
             icon={Icons.RefreshCw}
@@ -770,8 +829,8 @@ const RecentlyAdded = () => {
                                   try {
                                     if (mediaItem.rating_key) {
                                       // Clear the cache for this specific poster
-                                      await axios.post(
-                                        `/api/posters/cache/clear/${mediaItem.rating_key}`
+                                      await posterCacheService.clearPosterCache(
+                                        mediaItem.rating_key
                                       );
 
                                       // Re-cache the poster with fresh data
@@ -806,6 +865,9 @@ const RecentlyAdded = () => {
                             queryClient.invalidateQueries([
                               `section:${sectionData.section.section_id}`,
                             ]);
+
+                            // Reset poster preloaded flag
+                            postersPreloaded.current = false;
 
                             // Success toast
                             toast.success(
@@ -851,11 +913,7 @@ const RecentlyAdded = () => {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
                       {sortedMedia.slice(0, 6).map((media, mediaIndex) => (
                         <MediaCard
-                          key={`${sectionData.section.section_id}-${
-                            media.rating_key || "unknown"
-                          }-${mediaIndex}-${Math.random()
-                            .toString(36)
-                            .substr(2, 5)}`}
+                          key={`${media.rating_key || `unknown-${mediaIndex}`}`}
                           media={media}
                         />
                       ))}

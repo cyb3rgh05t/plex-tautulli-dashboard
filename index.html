@@ -8,11 +8,28 @@
     <script>
       // Theme detection script to run before React loads
       (function () {
-        // Always use dark theme
-        const savedTheme = "dark";
+        // Get saved theme or use dark theme as default
+        const savedTheme = localStorage.getItem("themeName") || "dark";
 
-        // Get saved Accent color
+        // Get saved Accent color or use grey as default
         const savedAccent = localStorage.getItem("accentColor") || "grey";
+
+        // Define valid theme names
+        const validThemes = [
+          "dark",
+          "dracula",
+          "plex",
+          "overseerr",
+          "onedark",
+          "nord",
+          "hotline",
+          "aquamarine",
+          "spacegray",
+          "organizr",
+          "maroon",
+          "hotpink",
+          "cyberpunk",
+        ];
 
         // Define valid accent colors
         const validAccents = [
@@ -23,27 +40,52 @@
           "orange",
           "blue",
           "red",
+          "neon",
+          "cyber",
         ];
 
-        // Ensure only valid accents are applied
+        // Ensure only valid theme and accent are applied
+        const theme = validThemes.includes(savedTheme) ? savedTheme : "dark";
         const accent = validAccents.includes(savedAccent)
           ? savedAccent
           : "grey";
 
+        // Save default values if not already saved
+        if (!localStorage.getItem("themeName")) {
+          localStorage.setItem("themeName", "dark");
+        }
+        if (!localStorage.getItem("accentColor")) {
+          localStorage.setItem("accentColor", "grey");
+        }
+
+        // Remove any existing theme and accent classes
+        document.documentElement.classList.remove(
+          ...validThemes.map((t) => "theme-" + t)
+        );
+        document.documentElement.classList.remove(
+          ...validAccents.map((a) => "accent-" + a)
+        );
+        document.documentElement.classList.remove("accent-default");
+
         // Apply theme and accent classes immediately
-        document.documentElement.classList.add("theme-dark");
+        document.documentElement.classList.add("theme-" + theme);
         document.documentElement.classList.add("dark"); // For Tailwind dark mode
         document.documentElement.classList.add("accent-" + accent);
 
         // Set data attributes for theme and accent
-        document.documentElement.setAttribute("data-theme", "dark");
+        document.documentElement.setAttribute("data-theme", theme);
         document.documentElement.setAttribute("data-accent", accent);
 
-        console.log("Initial theme applied: dark with accent:", accent);
+        // Apply to body as well
+        document.addEventListener("DOMContentLoaded", function () {
+          document.body.classList.add("theme-" + theme);
+        });
+
+        console.log("Initial theme applied:", theme, "with accent:", accent);
       })();
     </script>
   </head>
-  <body class="theme-dark">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

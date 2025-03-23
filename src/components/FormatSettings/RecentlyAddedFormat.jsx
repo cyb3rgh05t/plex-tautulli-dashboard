@@ -109,7 +109,7 @@ const AVAILABLE_VARIABLES = {
     { name: "rating_key", description: "Unique identifier for the media" },
     { name: "title", description: "Album title" },
     //{ name: "grandparent_title", description: "Artist name" },
-    { name: "parent_title", description: "Album name" },
+    { name: "parent_title", description: "Artist name" },
     { name: "year", description: "Year of release" },
     { name: "mediaType", description: "Type of media" },
     {
