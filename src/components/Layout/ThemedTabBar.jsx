@@ -29,13 +29,14 @@ const ThemedTabBar = () => {
         key={tab.to}
         to={tab.to}
         className={`
-          relative flex items-center gap-2 px-4 py-3 rounded-lg transition-theme
+          relative flex items-center gap-2 px-4 py-3 rounded-lg transition-colors
           ${
             isActive
-              ? "tab-accent active text-accent bg-accent-light border border-accent/20"
+              ? "bg-accent-light border border-accent/20 text-white"
               : "text-gray-400 hover:text-white hover:bg-gray-700/50 hover:border-accent/10 border border-transparent"
           }
         `}
+        style={isActive ? { color: "white" } : {}}
       >
         {/* Add subtle accent glow for active tabs */}
         {isActive && (

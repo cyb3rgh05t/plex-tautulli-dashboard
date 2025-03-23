@@ -107,8 +107,8 @@ const AVAILABLE_VARIABLES = {
   ],
   music: [
     { name: "rating_key", description: "Unique identifier for the media" },
-    { name: "title", description: "Track title" },
-    { name: "grandparent_title", description: "Artist name" },
+    { name: "title", description: "Album title" },
+    //{ name: "grandparent_title", description: "Artist name" },
     { name: "parent_title", description: "Album name" },
     { name: "year", description: "Year of release" },
     { name: "mediaType", description: "Type of media" },
@@ -118,7 +118,7 @@ const AVAILABLE_VARIABLES = {
         "Timestamp when media was added (formats: default, short, relative, full, time)",
     },
     { name: "summary", description: "Additional information" },
-    { name: "duration", description: "Track duration" },
+    //{ name: "duration", description: "Track duration" },
   ],
 };
 

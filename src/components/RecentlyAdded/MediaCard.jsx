@@ -397,17 +397,20 @@ const MediaCard = ({ media }) => {
       case "show":
         return media.title || "Unknown Show";
       case "artist":
+        // For artists, return the artist name
         return media.title || "Unknown Artist";
       case "album":
-        return media.parent_title || media.title || "Unknown Album";
+        // For albums, display the album title
+        return media.title || media.parent_title || "Unknown Album";
       case "track":
-        return media.grandparent_title || media.title || "Unknown Track";
+        // For tracks, display the track title
+        return media.title || "Unknown Track";
       default:
         return media.title || "Unknown";
     }
   }
 
-  // Get display subtitle based on media type
+  // Updated getDisplaySubtitle function for MediaCard.jsx
   function getDisplaySubtitle() {
     // Safety check for media object
     if (!media) return "";
@@ -427,11 +430,13 @@ const MediaCard = ({ media }) => {
       case "show":
         return `Season ${media.season || 1}`;
       case "artist":
-        return "Artist";
+        return "Artist"; // Simple label for artist
       case "album":
-        return media.year || "Album";
+        // For albums, show artist name
+        return media.parent_title || "Unknown Artist";
       case "track":
-        return media.parent_title || "Track";
+        // For tracks, show artist name
+        return media.grandparent_title || "Unknown Artist";
       default:
         return "";
     }
@@ -629,6 +634,10 @@ const MediaCard = ({ media }) => {
             {displaySubtitle && (
               <span className="text-accent">{displaySubtitle}</span>
             )}
+            {(getMediaType() === "album" || getMediaType() === "track") &&
+              media.year && (
+                <span className="text-theme-muted">({media.year})</span>
+              )}
             {media.duration && (
               <div className="flex items-center gap-1 text-gray-400">
                 <Icons.Clock3 size={14} />

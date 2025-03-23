@@ -215,6 +215,12 @@ const MediaModal = ({ media, onClose, apiKey }) => {
         return Icons.Tv2;
       case "season":
         return Icons.List;
+      case "artist":
+        return Icons.Mic2; // Icon for artist
+      case "album":
+        return Icons.Disc; // Icon for album
+      case "track":
+        return Icons.Music; // Icon for track
       default:
         return Icons.Film;
     }
@@ -284,6 +290,96 @@ const MediaModal = ({ media, onClose, apiKey }) => {
             {displayData.studio && (
               <div className="space-y-1.5">
                 <h3 className="text-theme-muted text-sm">Studio</h3>
+                <p className="text-theme">{displayData.studio}</p>
+              </div>
+            )}
+            {displayData.genres && displayData.genres.length > 0 && (
+              <div className="space-y-1.5">
+                <h3 className="text-theme-muted text-sm">Genres</h3>
+                <div className="flex flex-wrap gap-2">
+                  {displayData.genres.map((genre) => (
+                    <span
+                      key={genre}
+                      className="px-2 py-1 rounded-lg border border-accent/30 bg-accent-light text-accent text-sm"
+                    >
+                      {genre}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        );
+      case "artist":
+        return (
+          <>
+            {displayData.genres && displayData.genres.length > 0 && (
+              <div className="space-y-1.5">
+                <h3 className="text-theme-muted text-sm">Genres</h3>
+                <div className="flex flex-wrap gap-2">
+                  {displayData.genres.map((genre) => (
+                    <span
+                      key={genre}
+                      className="px-2 py-1 rounded-lg border border-accent/30 bg-accent-light text-accent text-sm"
+                    >
+                      {genre}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        );
+      case "album":
+        return (
+          <>
+            {displayData.studio && (
+              <div className="space-y-1.5">
+                <h3 className="text-theme-muted text-sm">Label</h3>
+                <p className="text-theme">{displayData.studio}</p>
+              </div>
+            )}
+            {displayData.parent_title && (
+              <div className="space-y-1.5">
+                <h3 className="text-theme-muted text-sm">Artist</h3>
+                <p className="text-theme">{displayData.parent_title}</p>
+              </div>
+            )}
+            {displayData.genres && displayData.genres.length > 0 && (
+              <div className="space-y-1.5">
+                <h3 className="text-theme-muted text-sm">Genres</h3>
+                <div className="flex flex-wrap gap-2">
+                  {displayData.genres.map((genre) => (
+                    <span
+                      key={genre}
+                      className="px-2 py-1 rounded-lg border border-accent/30 bg-accent-light text-accent text-sm"
+                    >
+                      {genre}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        );
+      case "track":
+        return (
+          <>
+            {displayData.parent_title && (
+              <div className="space-y-1.5">
+                <h3 className="text-theme-muted text-sm">Album</h3>
+                <p className="text-theme">{displayData.parent_title}</p>
+              </div>
+            )}
+            {displayData.grandparent_title && (
+              <div className="space-y-1.5">
+                <h3 className="text-theme-muted text-sm">Artist</h3>
+                <p className="text-theme">{displayData.grandparent_title}</p>
+              </div>
+            )}
+            {displayData.studio && (
+              <div className="space-y-1.5">
+                <h3 className="text-theme-muted text-sm">Label</h3>
                 <p className="text-theme">{displayData.studio}</p>
               </div>
             )}

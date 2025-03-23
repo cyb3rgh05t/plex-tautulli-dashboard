@@ -41,7 +41,6 @@ const BASE_VARIABLES = [
     name: "is_watching",
     description: "Watching status ('Watching'/'Watched')",
   },
-  { name: "state", description: "Current watching state (watching/watched)" },
   { name: "media_type", description: "Type of media (Movie/Episode)" },
   {
     name: "progress_percent",
