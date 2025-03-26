@@ -1,4 +1,3 @@
-// update-release.js
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -31,8 +30,16 @@ function getVersionFromFile() {
     }
 
     // Extract the base version from the file
-    const version = versionMatch[1];
-    console.log(`Found version in release.js: ${version}`);
+    let version = versionMatch[1];
+
+    // Add -dev suffix for development mode
+    if (isDev) {
+      version = `${version}-dev`;
+      console.log(`Development mode - using version: ${version}`);
+    } else {
+      console.log(`Production mode - using version: ${version}`);
+    }
+
     return version;
   } catch (error) {
     console.log("Error reading release.js:", error);
