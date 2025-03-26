@@ -1,4 +1,4 @@
-# Use an official Node runtime as the base image
+# Development Dockerfile - optimized for faster rebuilds and development
 FROM node:20-alpine
 
 LABEL maintainer="cyb3rgh05t"
@@ -20,13 +20,15 @@ COPY update-release.js ./
 RUN npm install
 
 # Update package.json with the correct version from release.js
-# Set NODE_ENV based on build arg (default to development)
-ARG NODE_ENV=development
-ENV NODE_ENV=${NODE_ENV}
+# Set NODE_ENV to development
+ENV NODE_ENV=development
 RUN node update-release.js
 
 # Copy the rest of the application code
 COPY . .
+
+# Create configs directory and poster cache directory
+RUN mkdir -p configs cache/posters
 
 # Expose the ports the app runs on
 EXPOSE 3005 3006
@@ -34,5 +36,5 @@ EXPOSE 3005 3006
 # Install concurrently to run multiple commands
 RUN npm install -g concurrently
 
-# Command to run the application (using appropriate npm script based on NODE_ENV)
-CMD ["sh", "-c", "if [ \"$NODE_ENV\" = \"development\" ]; then npm run dev; else npm run start; fi"]
+# Command to run the development environment (frontend + backend)
+CMD ["npm", "run", "dev"]

@@ -1,0 +1,74 @@
+# Multi-stage build for production
+FROM node:20-alpine AS builder
+
+LABEL maintainer="cyb3rgh05t"
+LABEL org.opencontainers.image.source="https://github.com/cyb3rgh05t/plex-tautulli-dashboard"
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files for dependency installation
+COPY package*.json ./
+COPY release.js ./
+COPY update-release.js ./
+
+# Install dependencies
+RUN npm ci
+
+# Set production environment
+ENV NODE_ENV=production
+
+# Update version number
+RUN node update-release.js
+
+# Copy source files
+COPY . .
+
+# Build the application
+RUN npm run build
+
+# Create the production image
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files to install production dependencies only
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Copy built files from builder stage
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/release.js ./
+COPY --from=builder /app/server.js ./
+COPY --from=builder /app/src/utils ./src/utils
+
+# Add code to serve static files (if not already in server.js)
+RUN echo "\n\n\
+    // Serve static files from the dist directory\n\
+    const DIST_DIR = path.join(__dirname, 'dist');\n\
+    if (fs.existsSync(DIST_DIR)) {\n\
+    logInfo(\`Serving static files from: \${DIST_DIR}\`);\n\
+    app.use(express.static(DIST_DIR));\n\
+    \n\
+    // Handle client-side routing\n\
+    app.get('*', (req, res, next) => {\n\
+    // Skip API routes\n\
+    if (req.path.startsWith('/api/')) {\n\
+    return next();\n\
+    }\n\
+    \n\
+    res.sendFile(path.join(DIST_DIR, 'index.html'));\n\
+    });\n\
+    }" >> server.js.additional
+
+# Create configs directory
+RUN mkdir -p configs cache/posters
+
+# Expose server port
+EXPOSE 3006
+
+# Set environment to production
+ENV NODE_ENV=production
+
+# Run the server
+CMD ["node", "server.js"]

@@ -45,34 +45,53 @@ jobs:
           echo "RELEASE_VERSION=$VERSION" >> $GITHUB_ENV
           echo "::set-output name=version::$VERSION"
 
-      - name: Determine Image Tags
+      - name: Determine Image Tags and Dockerfile
         id: prep
         run: |
           REPO=$CI_REPOSITORY_NAME
           DOCKER_IMAGE=ghcr.io/${{ github.repository_owner }}/${REPO}
           RELEASE_VERSION=${{ env.RELEASE_VERSION }}
 
+          # Default to production Dockerfile
+          DOCKERFILE="Dockerfile.production"
+
           # Check for workflow_dispatch with inputs first
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.tag }}" ]]; then
             VERSION="${{ github.event.inputs.tag }}"
             TAGS="${DOCKER_IMAGE}:${VERSION},${DOCKER_IMAGE}:latest"
+            # For tags, use production Dockerfile
+            DOCKERFILE="Dockerfile.production"
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.branch }}" ]]; then
             VERSION="${{ github.event.inputs.branch }}"
             TAGS="${DOCKER_IMAGE}:${VERSION}"
+            # For workflow dispatch, use the appropriate Dockerfile based on branch
+            if [[ "${{ github.event.inputs.branch }}" == "dev" ]]; then
+              DOCKERFILE="Dockerfile.development"
+            else
+              DOCKERFILE="Dockerfile.production"
+            fi
           # Then check git refs
           elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
             # For main branch, use both the release version and latest
             TAGS="${DOCKER_IMAGE}:${RELEASE_VERSION},${DOCKER_IMAGE}:latest"
+            # Use production Dockerfile for main branch
+            DOCKERFILE="Dockerfile.production"
           elif [[ "$GITHUB_REF" == refs/heads/dev ]]; then
             # For dev branch, only use dev tag
             TAGS="${DOCKER_IMAGE}:dev"
+            # Use development Dockerfile for dev branch
+            DOCKERFILE="Dockerfile.development"
           elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
             TAGS="${DOCKER_IMAGE}:${VERSION},${DOCKER_IMAGE}:latest"
+            # Use production Dockerfile for tagged releases
+            DOCKERFILE="Dockerfile.production"
           else
             # For any other branch, use branch name
             BRANCH="${GITHUB_REF#refs/heads/}"
             TAGS="${DOCKER_IMAGE}:${BRANCH}"
+            # Default to development Dockerfile for other branches
+            DOCKERFILE="Dockerfile.development"
           fi
 
           CREATED=$(date +'%Y-%m-%dT%H:%M:%SZ')
@@ -81,7 +100,9 @@ jobs:
           echo "::set-output name=title::${GITHUB_REPOSITORY}"
           echo "::set-output name=version::${RELEASE_VERSION}"
           echo "::set-output name=created::${CREATED}"
+          echo "::set-output name=dockerfile::${DOCKERFILE}"
           echo "DOCKER_TAGS=${TAGS}" >> $GITHUB_ENV
+          echo "DOCKERFILE=${DOCKERFILE}" >> $GITHUB_ENV
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -114,7 +135,7 @@ jobs:
         with:
           builder: ${{ steps.buildx.outputs.name }}
           context: .
-          file: ./Dockerfile
+          file: ./${{ env.DOCKERFILE }}
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           cache-from: type=local,src=/tmp/.buildx-cache
@@ -198,6 +219,11 @@ jobs:
                 {
                   "name": "📋 Tags",
                   "value": "$IMAGE_TAGS",
+                  "inline": false
+                },
+                {
+                  "name": "🔧 Dockerfile",
+                  "value": "${{ env.DOCKERFILE }}",
                   "inline": false
                 }
               ],
