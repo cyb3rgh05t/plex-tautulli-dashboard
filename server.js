@@ -3915,6 +3915,9 @@ const productionBanner = (version) => {
     "                " +
     chalk.red.bold("*** PRODUCTION ***") +
     "                  " +
+    chalk.cyan("║\n") +
+    chalk.cyan("║") +
+    "                                                    " +
     chalk.white("║\n") +
     chalk.white("╚════════════════════════════════════════════════════╝")
   );
@@ -3969,8 +3972,31 @@ const selectBanner = (version) => {
 };
 
 const PORT = process.env.PORT || 3006;
+
+// Serve static files from the dist directory in production
+if (process.env.NODE_ENV === "production") {
+  const DIST_DIR = path.join(__dirname, "dist");
+  if (fs.existsSync(DIST_DIR)) {
+    logInfo(`Serving static files from: ${DIST_DIR}`);
+    app.use(express.static(DIST_DIR));
+
+    // Handle client-side routing - serve index.html for any unknown paths
+    app.get("*", (req, res, next) => {
+      // Skip API routes
+      if (req.path.startsWith("/api/")) {
+        return next();
+      }
+
+      res.sendFile(path.join(DIST_DIR, "index.html"));
+    });
+  } else {
+    logWarn(`Production build directory not found: ${DIST_DIR}`);
+    logWarn('Run "npm run build" to create the production build');
+  }
+}
+
 app.listen(PORT, "0.0.0.0", () => {
-  console.clear();
+  // console.clear();
 
   // Display the appropriate banner based on environment
   console.log(selectBanner(appVersion));
