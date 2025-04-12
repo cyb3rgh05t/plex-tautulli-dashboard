@@ -1,9 +1,11 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
+import { useTheme } from "../../context/ThemeContext";
 import * as Icons from "lucide-react";
 
 const ThemedTabBar = () => {
   const location = useLocation();
+  const { themeName, accentColor } = useTheme();
 
   // Define tabs with their routes, icons, and labels
   const mainTabs = [
@@ -24,51 +26,65 @@ const ThemedTabBar = () => {
     const isActive = location.pathname === tab.to;
     const Icon = tab.icon;
 
+    // Active styling with transparent background and accent borders
+    const activeClasses = "bg-transparent border border-accent";
+
     return (
       <Link
         key={tab.to}
         to={tab.to}
         className={`
-          relative flex items-center gap-2 px-4 py-3 rounded-lg transition-colors
+          relative flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200
           ${
             isActive
-              ? "bg-accent-light border border-accent/20 text-white"
-              : "text-gray-400 hover:text-white hover:bg-gray-700/50 hover:border-accent/10 border border-transparent"
+              ? activeClasses
+              : "text-gray-400 hover:text-white hover:bg-gray-800/40 border border-transparent"
           }
+          group
         `}
-        style={isActive ? { color: "white" } : {}}
+        aria-current={isActive ? "page" : undefined}
       >
-        {/* Add subtle accent glow for active tabs */}
-        {isActive && (
-          <div className="absolute inset-0 rounded-lg -z-10 opacity-20 blur-sm bg-accent"></div>
-        )}
+        {/* Icon - accent color when active */}
+        <Icon
+          size={18}
+          className={`transition-colors ${
+            isActive ? "text-accent" : "text-gray-400 group-hover:text-gray-200"
+          }`}
+        />
 
-        {Icon && (
-          <Icon
-            size={20}
-            className={
-              isActive ? "text-accent" : "text-gray-400 group-hover:text-white"
-            }
-          />
-        )}
-        <span className="font-medium">{tab.label}</span>
+        {/* Label with accent color when active */}
+        <span
+          className={`
+          font-medium transition-colors
+          ${isActive ? "text-accent" : "group-hover:text-white"}
+        `}
+        >
+          {tab.label}
+        </span>
       </Link>
     );
   };
 
   return (
-    <nav className="border-b border-gray-800/50 backdrop-blur-sm relative bg-gray-900/70">
-      {/* Subtle accent gradient background effect */}
-      <div className="absolute inset-0 opacity-10 pointer-events-none bg-accent"></div>
+    <nav className="sticky top-16 z-40 border-b border-gray-800/70 shadow-sm bg-theme">
+      {/* Use theme-bg classes for consistent background across themes */}
+      <div className="absolute inset-0 -z-10 bg-theme-modal">
+        {/* Subtle accent gradient effect */}
+        <div className="absolute inset-0 opacity-10 bg-gradient-to-r from-accent via-transparent to-accent"></div>
+      </div>
 
-      <div className="container mx-auto px-4 py-2">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 hide-scrollbar">
-          {mainTabs.map(renderTab)}
+      <div className="container mx-auto px-4">
+        <div className="flex items-center overflow-x-auto py-0.5 hide-scrollbar scrollbar-none">
+          {/* Main tabs - wrapping in a div for better mobile scrolling */}
+          <div className="flex items-center gap-1 py-1">
+            {mainTabs.map(renderTab)}
+          </div>
 
-          <div className="ml-auto flex items-center gap-2">
-            {/* Subtle vertical divider with accent color */}
-            <div className="h-6 w-px mx-1 opacity-30 bg-accent"></div>
+          <div className="ml-auto flex items-center gap-1">
+            {/* Divider with enhanced styling */}
+            <div className="h-6 mx-2 w-px bg-gradient-to-b from-transparent via-accent/30 to-transparent"></div>
 
+            {/* Settings tabs */}
             {settingsTabs.map(renderTab)}
           </div>
         </div>

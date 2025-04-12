@@ -128,8 +128,8 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="p-2 rounded-lg border  border-accent bg-accent text-theme-muted 
-          hover:bg-accent-light hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="p-2 rounded-lg border border-accent bg-gray-800/50 text-theme-muted 
+          hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Icons.ChevronLeft size={16} />
       </button>
