@@ -2,6 +2,12 @@
 
 All notable changes to the Plex & Tautulli Dashboard will be documented in this file.
 
+## [2.4.1] - 2025-04-12
+
+### Fixed
+
+- Theme Selection State on Browser reload
+
 ## [2.4.0] - 2025-04-12
 
 ### Added

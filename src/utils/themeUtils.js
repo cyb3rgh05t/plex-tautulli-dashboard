@@ -3,6 +3,19 @@
  * This file contains functions for direct CSS manipulation
  */
 
+// Initialize theme if marker exists from index.html
+if (typeof window !== "undefined" && window.__applyCyberpunkTheme) {
+  // Use setTimeout to ensure DOM is ready
+  setTimeout(() => {
+    applyCyberpunkTheme();
+    // Clean up the marker
+    delete window.__applyCyberpunkTheme;
+    // Remove temporary style if it exists
+    const tempStyle = document.getElementById("temp-cyberpunk-style");
+    if (tempStyle) tempStyle.remove();
+  }, 0);
+}
+
 /**
  * Apply Cyberpunk theme with direct CSS injection
  * This ensures the theme is properly displayed by forcing styles
@@ -146,6 +159,19 @@ export const removeCyberpunkTheme = () => {
   const styleElement = document.getElementById("cyberpunk-theme-override");
   if (styleElement) {
     styleElement.remove();
+  }
+
+  // Also remove any lingering cyberpunk classes
+  const html = document.documentElement;
+  const body = document.body;
+
+  if (html) {
+    html.classList.remove("theme-cyberpunk");
+    html.removeAttribute("data-cyberpunk");
+  }
+
+  if (body) {
+    body.classList.remove("theme-cyberpunk");
   }
 };
 
