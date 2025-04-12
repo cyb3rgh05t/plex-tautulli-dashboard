@@ -81,6 +81,30 @@
           document.body.classList.add("theme-" + theme);
         });
 
+        // Special handling for Cyberpunk theme
+        if (theme === "cyberpunk") {
+          // Create a marker for React to know we need to apply the cyberpunk theme
+          window.__applyCyberpunkTheme = true;
+
+          // Apply a basic version of cyberpunk styling immediately
+          const style = document.createElement("style");
+          style.id = "temp-cyberpunk-style";
+          style.textContent = `
+            /* Basic cyberpunk styling until React loads */
+            body.theme-cyberpunk {
+              background: linear-gradient(135deg, #160133 0%, #0c0221 40%, #06021a 80%, #000000 100%) !important;
+              background-color: #160133 !important;
+            }
+            :root.theme-cyberpunk {
+              --accent-color: 191, 0, 255 !important;
+              --button-color: #e0ff00 !important;
+              --button-color-hover: #bf00ff !important;
+              --text: #d6c5ff !important;
+            }
+          `;
+          document.head.appendChild(style);
+        }
+
         console.log("Initial theme applied:", theme, "with accent:", accent);
       })();
     </script>

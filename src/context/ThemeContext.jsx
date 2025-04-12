@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { logInfo, logError, logDebug } from "../utils/logger";
+import { applyCyberpunkTheme, removeCyberpunkTheme } from "../utils/themeUtils";
 
 // Create context
 const ThemeContext = createContext(null);
@@ -226,6 +227,14 @@ export const ThemeProvider = ({ children }) => {
       setAccentColor(getThemeDefaultAccent(theme));
     }
 
+    // Handle special theme cases
+    if (theme === "cyberpunk") {
+      applyCyberpunkTheme();
+    } else if (themeName === "cyberpunk") {
+      // Clean up cyberpunk theme if we're switching away from it
+      removeCyberpunkTheme();
+    }
+
     setThemeName(theme);
     saveToStorage(THEME_STORAGE_KEY, theme);
   };
@@ -303,6 +312,17 @@ export const ThemeProvider = ({ children }) => {
       // Set data attributes for easy inspection
       htmlElement.setAttribute("data-theme", themeName);
       htmlElement.setAttribute("data-accent", accentColor);
+
+      // Handle special themes with direct CSS manipulation
+      if (themeName === "cyberpunk") {
+        applyCyberpunkTheme();
+      } else {
+        // Make sure to remove any special theme overrides
+        removeCyberpunkTheme();
+      }
+
+      // Force a repaint to ensure all styles are properly applied
+      const forceRepaint = bodyElement.offsetHeight;
 
       logInfo("Applied theme via CSS classes", { themeName, accentColor });
     } catch (error) {

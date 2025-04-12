@@ -104,9 +104,29 @@ try {
   logWarn("Query persistence unavailable:", err.message);
 }
 
-// Wrapper to apply theme classes safely
 const ThemeWrapper = ({ children }) => {
-  const { theme, accentColor, isLoading } = useTheme();
+  const { themeName, accentColor, isLoading } = useTheme();
+
+  // Add this useEffect to force a reflow when theme changes
+  useEffect(() => {
+    if (!isLoading) {
+      // Force a reflow/repaint when theme changes by accessing offsetHeight
+      document.body.style.display = "none";
+      const reflow = document.body.offsetHeight;
+      document.body.style.display = "";
+
+      // Wait for next frame and apply a class to signal completed theme change
+      requestAnimationFrame(() => {
+        document.documentElement.classList.add("theme-transition-complete");
+        // Remove class after animation frame to allow future transitions
+        setTimeout(() => {
+          document.documentElement.classList.remove(
+            "theme-transition-complete"
+          );
+        }, 100);
+      });
+    }
+  }, [themeName, accentColor, isLoading]);
 
   // Only apply theme-specific inline styles once theme is loaded
   const wrapperStyle = !isLoading
@@ -123,7 +143,7 @@ const ThemeWrapper = ({ children }) => {
 
   return (
     <div
-      className={`theme-${theme} accent-${accentColor}`}
+      className={`theme-${themeName} accent-${accentColor}`}
       style={wrapperStyle}
     >
       {children}

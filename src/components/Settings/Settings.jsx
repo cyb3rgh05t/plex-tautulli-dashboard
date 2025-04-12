@@ -13,6 +13,7 @@ import BackupSettings from "./BackupSettings";
 import CacheManager from "./CacheManager";
 import LoggingSettings from "./LoggingSettings";
 import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
+import { appVersion } from "../../../release.js";
 
 // Styled tab component for settings
 const SettingsTab = ({ active, onClick, icon: Icon, label }) => (
@@ -391,15 +392,15 @@ const SettingsPage = () => {
     }
   };
 
-  // Tabs definition
+  // Tabs definition - Rename "Reset Application" to "About"
   const tabs = [
     { id: "servers", label: "Server Configuration", icon: Icons.Server },
+    { id: "api", label: "API Documentation", icon: Icons.FileCode },
     { id: "theme", label: "Theme Settings", icon: Icons.Palette },
-    { id: "logging", label: "Logging", icon: Icons.FileText },
+    { id: "logging", label: "Debug Logging", icon: Icons.FileText },
     { id: "cache", label: "Cache Management", icon: Icons.Database },
     { id: "backup", label: "Backup & Restore", icon: Icons.Save },
-    { id: "api", label: "API Documentation", icon: Icons.FileCode },
-    { id: "reset", label: "Reset Application", icon: Icons.AlertTriangle },
+    { id: "about", label: "About", icon: Icons.Info }, // Changed from reset to about
   ];
 
   // Only allow accent customization for dark theme
@@ -828,39 +829,195 @@ const SettingsPage = () => {
           </ThemedCard>
         );
 
-      case "reset":
+      case "about":
         return (
-          <ThemedCard
-            title="Reset Application"
-            icon={Icons.AlertTriangle}
-            useAccentBorder={true}
-            className="p-6"
-          >
-            <div className="space-y-6">
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-                <p className="text-yellow-400 mb-4">
-                  Warning: This will reset all settings and configurations. You
-                  will need to set up the application again.
-                </p>
-                <p className="text-theme-muted mb-4">This action will:</p>
-                <ul className="list-disc list-inside text-theme-muted mb-4 space-y-1">
-                  <li>Clear all saved server configurations</li>
-                  <li>Reset all format templates</li>
-                  <li>Clear saved library sections</li>
-                  <li>Return to the initial setup screen</li>
-                </ul>
-                <ThemedButton
-                  onClick={handleReset}
-                  variant="danger"
-                  icon={resetConfirm ? Icons.AlertOctagon : Icons.RefreshCw}
-                >
-                  {resetConfirm
-                    ? "Confirm Reset (This cannot be undone)"
-                    : "Reset All Settings"}
-                </ThemedButton>
+          <div className="space-y-6">
+            {/* About App Section */}
+            <ThemedCard
+              title="About"
+              icon={Icons.Info}
+              useAccentBorder={true}
+              className="p-6"
+            >
+              <div className="flex flex-col md:flex-row gap-6 items-start">
+                {/* App Logo/Icon */}
+                <div className="flex-shrink-0 bg-accent-light/10 p-6 rounded-lg border border-accent">
+                  <div className="relative w-28 h-28 mx-auto flex items-center justify-center">
+                    <Icons.FilmIcon size={72} className="text-accent-base" />
+                    <Icons.BarChart2
+                      size={28}
+                      className="text-accent-base absolute bottom-0 right-0"
+                    />
+                  </div>
+                </div>
+
+                {/* App Information */}
+                <div className="flex-1 space-y-4">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white mb-1">
+                      Plex & Tautulli Dashboard
+                    </h2>
+                    <div className="flex items-center gap-2 text-theme-muted">
+                      <Icons.Tag size={14} className="text-accent-base" />
+                      <span className="text-accent-base font-medium">
+                        v{appVersion}
+                        {process.env.NODE_ENV === "development" ? "-dev" : ""}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-theme-muted">
+                    A modern, elegant dashboard for monitoring your Plex Media
+                    Server and Tautulli statistics, featuring a dark-themed UI
+                    with customizable displays and real-time monitoring.
+                  </p>
+
+                  <div className="pt-2 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Icons.Github size={16} className="text-accent-base" />
+                      <span className="text-theme-muted">Github: </span>
+                      <a
+                        href="https://github.com/cyb3rgh05t/plex-tautulli-dashboard"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-accent-base hover:text-accent-hover"
+                      >
+                        cyb3rgh05t/plex-tautulli-dashboard
+                      </a>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Icons.User size={16} className="text-accent-base" />
+                      <span className="text-theme-muted">Author: </span>
+                      <a
+                        href="https://github.com/cyb3rgh05t"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-accent-base hover:text-accent-hover"
+                      >
+                        cyb3rgh05t
+                      </a>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Icons.Scale size={16} className="text-accent-base" />
+                      <span className="text-theme-muted">License: </span>
+                      <span className="text-white">MIT</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-          </ThemedCard>
+
+              {/* Features Section */}
+              <div className="mt-6 pt-6 border-t border-accent/20">
+                <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                  <Icons.CheckSquare size={18} className="text-accent-base" />
+                  Features
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-gray-800/40 p-3 rounded-lg border border-accent/20 flex items-start gap-3">
+                    <Icons.Activity
+                      size={16}
+                      className="text-accent-base mt-0.5"
+                    />
+                    <div>
+                      <span className="text-white font-medium">
+                        Real-time Activity
+                      </span>
+                      <p className="text-theme-muted text-sm">
+                        Live monitoring of streams and downloads
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-800/40 p-3 rounded-lg border border-accent/20 flex items-start gap-3">
+                    <Icons.Film size={16} className="text-accent-base mt-0.5" />
+                    <div>
+                      <span className="text-white font-medium">
+                        Recently Added
+                      </span>
+                      <p className="text-theme-muted text-sm">
+                        Showcases newest content in your libraries
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-800/40 p-3 rounded-lg border border-accent/20 flex items-start gap-3">
+                    <Icons.Users
+                      size={16}
+                      className="text-accent-base mt-0.5"
+                    />
+                    <div>
+                      <span className="text-white font-medium">
+                        User Statistics
+                      </span>
+                      <p className="text-theme-muted text-sm">
+                        Track user activity and watch history
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-800/40 p-3 rounded-lg border border-accent/20 flex items-start gap-3">
+                    <Icons.Palette
+                      size={16}
+                      className="text-accent-base mt-0.5"
+                    />
+                    <div>
+                      <span className="text-white font-medium">
+                        Customizable UI
+                      </span>
+                      <p className="text-theme-muted text-sm">
+                        13 themes with selectable accent colors
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Acknowledgements */}
+              <div className="mt-6 pt-4 border-t border-accent/20">
+                <p className="text-xs text-theme-muted">
+                  This application is built with React, Tailwind CSS, and other
+                  open-source libraries. Special thanks to the Plex and Tautulli
+                  communities.
+                </p>
+              </div>
+            </ThemedCard>
+
+            {/* Danger Zone - Reset Application */}
+            <ThemedCard
+              title="Danger Zone"
+              icon={Icons.AlertTriangle}
+              useAccentBorder={true}
+              className="p-6"
+            >
+              <div className="space-y-6">
+                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+                  <p className="text-yellow-400 mb-4">
+                    Warning: This will reset all settings and configurations.
+                    You will need to set up the application again.
+                  </p>
+                  <p className="text-theme-muted mb-4">This action will:</p>
+                  <ul className="list-disc list-inside text-theme-muted mb-4 space-y-1">
+                    <li>Clear all saved server configurations</li>
+                    <li>Reset all format templates</li>
+                    <li>Clear saved library sections</li>
+                    <li>Return to the initial setup screen</li>
+                  </ul>
+                  <ThemedButton
+                    onClick={handleReset}
+                    variant="danger"
+                    icon={resetConfirm ? Icons.AlertOctagon : Icons.RefreshCw}
+                  >
+                    {resetConfirm
+                      ? "Confirm Reset (This cannot be undone)"
+                      : "Reset All Settings"}
+                  </ThemedButton>
+                </div>
+              </div>
+            </ThemedCard>
+          </div>
         );
 
       default:

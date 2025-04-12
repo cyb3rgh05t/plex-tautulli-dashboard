@@ -10,6 +10,10 @@ import { appVersion } from "../../../release.js";
 import axios from "axios";
 import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 
+const displayVersion = `v${appVersion}${
+  process.env.NODE_ENV === "development" ? "-dev" : ""
+}`;
+
 /**
  * Status indicator component for the footer
  */
@@ -202,7 +206,7 @@ const ThemedDashboardLayout = () => {
               <div className="bg-accent-light/20 rounded-md px-2 py-1 border border-accent/20">
                 <p className="flex items-center gap-1">
                   <Icons.Palette size={14} className="text-accent-base" />
-                  <span className="text-white">{appVersion}</span>
+                  <span className="text-white">{displayVersion}</span>
                   <span className="text-accent-base ml-1 font-medium">
                     {themeName === "dark"
                       ? capitalizeFirstLetter(accentColor)

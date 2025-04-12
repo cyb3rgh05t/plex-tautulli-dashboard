@@ -84,7 +84,16 @@ function getAppVersion() {
     const versionFilePath = path.join(__dirname, "release.js");
     const versionFileContent = fs.readFileSync(versionFilePath, "utf8");
     const versionMatch = versionFileContent.match(/appVersion = "([^"]+)"/);
-    return versionMatch && versionMatch[1] ? versionMatch[1] : "unknown";
+
+    // Get the base version from the file
+    const baseVersion =
+      versionMatch && versionMatch[1] ? versionMatch[1] : "unknown";
+
+    // Add '-dev' suffix in development environment
+    const isDevelopment = process.env.NODE_ENV === "development";
+    const fullVersion = isDevelopment ? `${baseVersion}-dev` : baseVersion;
+
+    return fullVersion;
   } catch (error) {
     logError("Error reading version", error);
     return "unknown";

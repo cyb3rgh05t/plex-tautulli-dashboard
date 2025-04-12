@@ -52,3 +52,41 @@
   --text-hover: var(--theme-text-primary);
   --text-muted: var(--theme-text-muted);
 }
+
+/* Additional fixes for theme transitions */
+html.theme-transition-complete * {
+  transition: none !important;
+}
+
+/* Force the root level CSS variables to be inherited properly */
+html,
+body {
+  color-scheme: dark;
+}
+
+html[data-theme] {
+  /* Ensure all root level variables defined in theme-presets.css are available at all levels */
+  --main-bg-color: var(--theme-bg-primary);
+  --modal-bg-color: var(--theme-bg-secondary);
+  --drop-down-menu-bg: var(--theme-bg-tertiary);
+  --text: var(--theme-text-primary);
+  --text-hover: var(--theme-text-primary);
+  --text-muted: var(--theme-text-muted);
+}
+
+/* Force higher specificity on themed components */
+html[data-theme="cyberpunk"] body.theme-cyberpunk,
+html[data-theme="hotline"] body.theme-hotline,
+html[data-theme="aquamarine"] body.theme-aquamarine,
+html[data-theme="maroon"] body.theme-maroon,
+html[data-theme="hotpink"] body.theme-hotpink,
+html[data-theme="dracula"] body.theme-dracula,
+html[data-theme="plex"] body.theme-plex,
+html[data-theme="overseerr"] body.theme-overseerr,
+html[data-theme="onedark"] body.theme-onedark,
+html[data-theme="nord"] body.theme-nord,
+html[data-theme="spacegray"] body.theme-spacegray,
+html[data-theme="organizr"] body.theme-organizr {
+  /* This ensures body theme styles override any conflicts */
+  background-attachment: fixed !important;
+}
