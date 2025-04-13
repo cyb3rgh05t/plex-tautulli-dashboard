@@ -16,7 +16,7 @@
     "extract-changelog": "node scripts/extract-changelog.js"
   },
   "dependencies": {
-    "axios": "^1.7.9",
+    "axios": "^1.8.4",
     "chalk": "^5.4.1",
     "concurrently": "^8.2.2",
     "cors": "^2.8.5",
