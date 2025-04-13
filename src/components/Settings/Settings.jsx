@@ -14,6 +14,7 @@ import CacheManager from "./CacheManager";
 import LoggingSettings from "./LoggingSettings";
 import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 import { appVersion } from "../../../scripts/release.js";
+import Logo from "../common/Logo"; // Import the Logo component
 
 // Styled tab component for settings
 const SettingsTab = ({ active, onClick, icon: Icon, label }) => (
@@ -840,10 +841,15 @@ const SettingsPage = () => {
               className="p-6"
             >
               <div className="flex flex-col md:flex-row gap-6 items-start">
-                {/* App Logo/Icon */}
+                {/* App Logo/Icon - Now uses the Logo component instead of FilmIcon */}
                 <div className="flex-shrink-0 bg-accent-light/10 p-6 rounded-lg border border-accent">
                   <div className="relative w-28 h-28 mx-auto flex items-center justify-center">
-                    <Icons.FilmIcon size={72} className="text-accent-base" />
+                    {/* Replace FilmIcon with our Logo component */}
+                    <Logo
+                      size={90}
+                      fillColor="#1f2937"
+                      strokeColor="rgb(var(--accent-color))"
+                    />
                     <Icons.BarChart2
                       size={28}
                       className="text-accent-base absolute bottom-0 right-0"
@@ -908,7 +914,7 @@ const SettingsPage = () => {
                 </div>
               </div>
 
-              {/* Features Section */}
+              {/* Features Section - remains the same */}
               <div className="mt-6 pt-6 border-t border-accent/20">
                 <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
                   <Icons.CheckSquare size={18} className="text-accent-base" />
