@@ -5,6 +5,7 @@ import { useConfig } from "../../context/ConfigContext";
 import ThemeToggle from "../common/ThemeToggle";
 import ThemeSelector from "../common/ThemeSelector";
 import ServiceStatusBadge from "./ServiceStatusBadge";
+import Logo from "../common/Logo"; // Import the Logo component
 import * as Icons from "lucide-react";
 import { appVersion } from "../../../scripts/release.js";
 
@@ -38,7 +39,12 @@ const ThemedNavbar = () => {
               border: "1px solid rgba(var(--accent-color), 0.3)",
             }}
           >
-            <Icons.LayoutGrid className="text-accent-base" size={22} />
+            {/* Replace the grid icon with our custom Logo */}
+            <Logo
+              size={22}
+              fillColor="transparent"
+              strokeColor="rgb(var(--accent-color))"
+            />
           </div>
           <span className="hidden text-xl font-semibold text-white md:inline-block">
             Plex &amp; Tautulli Dashboard

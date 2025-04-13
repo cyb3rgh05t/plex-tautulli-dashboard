@@ -1,6 +1,7 @@
 import React from "react";
 import { useTheme } from "../../context/ThemeContext";
 import * as Icons from "lucide-react";
+import Logo from "../common/Logo"; // Import the Logo component
 
 /**
  * Enhanced loading screen component with improved progress bar and detailed information
@@ -68,10 +69,19 @@ const LoadingScreen = ({
         {/* Logo/Brand */}
         <div className="mb-8 flex items-center">
           <div
-            style={{ color: "var(--accent-color-base, var(--link-color))" }}
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(var(--accent-color), 0.2) 0%, rgba(var(--accent-color), 0.1) 100%)",
+              border: "1px solid rgba(var(--accent-color), 0.3)",
+            }}
             className="mr-3"
           >
-            <Icons.FilmIcon size={32} />
+            {/* Replace the grid icon with our custom Logo */}
+            <Logo
+              size={22}
+              fillColor="transparent"
+              strokeColor="rgb(var(--accent-color))"
+            />
           </div>
           <h1 className="text-2xl font-bold">Plex & Tautulli Dashboard</h1>
         </div>
