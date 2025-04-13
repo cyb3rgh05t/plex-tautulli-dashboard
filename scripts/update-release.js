@@ -79,7 +79,7 @@ function updatePackageJson(version) {
 // Update README.md version badge
 function updateReadmeBadge(version) {
   try {
-    const readmePath = path.join(__dirname, "README.md");
+    const readmePath = path.join(__dirname, "../README.md");
 
     if (!fs.existsSync(readmePath)) {
       console.log("README.md file not found, skipping badge update");
