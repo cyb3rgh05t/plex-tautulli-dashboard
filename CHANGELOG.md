@@ -2,6 +2,12 @@
 
 All notable changes to the Plex & Tautulli Dashboard will be documented in this file.
 
+## [2.4.2] - 2025-04-13
+
+### Added
+
+- Changelog Extraction for tagged releases
+
 ## [2.4.1] - 2025-04-12
 
 ### Fixed
