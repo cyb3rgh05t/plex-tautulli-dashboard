@@ -2,6 +2,18 @@
 
 All notable changes to the Plex & Tautulli Dashboard will be documented in this file.
 
+## [2.4.4] - 2025-04-13
+
+### Changed
+
+- Updated dependencies in package.json
+
+## [2.4.3] - 2025-04-13
+
+### Added
+
+- Project Logo - lol after 2 weeks
+
 ## [2.4.2] - 2025-04-13
 
 ### Added
