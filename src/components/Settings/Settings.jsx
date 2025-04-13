@@ -13,7 +13,7 @@ import BackupSettings from "./BackupSettings";
 import CacheManager from "./CacheManager";
 import LoggingSettings from "./LoggingSettings";
 import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
-import { appVersion } from "../../../release.js";
+import { appVersion } from "../../../scripts/release.js";
 
 // Styled tab component for settings
 const SettingsTab = ({ active, onClick, icon: Icon, label }) => (

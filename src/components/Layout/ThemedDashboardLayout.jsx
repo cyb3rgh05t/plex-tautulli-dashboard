@@ -6,7 +6,7 @@ import ThemedNavbar from "./ThemedNavbar";
 import ThemedTabBar from "./ThemedTabBar";
 import ThemeToggleFooter from "./ThemedToggleFooter";
 import * as Icons from "lucide-react";
-import { appVersion } from "../../../release.js";
+import { appVersion } from "../../../scripts/release.js";
 import axios from "axios";
 import { logError, logInfo, logDebug, logWarn } from "../../utils/logger";
 

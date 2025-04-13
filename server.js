@@ -81,7 +81,7 @@ const corsOptions = {
 // Version Management
 function getAppVersion() {
   try {
-    const versionFilePath = path.join(__dirname, "release.js");
+    const versionFilePath = path.join(__dirname, "./scripts/release.js");
     const versionFileContent = fs.readFileSync(versionFilePath, "utf8");
     const versionMatch = versionFileContent.match(/appVersion = "([^"]+)"/);
 

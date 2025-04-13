@@ -9,8 +9,8 @@ WORKDIR /app
 
 # Copy package files for dependency installation
 COPY package*.json ./
-COPY release.js ./
-COPY update-release.js ./
+COPY scripts/release.js ./scripts/
+COPY scripts/update-release.js ./scripts/
 
 # Install dependencies
 RUN npm ci
@@ -19,7 +19,7 @@ RUN npm ci
 ENV NODE_ENV=production
 
 # Update version number
-RUN node update-release.js
+RUN npm run update-version:prod
 
 # Copy source files
 COPY . .
@@ -38,7 +38,7 @@ RUN npm ci --omit=dev
 
 # Copy built files from builder stage
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/release.js ./
+COPY --from=builder /app/scripts/release.js ./scripts/
 COPY --from=builder /app/server.js ./
 COPY --from=builder /app/src/utils ./src/utils
 
