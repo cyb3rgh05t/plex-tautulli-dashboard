@@ -1,7 +1,7 @@
 {
   "name": "plex-tautulli-dashboard",
   "private": true,
-  "version": "2.4.1-dev",
+  "version": "2.4.2-dev",
   "type": "module",
   "scripts": {
     "dev:frontend": "vite --port 3005",
@@ -9,10 +9,11 @@
     "dev": "npm run update-version && concurrently \"npm run dev:frontend\" \"npm run dev:server\"",
     "build": "npm run update-version:prod && vite build",
     "preview": "vite preview",
-    "update-version": "cross-env NODE_ENV=development node update-release.js",
-    "update-version:prod": "cross-env NODE_ENV=production node update-release.js",
+    "update-version": "cross-env NODE_ENV=development node scripts/update-release.js",
+    "update-version:prod": "cross-env NODE_ENV=production node scripts/update-release.js",
     "start": "node server.js",
-    "start:prod": "npm run build && node server.js"
+    "start:prod": "npm run build && node server.js",
+    "extract-changelog": "node scripts/extract-changelog.js"
   },
   "dependencies": {
     "axios": "^1.7.9",

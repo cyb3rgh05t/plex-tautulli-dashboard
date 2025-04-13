@@ -50,7 +50,7 @@ function getVersionFromFile() {
 // Update package.json with the version from release.js
 function updatePackageJson(version) {
   try {
-    const packageJsonPath = path.join(__dirname, "package.json");
+    const packageJsonPath = path.join(__dirname, "../package.json");
 
     if (!fs.existsSync(packageJsonPath)) {
       console.log("Error: package.json file does not exist!");

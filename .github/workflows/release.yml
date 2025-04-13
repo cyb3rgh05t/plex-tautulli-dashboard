@@ -1,0 +1,273 @@
+name: Version and Tag Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "package.json"
+      - "CHANGELOG.md"
+  workflow_dispatch:
+    inputs:
+      force_update:
+        description: "Force update even if tag exists"
+        required: false
+        default: "false"
+      version_override:
+        description: "Override version (leave empty to use package.json)"
+        required: false
+        default: ""
+
+jobs:
+  create-tag-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PACKAGES }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Extract version from package.json
+        id: package-version
+        run: |
+          if [[ -n "${{ github.event.inputs.version_override }}" ]]; then
+            VERSION="${{ github.event.inputs.version_override }}"
+            echo "Using overridden version: $VERSION"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+            echo "Using version from package.json: $VERSION"
+          fi
+
+          # Remove -dev suffix if present
+          CLEAN_VERSION="${VERSION//-dev/}"
+          if [[ "$CLEAN_VERSION" != "$VERSION" ]]; then
+            echo "Removed -dev suffix: $CLEAN_VERSION"
+            VERSION="$CLEAN_VERSION"
+          fi
+
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "TAG_NAME=v$VERSION" >> $GITHUB_ENV
+
+      - name: Check if tag already exists
+        id: check-tag
+        run: |
+          if git ls-remote --tags origin | grep -q "refs/tags/${{ env.TAG_NAME }}$"; then
+            echo "TAG_EXISTS=true" >> $GITHUB_ENV
+            echo "Tag ${{ env.TAG_NAME }} already exists"
+          else
+            echo "TAG_EXISTS=false" >> $GITHUB_ENV
+            echo "Tag ${{ env.TAG_NAME }} does not exist yet"
+          fi
+
+      - name: Create extract-changelog.js script
+        run: |
+          mkdir -p scripts
+          cat > scripts/extract-changelog.js << 'EOF'
+          /**
+           * Extract version-specific release notes from CHANGELOG.md
+           */
+          import fs from 'fs';
+          import path from 'path';
+          import { fileURLToPath } from 'url';
+          import { createRequire } from 'module';
+
+          // Create require function for importing JSON
+          const require = createRequire(import.meta.url);
+
+          // Get current file path and directory
+          const __filename = fileURLToPath(import.meta.url);
+          const __dirname = path.dirname(__filename);
+
+          // Find project root
+          let projectRoot = __dirname;
+          while (!fs.existsSync(path.join(projectRoot, 'package.json')) && projectRoot !== path.dirname(projectRoot)) {
+            projectRoot = path.dirname(projectRoot);
+          }
+
+          // Get version from command line or package.json
+          let version = process.argv[2];
+
+          if (!version) {
+            try {
+              const packageJsonPath = path.join(projectRoot, 'package.json');
+              const packageJson = require(packageJsonPath);
+              version = packageJson.version;
+              console.log(`Using version from package.json: ${version}`);
+            } catch (error) {
+              console.error(`Error reading package.json: ${error.message}`);
+              process.exit(1);
+            }
+          }
+
+          // Remove "-dev" suffix if present
+          const cleanVersion = version.replace(/-dev$/, '');
+          if (cleanVersion !== version) {
+            console.log(`Removed "-dev" suffix: ${cleanVersion}`);
+            version = cleanVersion;
+          }
+
+          // Changelog path
+          const changelogPath = path.join(projectRoot, 'CHANGELOG.md');
+
+          try {
+            // Check if file exists
+            if (!fs.existsSync(changelogPath)) {
+              console.error('Changelog file not found');
+              process.exit(1);
+            }
+
+            // Read the file
+            const content = fs.readFileSync(changelogPath, 'utf8');
+            
+            // Find the version header
+            const versionHeader = `## [${version}]`;
+            const startIndex = content.indexOf(versionHeader);
+            
+            if (startIndex === -1) {
+              console.error(`Version ${version} not found in changelog`);
+              
+              // Create generic message for missing version
+              const genericMsg = `No specific release notes available for version ${version}.\n\nPlease refer to the CHANGELOG.md file for detailed information about this release.`;
+              fs.writeFileSync(path.join(projectRoot, 'RELEASE_NOTES.md'), genericMsg);
+              console.log(`Created generic release notes for ${version}`);
+              process.exit(0);
+            }
+            
+            // Find the start of the version header line
+            let headerLineStart = startIndex;
+            while (headerLineStart > 0 && content[headerLineStart - 1] !== '\n') {
+              headerLineStart--;
+            }
+            
+            // Find the next version header or end of file
+            const nextVersionMatch = content.substring(startIndex).match(/\n## \[\d+\.\d+\.\d+\]/);
+            const endIndex = nextVersionMatch 
+              ? startIndex + nextVersionMatch.index 
+              : content.length;
+            
+            // Extract the text including the header line up to the next version
+            const releaseNotes = content
+              .substring(headerLineStart, endIndex)
+              .trim();
+            
+            // Save to file
+            const outputPath = path.join(projectRoot, 'RELEASE_NOTES.md');
+            fs.writeFileSync(outputPath, releaseNotes);
+            console.log(`Release notes for ${version} saved to ${outputPath}`);
+            
+            // Also output to console for GitHub Actions
+            console.log('\n--- RELEASE NOTES ---\n');
+            console.log(releaseNotes);
+            console.log('\n--- END RELEASE NOTES ---\n');
+            
+          } catch (error) {
+            console.error(`Error extracting release notes: ${error.message}`);
+            process.exit(1);
+          }
+          EOF
+
+          chmod +x scripts/extract-changelog.js
+          echo "Created extract-changelog.js script"
+
+      - name: Extract release notes from CHANGELOG.md
+        id: extract-release-notes
+        run: |
+          echo "Looking for version $VERSION in CHANGELOG.md"
+
+          # Use our Node.js script to extract the release notes
+          node scripts/extract-changelog.js "$VERSION"
+
+          if [ -f "RELEASE_NOTES.md" ]; then
+            echo "Release notes extracted successfully"
+            
+            # Get the content of the release notes
+            RELEASE_NOTES=$(cat RELEASE_NOTES.md)
+            
+            # Create a summary of the release notes for commit message (first 3 non-empty lines)
+            SUMMARY=$(echo "$RELEASE_NOTES" | grep -v "^$" | head -n 3)
+            
+            # Store the release notes for the next step
+            echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+            echo "$RELEASE_NOTES" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+            
+            echo "SUMMARY<<EOF" >> $GITHUB_ENV
+            echo "$SUMMARY" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+            
+            # Print the first few lines for verification
+            echo "First few lines of release notes:"
+            head -n 5 RELEASE_NOTES.md
+          else
+            echo "Failed to extract release notes"
+            exit 1
+          fi
+
+      - name: Create and push tag
+        if: env.TAG_EXISTS == 'false' || github.event.inputs.force_update == 'true'
+        run: |
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Create an annotated tag with release notes
+          COMMIT_MSG="Release ${{ env.TAG_NAME }}"
+          if [[ -n "${{ env.SUMMARY }}" ]]; then
+            COMMIT_MSG="$COMMIT_MSG
+            
+            ${{ env.SUMMARY }}"
+          fi
+
+          # Delete tag if it exists and force update is enabled
+          if [[ "${{ env.TAG_EXISTS }}" == "true" && "${{ github.event.inputs.force_update }}" == "true" ]]; then
+            echo "Force updating existing tag"
+            git tag -d ${{ env.TAG_NAME }} || true
+            git push --delete origin ${{ env.TAG_NAME }} || true
+          fi
+
+          # Create and push the tag
+          git tag -a ${{ env.TAG_NAME }} -m "$COMMIT_MSG"
+          git push origin ${{ env.TAG_NAME }}
+
+          echo "Created and pushed tag ${{ env.TAG_NAME }}"
+          echo "This will trigger the Docker build workflow for the new tag"
+
+      - name: Create GitHub Release
+        if: env.TAG_EXISTS == 'false' || github.event.inputs.force_update == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: Release ${{ env.TAG_NAME }}
+          body: ${{ env.RELEASE_NOTES }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGES }}
+
+      - name: Verify Docker Build Workflow
+        run: |
+          echo "Verifying dockerbuild.yml workflow configuration..."
+          if grep -q 'tags:.*"v\*"' .github/workflows/dockerbuild.yml; then
+            echo "✅ Docker build workflow is configured to run on tag events"
+            echo "The v$VERSION tag we just created will trigger the Docker build workflow"
+            echo "This will create Docker images tagged as:"
+            echo "  - v$VERSION"
+            echo "  - latest (if it's a tag on main branch)"
+          else
+            echo "⚠️ Warning: Docker build workflow may not be configured to run on tag events"
+            echo "Please verify that .github/workflows/dockerbuild.yml includes the following:"
+            echo ""
+            echo "on:"
+            echo "  push:"
+            echo "    tags:"
+            echo "      - \"v*\"  # Automatically triggers on new version tags"
+            echo ""
+          fi

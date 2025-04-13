@@ -6,7 +6,7 @@ import ThemeToggle from "../common/ThemeToggle";
 import ThemeSelector from "../common/ThemeSelector";
 import ServiceStatusBadge from "./ServiceStatusBadge";
 import * as Icons from "lucide-react";
-import { appVersion } from "../../../release.js";
+import { appVersion } from "../../../scripts/release.js";
 
 const displayVersion = `v${appVersion}${
   process.env.NODE_ENV === "development" ? "-dev" : ""
