@@ -38,10 +38,10 @@ jobs:
 
       - uses: FranzDiebold/github-env-vars-action@v2.8.0
 
-      - name: Read release.js version
-        id: release_version
+      - name: Read package.json version
+        id: package_version
         run: |
-          VERSION=$(grep -o 'appVersion = "[^"]*"' release.js | cut -d'"' -f2)
+          VERSION=$(node -p "require('./package.json').version")
           echo "RELEASE_VERSION=$VERSION" >> $GITHUB_ENV
           echo "::set-output name=version::$VERSION"
 
@@ -192,7 +192,7 @@ jobs:
           cat > discord-payload.json << EOF
           {
             "embeds": [{
-              "title": "🚀 Docker Build Success: ${{ github.repository }}",
+              "title": "New Plex & Tautulli Dashboard release",
               "color": $BRANCH_COLOR,
               "description": "A new Docker image has been built and pushed to the container registry.",
               "fields": [
