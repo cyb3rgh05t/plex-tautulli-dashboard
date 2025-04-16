@@ -192,7 +192,7 @@ jobs:
           cat > discord-payload.json << EOF
           {
             "embeds": [{
-              "title": "🚀 New Plex & Tautulli Dashboard release",
+              "title": "Plex & Tautulli Dashboard",
               "color": $BRANCH_COLOR,
               "description": "A new Docker image has been built and pushed to the container registry.",
               "fields": [
