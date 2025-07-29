@@ -16,31 +16,33 @@
     "extract-changelog": "node scripts/extract-changelog.js"
   },
   "dependencies": {
-    "axios": "^1.8.2",
+    "axios": "^1.10.0",
     "chalk": "^5.4.1",
     "concurrently": "^9.1.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.8",
     "express": "^4.19.2",
-    "http-proxy-middleware": "^2.0.9",
+    "http-proxy-middleware": "^3.0.5",
     "lucide-react": "^0.487.0",
+
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react-dom": "^19.1.0",
     "react-hot-toast": "^2.4.2",
     "react-icons": "^5.4.0",
     "react-intersection-observer": "^9.16.0",
     "react-query": "^3.39.3",
-    "react-router-dom": "^6.25.1"
+    "react-router-dom": "^7.6.3"
   },
   "devDependencies": {
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.2.3",
+    "@vitejs/plugin-react": "^4.6.0",
     "autoprefixer": "^10.4.19",
+
     "cross-env": "^7.0.3",
     "postcss": "^8.4.35",
-    "tailwindcss": "^3.4.1",
-    "vite": "^5.2.8"
+    "tailwindcss": "^4.1.11",
+    "vite": "^7.0.4"
   },
   "author": "cyb3rgh05t",
   "repository": {
