@@ -1,5 +1,5 @@
 # Development Dockerfile - optimized for faster rebuilds and development
-FROM node:20-alpine
+FROM node:24-alpine
 
 LABEL maintainer="cyb3rgh05t"
 LABEL org.opencontainers.image.source="https://github.com/cyb3rgh05t/plex-tautulli-dashboard"
