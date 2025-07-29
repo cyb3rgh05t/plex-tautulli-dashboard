@@ -18,7 +18,7 @@ COPY scripts/update-release.js ./scripts/
 RUN npm install
 
 # Update package.json with the correct version from release.js
-# Set NODE_ENV to development
+
 ENV NODE_ENV=development
 RUN npm run update-version
 
