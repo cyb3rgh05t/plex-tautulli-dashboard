@@ -20,7 +20,7 @@
     "chalk": "^5.4.1",
     "concurrently": "^9.1.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.8",
+    "dotenv": "^17.2.1",
     "express": "^4.19.2",
     "http-proxy-middleware": "^3.0.5",
     "lucide-react": "^0.487.0",
