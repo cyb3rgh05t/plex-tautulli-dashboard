@@ -1,5 +1,5 @@
 # Multi-stage build for production
-FROM node:24-alpine AS builder
+FROM node:25-alpine AS builder
 
 LABEL maintainer="cyb3rgh05t"
 LABEL org.opencontainers.image.source="https://github.com/cyb3rgh05t/plex-tautulli-dashboard"
@@ -28,7 +28,7 @@ COPY . .
 RUN npm run build
 
 # Create the production image
-FROM node:24-alpine
+FROM node:25-alpine
 
 WORKDIR /app
 
